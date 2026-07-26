@@ -31,6 +31,12 @@ learned section below.
   visibly — silent absence of a scanner reads as "scanned and clean".
 - Never commit `.mas/` artifacts, checkpoints, or API keys. Secrets stay
   in the environment.
+- **Never delete `.mas/`** (no `rm -rf .mas`, no `git clean` with `-x`/`-X`
+  — plain `git clean -fd` spares ignored files and is fine). It holds
+  unrecoverable run history and failure forensics; it was wiped once
+  (2026-07-26) and runs 1–8's originals were lost. Scoreboard yamls are
+  dual-written to the tracked `benchmarks/results/`, but preserved
+  workspaces and failed-build snapshots exist nowhere else.
 - Subprocess calls: list argv (no `shell=True`), explicit `timeout`,
   `capture_output=True`.
 
