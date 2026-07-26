@@ -233,7 +233,11 @@ def run_case(
     import time
 
     start = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="autoproduct-productbench-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="autoproduct-productbench-",
+                                 ignore_cleanup_errors=True) as tmp:
+        # ignore_cleanup_errors: the T3 docker sandbox (present on CI
+        # runners) writes root-owned __pycache__ inside; a leaked tmp
+        # file on an ephemeral runner is harmless, a crashed suite is not.
         workspace = init_workspace(Path(tmp) / case.name, case.name, case.profile)
         (workspace / "FDR.md").write_text(case.fdr, encoding="utf-8")
         result = run_autopilot(
