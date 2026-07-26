@@ -18,6 +18,11 @@ from autoproduct.adoption.attestation import (
     verify_ledger,
 )
 from autoproduct.adoption.banners import adoption_banners
+from autoproduct.adoption.calibrate import (
+    CalibrationReport,
+    calibration_report,
+    write_calibration_report,
+)
 from autoproduct.adoption.data_gates import (
     ContractViolation,
     EvalGateResult,
@@ -66,6 +71,7 @@ from autoproduct.adoption.toolchains import (
 
 __all__ = [
     "BenchmarkResult",
+    "CalibrationReport",
     "ChangePackage",
     "ContractViolation",
     "DwellReport",
@@ -85,6 +91,7 @@ __all__ = [
     "attest_review",
     "benchmark_toolchain",
     "build_evidence_bundle",
+    "calibration_report",
     "check_stage",
     "contract_check",
     "data_check_spec",
@@ -110,5 +117,6 @@ __all__ = [
     "toolchain_banner",
     "toolchain_spec",
     "verify_ledger",
+    "write_calibration_report",
     "write_evidence_bundle",
 ]

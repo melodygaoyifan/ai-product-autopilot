@@ -20,6 +20,7 @@ voters fall back visibly without them).
 | `autoproduct readiness` | Substrate-ladder report (docs 18–19): active stages at the declared rung, what each missing rung unlocks |
 | `autoproduct evidence-bundle <review-id>` | Export the Gate-R evidence bundle (unsigned v0) for CAB/change-control submission |
 | `autoproduct toolchain <language> [--manifest seeded.yaml]` | Run a language lane's det_tools slots (skipped = loud, never clean); with a seeded-defect manifest, measure catch-rate and register (or label PROVISIONAL) |
+| `autoproduct calibrate <language>` | Calibrate seeded-lane patterns against real scanners; per-defect report with actual slot output for each miss (run via `make calibrate`) |
 | `autoproduct eval-gate <scores.yaml> [--pin]` | Eval-set regression gate vs the pinned baseline; `--pin` re-baselines (commit the diff via PR) |
 | `autoproduct idempotency <run_a> <run_b>` | Backfill idempotency: the fixture-slice re-run must be byte-identical |
 | `autoproduct data-checks` | Run the workspace's external data checks (dbt auto-detected; others in `.mas/data-checks.yaml`) |
@@ -38,6 +39,18 @@ config-lint-only from S1 and says so. No profile file = no gating
 preflight fixtures in `.mas/cab-preflight.yaml`, the rest land in
 `.mas/cab-rejections.yaml` for the compounding loop. CAB submission
 itself is human-only, always.
+
+**Toolchain calibration (§19 G7).** The seeded-lane manifest patterns in
+`tests/toolchains/seeded/{java,dotnet}/seeded.yaml` are hand-labels until a
+real scanner run confirms them. `make calibrate` builds the
+`Dockerfile.calibrate` image (Checkstyle, PIT, Semgrep, OWASP
+Dependency-Check, Stryker, dotnet SDK) and runs `autoproduct calibrate` per
+lane, writing per-defect reports to `.mas/calibration/<lang>.yaml` and a
+`calibration-summary.md` roll-up. A **miss on a slot that ran** means the
+pattern is wrong — fix it in the manifest using the slot output the report
+captured; a **skipped slot** means the scanner is absent. Re-run on every
+scanner version bump (R-G3). `make calibrate-local` runs it on the host if
+the scanners are already installed.
 
 ## Weekly rhythm
 

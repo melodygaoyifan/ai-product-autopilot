@@ -1,0 +1,52 @@
+# Scanner-calibration environment (§19 G7, R-G3).
+#
+# The seeded-lane manifest patterns are hand-labels until a real run confirms
+# them. This image installs the actual scanners so `make calibrate` can turn
+# them into published catch-rates. It is a DEV/CI tool — not part of the
+# runtime package, and never shipped.
+#
+# Pins are explicit so a calibration run is reproducible; bump them
+# deliberately and re-run (a scanner version bump is exactly when patterns
+# drift, R-G3).
+FROM debian:12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/opt/tools/bin:/root/.dotnet/tools:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl unzip git \
+      openjdk-17-jdk-headless maven \
+      python3 python3-pip python3-venv pipx \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Python scanners (semgrep = sast, pip-audit = deps for the python lane) ---
+RUN pipx install semgrep==1.86.0 && pipx install pip-audit==2.7.3
+
+# --- Java: Checkstyle (lint) + OWASP Dependency-Check (deps). PIT (mutation)
+#     and JUnit (tests) come from Maven plugins declared in the lane pom. ---
+ARG CHECKSTYLE_VERSION=10.18.2
+ARG DEPCHECK_VERSION=10.0.4
+RUN mkdir -p /opt/tools/bin \
+    && curl -fsSL -o /opt/tools/checkstyle.jar \
+       "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-${CHECKSTYLE_VERSION}/checkstyle-${CHECKSTYLE_VERSION}-all.jar" \
+    && printf '#!/bin/sh\nexec java -jar /opt/tools/checkstyle.jar "$@"\n' > /opt/tools/bin/checkstyle \
+    && chmod +x /opt/tools/bin/checkstyle \
+    && curl -fsSL -o /tmp/depcheck.zip \
+       "https://github.com/jeremylong/DependencyCheck/releases/download/v${DEPCHECK_VERSION}/dependency-check-${DEPCHECK_VERSION}-release.zip" \
+    && unzip -q /tmp/depcheck.zip -d /opt/tools && rm /tmp/depcheck.zip \
+    && ln -s /opt/tools/dependency-check/bin/dependency-check.sh /opt/tools/bin/dependency-check
+
+# --- .NET SDK (dotnet build = lint via warnaserror, dotnet test, Stryker) ---
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+    && sh /tmp/dotnet-install.sh --channel 8.0 --install-dir /root/.dotnet \
+    && rm /tmp/dotnet-install.sh \
+    && /root/.dotnet/dotnet tool install -g dotnet-stryker --version 4.4.1
+ENV PATH="/root/.dotnet:${PATH}"
+
+# --- autoproduct itself (via uv) ---
+RUN pip install --break-system-packages uv
+WORKDIR /work
+COPY . /work
+RUN uv sync --frozen || uv sync
+
+ENTRYPOINT ["scripts/calibrate.sh"]

@@ -1,0 +1,12 @@
+# Keep the calibration build context lean — the image needs source + the
+# seeded lanes, not local state or caches.
+.git
+.venv
+.mas
+**/__pycache__
+*.pyc
+.pytest_cache
+dist
+build
+*.egg-info
+calibration-summary.md

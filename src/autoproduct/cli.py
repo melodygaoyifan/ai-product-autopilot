@@ -1002,6 +1002,58 @@ def toolchain(
         raise typer.Exit(code=1)
 
 
+@app.command()
+def calibrate(
+    language: str = typer.Argument(..., help="Language lane: python | java | dotnet"),
+    repo_dir: str = typer.Option(
+        None, help="Seeded lane dir (default: the bundled tests/toolchains/seeded/<lang>)"
+    ),
+    manifest: str = typer.Option(
+        None, help="Manifest yaml (default: <lane>/seeded.yaml)"
+    ),
+):
+    """Calibrate a language lane's manifest patterns against the real
+    scanners (run inside `make calibrate`, where the binaries exist). Writes
+    a per-defect report — caught/missed plus the actual slot output for each
+    miss — so hand-labeled patterns can be fixed. A miss on a slot that ran
+    means the PATTERN is wrong, not the scanner; a skipped slot means the
+    binary is absent."""
+    from autoproduct.adoption import write_calibration_report
+    from autoproduct.adoption.calibrate import calibration_report
+
+    seeded = Path(__file__).resolve().parent.parent.parent / "tests" / "toolchains" / "seeded"
+    lane = Path(repo_dir) if repo_dir else seeded / language
+    manifest_path = Path(manifest) if manifest else lane / "seeded.yaml"
+    if not manifest_path.exists():
+        console.print(f"[red]no manifest at {manifest_path}[/red]")
+        raise typer.Exit(code=2)
+
+    report = calibration_report(lane, language, manifest_path)
+    # Write under CWD (the container mounts it), not the lane dir which is
+    # ephemeral inside the image.
+    out = write_calibration_report(lane, language, manifest_path, out_base=Path.cwd())
+
+    color = "green" if not report.needs_recalibration and not report.skipped_slots else "yellow"
+    console.print(
+        f"[bold {color}]{language}[/bold {color}] catch-rate "
+        f"{report.catch_rate:.0%} ({report.caught}/{report.total})"
+    )
+    if report.skipped_slots:
+        console.print(
+            f"[red]skipped slots (binary absent): {', '.join(report.skipped_slots)}[/red]"
+        )
+    if report.misses:
+        table = Table(show_lines=False, title="misses — fix the pattern or the scanner rule")
+        for col in ("Defect", "Slot", "Expected pattern", "Why missed"):
+            table.add_column(col)
+        for m in report.misses:
+            table.add_row(m.defect_id, m.slot, m.expected_pattern, m.detail)
+        console.print(table)
+    console.print(f"Full report (with slot output for each miss): {out}")
+    if report.needs_recalibration or report.skipped_slots:
+        raise typer.Exit(code=1)
+
+
 @app.command("eval-gate")
 def eval_gate_cmd(
     scores: str = typer.Argument(..., help="YAML file of metric: value pairs"),

@@ -22,3 +22,10 @@ Two calibration notes, per the doc-19 G7 discipline:
 
 Hermetic CI validates manifest structure and that every planted file
 exists; running the real scanners is availability-gated and manual.
+
+**Calibrating the patterns.** `make calibrate` (from the repo root) builds
+the scanner container and runs `autoproduct calibrate` per lane, producing
+`.mas/calibration/<lang>.yaml` — for every planted defect, caught or missed,
+and the actual scanner output for each miss. When a pattern here misses a
+defect the scanner *did* flag, copy the right substring out of that captured
+output into this manifest's `pattern`. That is the whole calibration loop.
