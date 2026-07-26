@@ -69,8 +69,18 @@ Rules:
   "index"). The acceptance probes are written from that contract, not
   from your code — inventing a synonym fails them all.
 - Endpoints never crash on user input: invalid JSON, wrong types, missing
-  or unknown fields get an explicit 4xx error response. An unhandled
-  exception on malformed input is a defect, not a shortcut.
+  or unknown fields get an explicit 4xx error response whose JSON body
+  carries a human-readable message (an "error" field unless the contract
+  fixes another shape — an empty {{}} body fails the founder's checks).
+  An unhandled exception on malformed input is a defect, not a shortcut.
+- tests/conftest.py and tests/helpers*.py are a SHARED vocabulary that
+  other tasks' committed tests import. Reuse the existing fixtures and
+  helpers as-is; extend them only additively (a rewrite that drops or
+  renames an existing name is discarded). Never build a parallel fixture
+  set for the same job.
+- If the existing product already satisfies every criterion, do NOT
+  rewrite source files: submit ONLY your skeleton test files proving the
+  criteria — a passing tests-only submission closes the task as built.
 - Never touch paths under {_FORBIDDEN_PREFIXES}.
 
 Respond with ONLY YAML:
@@ -190,6 +200,33 @@ def _reset_workspace(repo: Path, pre_existing: set[str]) -> None:
     )
 
 
+def _removed_names(old: str, new: str) -> set[str]:
+    """Top-level names a rewrite dropped. Support modules under tests/
+    are a shared vocabulary — sibling tasks' committed tests import these
+    names, so removal breaks their collection (run 7, case 04: a conftest
+    rewrite lost post_json/create_candidate and every iteration died on
+    ImportError). Unparseable code returns empty — the suite gate judges it."""
+    import ast
+
+    def names(src: str) -> set[str] | None:
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:
+            return None
+        return {
+            n.name for n in tree.body
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        } | {
+            t.id for n in tree.body if isinstance(n, ast.Assign)
+            for t in n.targets if isinstance(t, ast.Name)
+        }
+
+    old_names, new_names = names(old), names(new)
+    if old_names is None or new_names is None:
+        return set()
+    return old_names - new_names
+
+
 def _write_files(
     repo: Path, files: list[dict], *, allowed_test_paths: set[str] | None = None
 ) -> tuple[list[str], list[str]]:
@@ -252,6 +289,20 @@ def _write_files(
                     + ")"
                 )
                 continue
+            if not Path(rel).name.startswith("test_"):
+                # conftest/helpers are additive-only: dropped names break
+                # sibling tasks' imports.
+                lost = _removed_names(
+                    (repo / rel).read_text(encoding="utf-8", errors="replace"),
+                    content,
+                )
+                if lost:
+                    kept.append(
+                        f"{rel} (existing version kept — your rewrite removed "
+                        f"names committed tests import: {', '.join(sorted(lost)[:6])}. "
+                        "Extend this file additively; never rename or drop.)"
+                    )
+                    continue
         if len(content.splitlines()) > _MAX_FILE_LINES:
             raise ValueError(f"{rel} exceeds {_MAX_FILE_LINES} lines")
         validated.append((rel, content))

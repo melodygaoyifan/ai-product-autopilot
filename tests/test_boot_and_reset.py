@@ -91,6 +91,7 @@ def test_web_profile_carries_scope_law_and_boot_contract():
     assert "BOOT CONTRACT" in profile["stack_hint"]
     assert "PORT" in profile["stack_hint"]
     assert "never crash on user input" in text
+    assert "human-readable message" in text
 
 
 def test_implementer_receives_the_literal_source_contract(tmp_path, monkeypatch):
@@ -120,3 +121,36 @@ def test_implementer_receives_the_literal_source_contract(tmp_path, monkeypatch)
     prompt = seen[0]["user"]
     assert "<source_contract>" in prompt and '"item"' in prompt
     assert "LITERAL" in seen[0]["system"] and "4xx" in seen[0]["system"]
+    assert "additively" in seen[0]["system"] and "tests-only" in seen[0]["system"]
+
+
+def test_shared_test_fixtures_are_additive_only(tmp_path):
+    """conftest/helpers under tests/ are a vocabulary sibling tasks import —
+    a rewrite that drops a name is kept out (run 7, case 04: a conftest
+    rewrite lost post_json and three straight iterations died on
+    ImportError before any test ran)."""
+    from autoproduct.upstream.build import _write_files
+
+    (tmp_path / "tests").mkdir()
+    conftest = tmp_path / "tests" / "conftest.py"
+    conftest.write_text("def post_json(base, path, body):\n    return 1\n")
+
+    # Parallel-vocabulary rewrite dropping post_json: kept out, original intact.
+    written, kept = _write_files(
+        tmp_path,
+        [{"path": "tests/conftest.py",
+          "new_content": "def http(base):\n    return 2\n"}],
+        allowed_test_paths=set(),
+    )
+    assert written == [] and len(kept) == 1 and "post_json" in kept[0]
+    assert "post_json" in conftest.read_text()
+
+    # Additive extension: written.
+    written, kept = _write_files(
+        tmp_path,
+        [{"path": "tests/conftest.py",
+          "new_content": "def post_json(base, path, body):\n    return 1\n\n"
+                         "def http(base):\n    return 2\n"}],
+        allowed_test_paths=set(),
+    )
+    assert written == ["tests/conftest.py"] and kept == []
