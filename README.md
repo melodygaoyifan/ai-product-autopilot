@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-640-brightgreen)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-644-brightgreen)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -124,6 +124,9 @@ cannot be closed without a recorded human decision.
 
 Fourteen gated stages across two loops (design docs:
 [autoproduct-design](https://github.com/melodygaoyifan/autoproduct-design)):
+Every doc is cross-referenced to its shipped mechanism in the
+[implementation map](docs/implementation-map.md) — open items are named,
+never silent.
 
 **Outer loop (weeks-to-months):** Opportunity sensing (deterministic
 clustering of owned signals, kill-registry memory) → Market & viability
@@ -214,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **640 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **644 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -277,6 +280,7 @@ Claude-written code; without it those seats visibly fall back
 | v0.23 ✅ | complex-systems gap closure, deterministic core (docs 26–28, P21–P26): lintable perf ACs + VALID/INVALID load-run typing + `capacity.yaml` headroom arithmetic (perf lane calibrated: see roadmap v0.24); realtime delta (`det_sim_scan`, replay-identity/cross-build/desync checks, tick budgets); streaming delta (`stream_contract_check` — the word "default" is lexically illegal, exactly-once typed-or-downgraded, backpressure scan); architecture fitness (`deps.yaml` graph → `arch_contract_check`, brownfield checkpoint debt); delivery hardening (environment promotion DAG, `flag_lint` with owners+expiry, `migration_rehearsal` with reversibility round-trip) |
 | v0.24 ✅ | lane execution wrappers + calibration: k6 scripts compiled from perf ACs (thresholds ARE the AC; absent binary = visible skip with the script on record), netem condition profiles with gated apply, schema-registry wrapper + contract-file reconciliation — and the seeded perf-defect calibration ran for real: 5 of 5 defects caught at the 3x relative-detection factor (loopback, low parity, honestly scoped — satisfies no AC), converting the lane from PROVISIONAL to CALIBRATED |
 | v0.25 ✅ | the Sweep role (doc 29): `autoproduct sweep` harvests the maintenance queues the ledgers already keep (expired flags, checkpoint debt, stale claims/capacity, due watch items, contract drift), patches only allowlisted chores under the behavior-preservation contract (out-of-scope diffs abort), caps open PRs to the attention budget, records clean passes with a snapshot hash, and alarms on over-action — SW0 report-only by default, promotion is your recorded decision at the weekly review |
+| v0.26 ✅ | full design-doc cross-reference (docs 08–29 audited against the code): the [implementation map](docs/implementation-map.md) records every doc's shipped mechanism, tag, and named open items; gap-closure code from the audit — `operations-policy.yaml` (per-stage WIP + the shed rule + ci_concurrency), the `hot-files.yaml` shared-file registry + `lane_check`, the four 小程序 preflights (`mp_size_check`/`mp_domain_check`/`mp_setdata_lint`/`mp_privacy_check`), and `profiles/game.yaml` |
 | next 🔜 | the v3.0.0 design gate: one live loop ending in a real recorded kill-or-pivot at Gate PL5 |
 
 ## Star history

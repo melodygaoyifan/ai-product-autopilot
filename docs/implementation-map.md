@@ -1,0 +1,40 @@
+# Design-doc → implementation traceability map
+
+One row per design doc ([autoproduct-design](https://github.com/melodygaoyifan/autoproduct-design)),
+cross-referenced 2026-07-26 at v0.25.0. "Open" items are deliberately
+human-, pilot-, or external-shaped — each is named, none is silent.
+
+| Doc | Shipped mechanism (module / CLI) | Tag | Open (by design) |
+|---|---|---|---|
+| 08 foundation | review pipeline: checkpointed orchestrator graph, mode_router, taxonomy, 3-fail escalation, typed envelopes | v0.8 | peer-review/adversarial-test nodes (deferred, noted in graph.py); module-spec invariant layer (`.mas/specs/*.spec.yaml`); per-voter rolling logs; Postgres/encrypted checkpointer (SQLite today) |
+| 09 system design | voters + verify + leader, deterministic probes (secret/CSRF-SSRF/slopsquat + gated semgrep/bandit/pip-audit/trufflehog), HITL resume, deploy review, maintenance triage→rootcause→fixpr, mirror/replay, webhook server + queue | v0.8 | deploy/maintenance as checkpointed graphs (straight-line functions today, so no mid-stage resume there); observability/cost ledger (evidence-ledger, tool-audit, cost caps, /metrics); named signal clients beyond generic /incidents; secrets layer; policy thresholds in project.yaml |
+| 10 downstream plan | `bench` (13 labeled cases: recall 100%, precision 67%), compounding loop `compound --pr`, ~58 CLI commands, calibrate.sh | v0.8–v0.10 | harness enforcement layer (fixture_gate at registration repo-wide, contract_checker, MCP host); CI workflows (no .github/workflows); CHANGELOG/ADR docs |
+| 11 keystone | skill frontmatter contracts, ToolBox risk tiers + budget boundary, T3 docker test sandbox, spec_validator; fixture-gate registration real for the 24 product voters (`voter-gate`, v0.21) | v0.8+, v0.21 | MCP server partitioning + mcp-audit (in-process by mapping, doc 23 annotation); debt_server tools (radon/jscpd/vulture); registration gates for the review voters (product voters have them; review voters ride bench) |
+| 12–13 upstream design | discover/plan/spec/build + gates U1–U4 (`*-approve`), EARS lint + coverage gate, SCR as the sole drift channel, hypothesis ledger, authoring policy, dag/lane/budget checks, assertion_delta | v0.9 | per-voter upstream critique rosters (a single critic panel per stage today — the full per-voter roster shape ships in the docs 20+ product stages); research-session taint isolation/ContextAssembler; the extended upstream verdict vocabulary |
+| 14 upstream plan | autopilot (FDR → product), workspace/blocks/provisioning, correction loop, walkthrough 验收清单, telemetry digest | v0.9–v0.10, M2–M7 | `.mas/spec-lint.yaml` project config; persisted coverage-matrix artifact (in-memory today); upstream stages as checkpointed graphs |
+| 15 validation | research-index discipline; platform ledger applies it to this repo (ADR-U29) | v0.21 | — |
+| 16 scaling | dwell metric + rubber-stamp detector, similarity queue, worker pool, WIP as edition presets; **v0.26**: `operations-policy.yaml` (per-stage WIP + shed rule + ci_concurrency) and the `hot-files.yaml` shared-file registry + `lane_check` | v0.10–v0.12, v0.26 | serial merge-queue enforcement, GEPA proposer (disposer exists), voter cascades — named open items; live multi-lane pilot data |
+| 17 domain profiles | profiles web/miniprogram/app + probegen/screenshots/preview; **v0.26**: the four 小程序 preflights (`mp_size_check` per compiled target, `mp_domain_check`, `mp_setdata_lint`, `mp_privacy_check` with lazy-授权 rule) and `profiles/game.yaml` (determinism + replay-identity + tick budgets via the realtime lane; human playtest gate) | v0.9–v0.12, v0.26 | §41.1 structured profile schema (profiles are prose constraints today), Gate P1 platform-preflight class, web det-tool runners (axe/Lighthouse/size-limit — availability-gated externals), DesignFidelity/A11y/DeviceReality/PlatformFit voter charters, bot fleet |
+| 18–19 adoption track | substrate ladder + STAGE_INACTIVE, readiness, Gate R + cab-package + evidence-bundle, attest chain, java/dotnet seeded lanes, data profile + data-checks, calibrate.sh (doc 19's shipped column spot-verified 2026-07-26) | v0.11–v0.12 | doc 19's own pending column (wedge pilot, scanner calibration, SSO/IdP, org-key signing, VPC reference, ERP profile); plus named code gaps: data lineage check, data NFR vocabulary in ears, data-voter 8-fixture gates, classification tags, SOC-2 mapping |
+| 20 product-loop foundation | claim schema + `claim_lint` (13 rules) + snapshots + persona scan + source standing + taint floor; P0 opportunity (clustering, kill-registry read, Gate PL0); P1 market (`sizing_calc`, `injection_scan`, `record_probe`, Gate PL1); P2 PRD (`prd_lint`, handoff DoR-validated) | v0.13, v0.16 | — |
+| 21 launch & growth | the seven backstops (7 × 8-fixture gates), channel profiles (paid rejected by name), Gate PL3 scoped approvals, `forbidden_autonomous` floor, experiment MAS (prereg pin, BH, O'Brien–Fleming, guardrail veto, `BLOCKED(INSUFFICIENT_POWER)`) | v0.14, v0.17 | live pre-registered experiment on real traffic |
+| 22 evidence & double loop | analytics/feedback privacy boundary (query-layer refusal), metric vocabulary + baseline reset, `cohort_calc` + sufficiency, signal router, `attribution_typer` + holdouts, `evaluate_kill_criteria` + append-only registry + reconciliation + the five loop metrics | v0.15, v0.18 | the first real Gate PL5 kill/pivot (the v3.0.0 gate, deliberately) |
+| 23 product-loop plan | all six milestones (v2.1.0→v3.0.0 ↔ v0.13→v0.18); per-milestone annotation in the doc itself | v0.13–v0.18 | live-loop release gates (annotated per milestone) |
+| 24 editions | `edition_lint` narrowing-only, three presets + START-HERE doors, weekly founder review, procurement pack, `init --edition/--gate-owner` | v0.21 | — |
+| 25 distribution | `replay --demo` (no-key R1), `--from-bench` templates, opt-in schema-pinned telemetry, benchmark page, ADR-U29 self-linting README (`claims/platform.yaml`), CONTRIBUTING governance + watch items, launch pass P20 (PRD + backstopped post + pinned experiment, Gates PL2/PL3 recorded, published) | v0.22 | PyPI publication (watch item with falsifier) |
+| 26 perf lane | perf EARS grammar, VALID/INVALID run typing, `capacity.yaml` arithmetic, k6 script compilation + gated run, seeded manifest **calibrated 5/5** (loopback, relative detection) | v0.23–v0.24 | prod_mirror AC runs (need a real environment; ADR-U30 prec. 4) |
+| 27 realtime & streaming | `det_sim_scan`, replay-identity/cross-build/desync checks, tick budgets, netem profiles + gated apply; `stream_contract_check` ("default" lexically illegal), exactly-once typing, backpressure scan, registry wrapper + reconciliation | v0.23–v0.24 | live registry/netem hosts |
+| 28 architecture & delivery | `deps.yaml` graph + `arch_contract_check` + brownfield checkpoint, API-surface deprecation, environments DAG, `flag_lint`, `migration_rehearsal` | v0.23 | per-lane external checkers (import-linter/dependency-cruiser/ArchUnit) as gated wrappers |
+| 29 sweep role | `autoproduct sweep`: queue harvest over existing ledgers, behavior-preservation contract, SW0–SW2 ladder, attention caps, hash-stamped clean passes, over-action alarm | v0.25 | LLM patch-writer past SW0 (a recorded human promotion); vulture/jscpd feeds |
+
+**Cross-cutting deltas** (from the 2026-07-26 full audit): only the
+code-review stage is a checkpointed graph — deploy, maintenance, and the
+upstream stages are straight-line Python, which trades away mid-stage
+resume for those stages; and the MCP/harness enforcement layer of docs
+10–11 is realized in-process rather than as partitioned servers. Both are
+recorded architecture mappings, not silent omissions.
+
+Standing rules that govern this table: every ✅-equivalent is design
+coverage until a seeded manifest or fixture run converts it (docs' own
+rule); absent externals skip visibly; and the README's own claims resolve
+against [claims/platform.yaml](../claims/platform.yaml) in CI.

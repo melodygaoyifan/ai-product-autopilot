@@ -1,0 +1,17 @@
+name: game
+description: Game (deterministic simulation + bot playtests; doc 17 §45, doc 27 §79)
+constraints:
+  - The FDR's scope is law — capabilities it excludes must not appear in any spec.
+  - Realtime/multiplayer designs declare net_model + tick_rate + snapshot_policy in design.md; a realtime FDR without one is ESCALATE_REQUIREMENT_CONFLICT (§79.1).
+  - Simulation code is deterministic — no wall-clock reads, unseeded RNG, float accumulation, or hash-order iteration in tick paths; det_sim_scan findings on rollback/lockstep models are gate failures, not notes.
+  - A desync in any environment is an incident, never a nuisance (invariant 14.26).
+  - Balance-constant changes and retail-branch promotion are human decisions — never autonomous.
+spec_extras:
+  - Name the replay-identity fixture (input stream + expected state-hash cadence) for every simulation-touching criterion.
+  - State the tick budget (p99 per-tick ms × tick_rate < 1000ms) and the network-condition profiles the game must stay playable under (wifi_poor / mobile_4g / intercontinental).
+checks:
+  - det_sim_scan (deterministic, lanes/realtime.py)
+  - replay_identity / cross_build_replay / desync_probe (fixture-driven)
+  - perf_spike over WS (reconnect stampede; availability-gated fortio/ghz)
+  - bot playtests under netem profiles (availability-gated; skipped VISIBLY)
+stack_hint: 'Deterministic simulation core (integer/fixed-point math, injected RNG and tick clock) separated from presentation. The human playtest gate is the release gate no bot replaces.'
