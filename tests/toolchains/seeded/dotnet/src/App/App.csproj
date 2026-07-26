@@ -7,5 +7,9 @@
     <!-- N-DEPS-1: known-vulnerable pin (CVE-2024-21907, fixed in 13.0.1) -->
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
     <PackageReference Include="System.Data.SqlClient" Version="4.8.5" />
+    <!-- N-DEPS-2: known-vulnerable pin (System.Text.Json, CVE-2024-30105) -->
+    <PackageReference Include="System.Text.Json" Version="8.0.0" />
+    <!-- N-DEPS-3: known-vulnerable pin (Azure.Identity, CVE-2023-36414) -->
+    <PackageReference Include="Azure.Identity" Version="1.7.0" />
   </ItemGroup>
 </Project>

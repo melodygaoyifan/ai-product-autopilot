@@ -14,9 +14,11 @@ Two calibration notes, per the doc-19 G7 discipline:
   vary by version — the first real (non-hermetic) run against installed
   scanners calibrates them, and every toolchain version bump re-runs the
   benchmark (risk R-G3).
-- **Starter set, not the target set.** ~10 planted defects per lane here;
-  doc 19 G7 calls for ~30 sourced from the pilot's real historical bugs.
-  Expansion rides the pilot (logged so this never reads as "covered").
+- **Toward the target set.** ~20 planted defects per lane now (App.* +
+  Payments.*), spanning the full slot range; doc 19 G7 calls for ~30
+  sourced from the pilot's real historical bugs. The remaining ~10 ride the
+  pilot (logged so this never reads as "covered") — synthetic defects prove
+  the harness measures, real defects prove it measures what matters.
 
 Hermetic CI validates manifest structure and that every planted file
 exists; running the real scanners is availability-gated and manual.

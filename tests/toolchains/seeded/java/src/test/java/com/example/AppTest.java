@@ -17,4 +17,18 @@ public class AppTest {
     public void smallOrderDiscount() {
         assertEquals(5, new App().discountPercent(1));
     }
+
+    // J-TEST-2: permanently disabled test — green suite, dead coverage
+    @org.junit.jupiter.api.Disabled("flaky since 2024, never fixed")
+    @Test
+    public void settlementRoundTrip() {
+        assertEquals(100, new Payments().roundToUnit(100));
+    }
+
+    // J-TEST-3: tautological assertion — always true, verifies nothing
+    @Test
+    public void validAmountAccepted() {
+        long cents = new Payments().roundToUnit(250);
+        assertEquals(cents, cents);
+    }
 }

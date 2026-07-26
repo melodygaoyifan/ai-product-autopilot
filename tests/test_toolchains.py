@@ -217,6 +217,10 @@ def test_seeded_lane_manifest_valid_and_files_planted(language):
     missing_slots = {"lint", "tests", "mutation", "sast", "deps"} - slots_covered
     if missing_slots:
         pytest.fail(f"{language} lane leaves slots unmeasured: {missing_slots}")
+    # Guard against silent shrink below the current planted set (§19 G7 is
+    # walking toward ~30; never regress under 15).
+    if len(defects) < 15:
+        pytest.fail(f"{language} lane thinned to {len(defects)} defects (floor 15)")
     for d in defects:
         planted = lane / d["file"]
         if not planted.is_file():

@@ -17,6 +17,27 @@
       <artifactId>log4j-core</artifactId>
       <version>2.14.1</version>
     </dependency>
+    <!-- J-DEPS-2: known-vulnerable pin (Commons Text, CVE-2022-42889 Text4Shell) -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-text</artifactId>
+      <version>1.9</version>
+    </dependency>
+    <!-- J-DEPS-3: known-vulnerable pin (SnakeYAML, CVE-2022-1471) -->
+    <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <version>1.30</version>
+    </dependency>
+    <!-- J-DEPS-2: gadget-chain classic (CVE-2015-6420 class) -->
+    <dependency>
+      <groupId>commons-collections</groupId>
+      <artifactId>commons-collections</artifactId>
+      <version>3.2.1</version>
+    </dependency>
+    <!-- J-DEPS-3: jackson-databind with multiple known deserialization CVEs -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</group
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>

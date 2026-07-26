@@ -37,8 +37,58 @@ defects:
     pattern: "DiscountPercent"
     file: src/App/Program.cs
     note: "boundary quantity >= 100 never asserted — Stryker boundary mutant survives"
+  - id: N-SAST-4
+    slot: sast
+    pattern: "path"
+    file: src/App/Payments.cs
+    note: path traversal — user input into Path.Combine
+  - id: N-SAST-5
+    slot: sast
+    pattern: "command"
+    file: src/App/Payments.cs
+    note: command injection via Process.Start with concatenated input
+  - id: N-SAST-6
+    slot: sast
+    pattern: "xxe"
+    file: src/App/Payments.cs
+    note: XXE — XmlResolver left enabled on XmlDocument
+  - id: N-SAST-7
+    slot: sast
+    pattern: "deserial"
+    file: src/App/Payments.cs
+    note: BinaryFormatter.Deserialize over caller-controlled stream
+  - id: N-SAST-8
+    slot: sast
+    pattern: "trust"
+    file: src/App/Payments.cs
+    note: ServerCertificateCustomValidationCallback always returns true
+  - id: N-LINT-3
+    slot: lint
+    pattern: "CS0162"
+    file: src/App/Payments.cs
+    note: unreachable code after return (warnaserror build)
+  - id: N-MUT-2
+    slot: mutation
+    pattern: "ValidateAmount"
+    file: src/App/Payments.cs
+    note: negated-conditional mutant survives — rejection branch untested
+  - id: N-MUT-3
+    slot: mutation
+    pattern: "RoundToUnit"
+    file: src/App/Payments.cs
+    note: return-value mutant survives — production callers ignore the result
   - id: N-DEPS-1
     slot: deps
     pattern: "Newtonsoft.Json"
     file: src/App/App.csproj
     note: Newtonsoft.Json 12.0.1 (CVE-2024-21907)
+  - id: N-DEPS-2
+    slot: deps
+    pattern: "System.Text.Json"
+    file: src/App/App.csproj
+    note: System.Text.Json 8.0.0 (CVE-2024-30105)
+  - id: N-DEPS-3
+    slot: deps
+    pattern: "Azure.Identity"
+    file: src/App/App.csproj
+    note: Azure.Identity 1.7.0 (CVE-2023-36414)

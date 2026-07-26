@@ -42,8 +42,73 @@ defects:
     pattern: "discountPercent"
     file: src/main/java/com/example/App.java
     note: "boundary quantity >= 100 never asserted — conditional-boundary mutant survives"
+  - id: J-SAST-4
+    slot: sast
+    pattern: "path"
+    file: src/main/java/com/example/Payments.java
+    note: path traversal — user input joined into a filesystem path
+  - id: J-SAST-5
+    slot: sast
+    pattern: "command"
+    file: src/main/java/com/example/Payments.java
+    note: command injection via Runtime.exec with concatenated input
+  - id: J-SAST-6
+    slot: sast
+    pattern: "xxe"
+    file: src/main/java/com/example/Payments.java
+    note: XXE — DocumentBuilderFactory without external-entity hardening
+  - id: J-SAST-7
+    slot: sast
+    pattern: "cipher"
+    file: src/main/java/com/example/Payments.java
+    note: DES/ECB for card data
+  - id: J-SAST-8
+    slot: sast
+    pattern: "trust"
+    file: src/main/java/com/example/Payments.java
+    note: TrustManager that accepts all certificates
+  - id: J-SAST-9
+    slot: sast
+    pattern: "deserial"
+    file: src/main/java/com/example/Payments.java
+    note: ObjectInputStream over caller-controlled bytes
+  - id: J-LINT-4
+    slot: lint
+    pattern: "EqualsHashCode"
+    file: src/main/java/com/example/Payments.java
+    note: equals overridden without hashCode
+  - id: J-LINT-5
+    slot: lint
+    pattern: "IllegalCatch"
+    file: src/main/java/com/example/Payments.java
+    note: catch of broad Exception hiding failures
+  - id: J-LINT-6
+    slot: lint
+    pattern: "MissingSwitchDefault"
+    file: src/main/java/com/example/Payments.java
+    note: switch over tiers with no default branch
+  - id: J-MUT-2
+    slot: mutation
+    pattern: "validateAmount"
+    file: src/main/java/com/example/Payments.java
+    note: negated-conditional mutant survives — rejection branch untested
+  - id: J-MUT-3
+    slot: mutation
+    pattern: "roundToUnit"
+    file: src/main/java/com/example/Payments.java
+    note: return-value mutant survives — production callers ignore the result
   - id: J-DEPS-1
     slot: deps
     pattern: "CVE-2021-44228"
     file: pom.xml
     note: log4j-core 2.14.1 (Log4Shell)
+  - id: J-DEPS-2
+    slot: deps
+    pattern: "CVE-2022-42889"
+    file: pom.xml
+    note: commons-text 1.9 (Text4Shell)
+  - id: J-DEPS-3
+    slot: deps
+    pattern: "CVE-2022-1471"
+    file: pom.xml
+    note: snakeyaml 1.30 (unsafe constructor RCE)
