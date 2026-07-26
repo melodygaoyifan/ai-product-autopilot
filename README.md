@@ -204,7 +204,7 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
 
 ## Star history
 
-[![Star History Chart](https://api.star-history.com/svg?repos=melodygaoyifan/autoproduct&type=Date)](https://star-history.com/#melodygaoyifan/autoproduct)
+[![Star History Chart](https://api.star-history.com/svg?repos=melodygaoyifan/autoproduct-ai&type=Date)](https://star-history.com/#melodygaoyifan/autoproduct-ai)
 
 ---
 
