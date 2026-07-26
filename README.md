@@ -2,6 +2,33 @@
 
 **Write one document. Get a working product.**
 
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-~190-brightgreen)
+
+One plain-language paragraph in — a planned, built, tested, reviewed product out:
+
+```text
+FDR.md — written by a non-technical founder, in their own words:
+
+  小区团购接龙的后端 API(先只做后端)。
+  团长能创建一个团购(商品名和单价),能查看它;
+  住户能对某个团购下单(名字和数量);
+  团长能看到某个团购的汇总(总件数、应收总额)。
+  数据要存在数据库里,重启不丢。暂时不要:页面、支付、登录。
+```
+
+&nbsp;&nbsp;&nbsp;&nbsp;↓ &nbsp;`autoproduct create groupbuy --profile web`
+
+- ✅ **开工前确认** — the plan read back in plain language *before* anything is built
+- ✅ **Locked task DAG** — cycle/lane/budget-checked; scope changes only via approved SCR
+- ✅ **Machine-linted acceptance criteria** (EARS) — each one covered by a test skeleton
+- ✅ **Working code + hermetic tests** — test-first, sandboxed suite must pass
+- ✅ **6-voter code review** — deterministic security probes, every finding independently verified
+- ✅ **Build report in your language** — every automated approval on the record
+
+*(All of the above are real artifacts from one run — see [A real run](#a-real-run-unedited) below.)*
+
+<!-- TODO: terminal GIF of `autoproduct studio` / `create` goes here (vhs or asciinema) -->
+
 autoproduct builds apps, web services, and 微信小程序 from a single
 requirements document (the **FDR**) written by someone with **no coding or
 product experience** — in their own words, in their own language. The
@@ -73,6 +100,48 @@ intent?); machines keep the ones non-technical users can't make (EARS
 validity, DAG soundness, tests) — every auto-approval is recorded. Nothing
 auto-merges, nothing deploys to production autonomously.
 
+## A real run (unedited)
+
+Everything below is generated output from one `autoproduct product-bench --real`
+case — the group-buy FDR shown at the top of this page. Nothing is hand-edited.
+
+**1. The system confirms the plan back in plain language (Gate U1/U2 — you reply `--yes`):**
+
+> **会做什么**
+> - 团长可以**创建一个团购**,填写商品名和单价,系统会返回一个团购的编号。
+> - 住户可以**对某个团购下单**,填写自己的名字和购买数量。
+> - 团长可以**查看某个团购的汇总**:一共订了多少件、总共应收多少钱。
+> - 所有数据都会**保存在数据库里**,就算服务器重启,团购和订单也不会丢。
+>
+> **这次不做**
+> - 登录和身份系统 · 支付和对账 · 任何网页界面 · 修改或取消订单 · 截止时间
+>
+> **怎么算成功**
+> - 下单后,汇总的**总件数一件不差**;应收金额**一分不差**(单价 × 总件数)。
+> - 服务器重启后,已创建的团购和订单**一条都不丢**。
+
+**2. The locked plan (generated task DAG, Gate U2):**
+
+| id | task | depends on | lane | est |
+|---|---|---|---|---|
+| t1 | 数据持久化基座与团购创建 | — | api | 6.0h |
+| t2 | 查看单个团购详情 | t1 | api | 4.0h |
+| t3 | 对团购下单 | t2 | api | 6.0h |
+| t4 | 查看团购汇总 | t3 | api | 5.0h |
+
+**3. What lands in the workspace** (built test-first, then reviewed):
+
+```text
+app/        main.py db.py store.py orders.py summary.py handlers.py
+specs/      EARS acceptance criteria per feature + API contracts
+tests/      16 test files — persistence, validation, 404s, summary math
+product/    brief.md · plan.md · CONFIRMATION.md · ACCEPTANCE.md · BUILD-REPORT.md
+```
+
+Every built product is then scored by *independent* behavioral probes
+(start the server, hit the API, check the math) — results are reported
+unaveraged in the product benchmark, including the runs that fail.
+
 ## Measured
 
 - **Review benchmark** (`autoproduct bench`): recall 100%, precision 67%
@@ -121,5 +190,22 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
   pure-logic modules are gated via `node --test` today.
 - Single-machine operation; crash recovery is per-review, Celery/Redis
   multi-instance supervision is the documented upgrade path.
+
+## Roadmap
+
+| | |
+|---|---|
+| v0.8 ✅ | all four downstream stage MASes (code review, test gate, deploy review, maintenance) |
+| v0.9 ✅ | greenfield autopilot for non-technical founders (FDR → product) |
+| v0.10 ✅ | founder experience complete + measured (Studio UI, product benchmark) |
+| v0.11 ✅ | traditional-industry adoption track |
+| v0.12 ✅ | adoption hardening (degraded mode, dwell metric, profile wiring, evaluator graduation) |
+| M2–M7 🔜 | screenshots of the built product, in-Studio correction loop, generated 验收清单, built-in telemetry, pre-built 微信支付/登录 blocks catalog |
+
+## Star history
+
+[![Star History Chart](https://api.star-history.com/svg?repos=melodygaoyifan/autoproduct&type=Date)](https://star-history.com/#melodygaoyifan/autoproduct)
+
+---
 
 MIT · design docs: [autoproduct-design](https://github.com/melodygaoyifan/autoproduct-design)
