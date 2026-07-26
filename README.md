@@ -204,6 +204,7 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.13 ✅ | product-loop substrate (docs 20–23 weeks P1–P2): typed claim ledger, `claim_lint`, evidence snapshots, synthetic-persona scan, source standing, `user_data_taint` |
 | v0.14 ✅ | safe-publish (weeks P3–P5): the seven deterministic marketing backstops, channel profiles, Gate PL3 scoped approvals, `forbidden_autonomous` additions — the framework drafts and checks, a human presses every publish button, and it never spends money |
 | v0.15 ✅ | evidence (weeks P6–P8): analytics/feedback boundary with query-layer person-level refusal, metric vocabulary with baseline-resetting definitions, cohort readings with sufficiency teeth, P4/Stage-8 signal router, attribution typed at the tool boundary — only holdouts ground causal claims |
+| v0.16 ✅ | upstream (weeks P9–P13): P0 opportunity sensing (deterministic clustering, kill-registry read path, Gate PL0), P1 market & viability (`sizing_calc` ranges not points, `injection_scan`, standing-checked probes, Gate PL1), P2 PRD (`prd_lint`, kill criteria required, instrumentation-or-task), and the machine-checked `p2_to_stage1` handoff validated at Discovery's DoR gate — plus 16 upstream voter charters |
 | M2–M7 🔜 | screenshots of the built product, in-Studio correction loop, generated 验收清单, built-in telemetry, pre-built 微信支付/登录 blocks catalog |
 
 ## Star history

@@ -6,7 +6,58 @@ is upstream. Everything else in the product loop (P0-P5 stages, gates,
 voters) stands on this substrate and ships in later milestones.
 """
 
-from autoproduct.product.claim_lint import ClaimIssue, lint_ledger
+from autoproduct.product.claim_lint import ClaimIssue, has_causal_language, lint_ledger
+from autoproduct.product.handoff import (
+    Handoff,
+    HandoffError,
+    SeedHypothesis,
+    emit_handoff,
+    validate_handoff_at_dor,
+    write_handoff,
+)
+from autoproduct.product.injection import InjectionFinding, injection_scan
+from autoproduct.product.kill_registry import (
+    KillMatch,
+    KillRecord,
+    KillRegistryError,
+    load_kill_registry,
+    match_killed,
+)
+from autoproduct.product.market import (
+    GATE_PL1_RUBRIC,
+    GatePL1Decision,
+    GatePL1Entry,
+    gate_pl1_entry,
+    record_probe,
+)
+from autoproduct.product.opportunity import (
+    DemandHypothesis,
+    GatePL0Result,
+    OpportunityCandidate,
+    RawSignal,
+    SignalCluster,
+    cluster_signals,
+    gate_pl0,
+)
+from autoproduct.product.prd import (
+    GATE_PL2_RUBRIC,
+    PRD,
+    GatePL2Decision,
+    Instrumentation,
+    Outcome,
+    OutcomeTarget,
+    PlanningTask,
+    PRDDemandHypothesis,
+    PrdIssue,
+    prd_lint,
+)
+from autoproduct.product.sizing import (
+    SizingFactor,
+    SizingIssue,
+    SizingResult,
+    TopDownCrosscheck,
+    sizing_calc,
+)
 from autoproduct.product.claims import (
     Claim,
     ProductPolicy,
@@ -33,8 +84,49 @@ from autoproduct.product.sources import (
 from autoproduct.product.taint import TaintPolicyError, load_taint_classes
 
 __all__ = [
+    "GATE_PL1_RUBRIC",
+    "GATE_PL2_RUBRIC",
+    "PRD",
     "Claim",
     "ClaimIssue",
+    "DemandHypothesis",
+    "GatePL0Result",
+    "GatePL1Decision",
+    "GatePL1Entry",
+    "GatePL2Decision",
+    "Handoff",
+    "HandoffError",
+    "InjectionFinding",
+    "Instrumentation",
+    "KillMatch",
+    "KillRecord",
+    "KillRegistryError",
+    "OpportunityCandidate",
+    "Outcome",
+    "OutcomeTarget",
+    "PRDDemandHypothesis",
+    "PlanningTask",
+    "PrdIssue",
+    "RawSignal",
+    "SeedHypothesis",
+    "SignalCluster",
+    "SizingFactor",
+    "SizingIssue",
+    "SizingResult",
+    "TopDownCrosscheck",
+    "cluster_signals",
+    "emit_handoff",
+    "gate_pl0",
+    "gate_pl1_entry",
+    "has_causal_language",
+    "injection_scan",
+    "load_kill_registry",
+    "match_killed",
+    "prd_lint",
+    "record_probe",
+    "sizing_calc",
+    "validate_handoff_at_dor",
+    "write_handoff",
     "PersonaFinding",
     "ProductPolicy",
     "ProductPolicyError",

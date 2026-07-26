@@ -1,0 +1,54 @@
+# sizing_calc fixture gate (§20.55.1) — 8 cases.
+# expect: status ok|blocked, rules = exact issue-rule set, flagged = divergence flag.
+_orgs: &orgs {name: addressable_orgs, value: 4200, source_type: primary_cited,
+              sensitivity: [3000, 5000]}
+_share: &share {name: share_with_qualifying_workflow, value: 0.35,
+                source_type: third_party_report, sensitivity: [0.20, 0.50]}
+_acv: &acv {name: annual_contract_value, value: 3600, source_type: primary_measured, n: 27}
+
+fixtures:
+  - label: missing-sensitivity-on-reported-factor
+    expect: {status: blocked, rules: [missing_sensitivity]}
+    input:
+      factors:
+        - *orgs
+        - {name: share_with_qualifying_workflow, value: 0.35, source_type: third_party_report}
+        - *acv
+  - label: unsourced-factor-blocks-naming-it
+    expect: {status: blocked, rules: [unsourced_factor]}
+    input:
+      factors:
+        - *orgs
+        - {name: conversion_intuition, value: 0.1, source_type: ""}
+        - *acv
+  - label: sensitivity-not-bracketing-value
+    expect: {status: blocked, rules: [bad_sensitivity]}
+    input:
+      factors:
+        - {name: addressable_orgs, value: 4200, source_type: primary_cited,
+           sensitivity: [5000, 9000]}
+        - *acv
+  - label: six-x-divergence-is-flagged-not-smoothed
+    expect: {status: ok, rules: [], flagged: true}
+    input:
+      factors: [*orgs, *share, *acv]
+      top_down_crosscheck: {value: 32000000, note: "analyst TAM figure, ~6x midpoint"}
+  - label: clean-bottom-up-range
+    expect: {status: ok, rules: [], flagged: null}
+    input:
+      factors: [*orgs, *share, *acv]
+  - label: boundary-all-measured-no-sensitivities
+    expect: {status: ok, rules: [], flagged: null}
+    input:
+      factors:
+        - {name: active_workspaces, value: 900, source_type: primary_measured, n: 900}
+        - *acv
+  - label: boundary-modest-divergence-not-flagged
+    expect: {status: ok, rules: [], flagged: false}
+    input:
+      factors: [*orgs, *share, *acv]
+      top_down_crosscheck: {value: 8000000, note: "1.5x midpoint"}
+  - label: no-factors-is-a-guess
+    expect: {status: blocked, rules: [no_factors]}
+    input:
+      factors: []

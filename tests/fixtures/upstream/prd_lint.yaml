@@ -1,0 +1,76 @@
+# prd_lint fixture gate (§20.56) — 8 cases.
+# expect: rules = exact issue-rule set; tasks = generated Planning tasks.
+_outcome_ok: &outcome_ok
+  id: O-1
+  metric: activation_rate
+  definition_ref: metrics/activation_rate.md
+  baseline: {value: 0.11, source_type: primary_measured, n: 1840}
+  target: {value: 0.18, by: "2026-11-30"}
+  instrumentation: {event: workspace.first_export, exists: true}
+_prd_ok: &prd_ok
+  id: PRD-T-1
+  problem_statement: "Recruiting ops teams lose hours weekly to manual exports."
+  evidence_refs: [C-1]
+  affected_segment: {name: mid-market recruiting ops, size_claim: C-1}
+  non_goals: ["No custom report builder in this cycle.",
+              "No new user segment beyond existing workspace admins."]
+  outcomes: [*outcome_ok]
+  demand_hypotheses:
+    - {id: H-1, statement: "Admins will adopt one-click bulk export",
+       falsifier: "fewer than 10% of active workspaces use it within 30 days",
+       check: {stage: P4, method: cohort, window_days: 30}}
+  scope_tier: standard
+  kill_criteria: ["O-1 misses 50% of target lift after 2 loops => Gate PL5 review"]
+_prose_ok: &prose_ok
+  "Who: mid-market recruiting ops teams. Problem: hours lost weekly to manual
+  exports, evidenced by ticket cluster C-1. Why now: churn interviews name it."
+
+fixtures:
+  - label: ears-leakage
+    expect: {rules: [ears_leakage], tasks: 0}
+    input:
+      prd: *prd_ok
+      prose: "When an admin clicks export, the system shall produce a CSV
+        within 4 seconds."
+  - label: module-leakage
+    expect: {rules: [module_leakage], tasks: 0}
+    input:
+      prd: *prd_ok
+      prose: "We will add POST /api/exports/bulk and a worker in export_queue.py."
+  - label: one-non-goal-is-a-wish
+    expect: {rules: [missing_non_goals], tasks: 0}
+    input:
+      prd: {<<: *prd_ok, non_goals: ["No custom report builder."]}
+      prose: *prose_ok
+  - label: missing-kill-criteria
+    expect: {rules: [missing_kill_criteria], tasks: 0}
+    input:
+      prd: {<<: *prd_ok, kill_criteria: []}
+      prose: *prose_ok
+  - label: undefined-metric
+    expect: {rules: [undefined_metric], tasks: 0}
+    input:
+      prd:
+        <<: *prd_ok
+        outcomes:
+          - {<<: *outcome_ok, metric: vibes_score, definition_ref: ""}
+      prose: *prose_ok
+  - label: uninstrumented-outcome-becomes-a-task
+    expect: {rules: [], tasks: 1}
+    input:
+      prd:
+        <<: *prd_ok
+        outcomes:
+          - {<<: *outcome_ok,
+             instrumentation: {event: workspace.first_export, exists: false}}
+      prose: *prose_ok
+  - label: clean-prd
+    expect: {rules: [], tasks: 0}
+    input:
+      prd: *prd_ok
+      prose: *prose_ok
+  - label: unresolved-evidence-ref
+    expect: {rules: [unresolved_evidence_refs], tasks: 0}
+    input:
+      prd: {<<: *prd_ok, evidence_refs: [C-1, C-404]}
+      prose: *prose_ok

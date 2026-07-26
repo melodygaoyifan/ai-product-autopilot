@@ -23,8 +23,8 @@ import re
 from pydantic import BaseModel
 
 from autoproduct.marketing.artifacts import Page
-
-_SHINGLE_K = 5
+from autoproduct.textsim import jaccard as _jaccard
+from autoproduct.textsim import shingles as _shingles
 
 
 class SpamPolicyConfig(BaseModel):
@@ -40,19 +40,6 @@ class SpamPolicyFinding(BaseModel):
     rule: str
     message: str
     pages: list[str] = []
-
-
-def _shingles(text: str, k: int = _SHINGLE_K) -> set[tuple[str, ...]]:
-    words = re.findall(r"[a-z0-9']+", text.lower())
-    if len(words) < k:
-        return {tuple(words)} if words else set()
-    return {tuple(words[i : i + k]) for i in range(len(words) - k + 1)}
-
-
-def _jaccard(a: set, b: set) -> float:
-    if not a or not b:
-        return 0.0
-    return len(a & b) / len(a | b)
 
 
 def _has_original_contribution(page: Page) -> bool:
