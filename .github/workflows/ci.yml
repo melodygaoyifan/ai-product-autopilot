@@ -11,5 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      - run: |
+          git config --global user.email ci@example.invalid
+          git config --global user.name autoproduct-ci
       - run: uv sync
       - run: uv run pytest -q
