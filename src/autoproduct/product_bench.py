@@ -37,6 +37,52 @@ from autoproduct.upstream.provisioning import preview_env
 _PROBE_TIMEOUT_S = 60
 
 
+def _pid_alive(pid: int) -> bool:
+    import os
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # exists, owned by someone else
+    return True
+
+
+def acquire_bench_lock(repo_dir: str | Path = ".") -> Path:
+    """One bench at a time: concurrent runs interleave the same log,
+    collide on preserved-workspace paths, and double provider spend
+    (2026-07-26: two sessions launched run 6 within minutes of each
+    other). A pidfile whose pid is dead is stale and reclaimed."""
+    import os
+
+    pidfile = Path(repo_dir) / ".mas" / "product-bench" / "bench.pid"
+    if pidfile.exists():
+        try:
+            other = int(pidfile.read_text(encoding="utf-8").strip())
+        except ValueError:
+            other = 0
+        if other and other != os.getpid() and _pid_alive(other):
+            raise RuntimeError(
+                f"another product-bench is already running (pid {other}, "
+                f"pidfile {pidfile}) — refusing to start a duplicate. If that "
+                "pid is not a bench, delete the pidfile and rerun."
+            )
+    pidfile.parent.mkdir(parents=True, exist_ok=True)
+    pidfile.write_text(str(os.getpid()), encoding="utf-8")
+    return pidfile
+
+
+def release_bench_lock(pidfile: Path) -> None:
+    import os
+
+    try:
+        if pidfile.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            pidfile.unlink()
+    except OSError:
+        pass
+
+
 class Probe(BaseModel):
     name: str
     script: str  # python source, exit 0 = behavior works
@@ -256,6 +302,17 @@ def run_case(
 
 
 def run_product_bench(
+    cases_dir: str | Path, *, provider: str | None = None, limit: int | None = None,
+    repo_dir: str | Path = ".",
+) -> BenchSummary:
+    pidfile = acquire_bench_lock(repo_dir)
+    try:
+        return _run_product_bench(cases_dir, provider=provider, limit=limit)
+    finally:
+        release_bench_lock(pidfile)
+
+
+def _run_product_bench(
     cases_dir: str | Path, *, provider: str | None = None, limit: int | None = None
 ) -> BenchSummary:
     import time

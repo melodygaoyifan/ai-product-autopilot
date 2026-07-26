@@ -776,7 +776,13 @@ def product_bench(
     INDEPENDENT probes against the built product (WebGen-Bench pattern)."""
     from autoproduct.product_bench import run_product_bench, save_summary
 
-    summary = run_product_bench(cases_dir, provider=provider, limit=limit)
+    try:
+        summary = run_product_bench(
+            cases_dir, provider=provider, limit=limit, repo_dir=repo_dir
+        )
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
     table = Table(title="product bench")
     for col in ("case", "autopilot", "built", "probes passed", "clean reviews", "s"):
         table.add_column(col)
