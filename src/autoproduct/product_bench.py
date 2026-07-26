@@ -233,11 +233,13 @@ def run_case(
     import time
 
     start = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="autoproduct-productbench-",
-                                 ignore_cleanup_errors=True) as tmp:
-        # ignore_cleanup_errors: the T3 docker sandbox (present on CI
-        # runners) writes root-owned __pycache__ inside; a leaked tmp
-        # file on an ephemeral runner is harmless, a crashed suite is not.
+    # mkdtemp + rmtree(ignore_errors): the T3 docker sandbox (present on
+    # CI runners) writes root-owned __pycache__ inside, and on CPython
+    # 3.12 TemporaryDirectory's ignore_cleanup_errors still raises through
+    # its resetperms path there. A leaked tmp file on an ephemeral runner
+    # is harmless; a crashed suite is not.
+    tmp = tempfile.mkdtemp(prefix="autoproduct-productbench-")
+    try:
         workspace = init_workspace(Path(tmp) / case.name, case.name, case.profile)
         (workspace / "FDR.md").write_text(case.fdr, encoding="utf-8")
         result = run_autopilot(
@@ -319,6 +321,10 @@ def run_case(
             probes=probes,
             duration_s=round(time.monotonic() - start, 1),
         )
+    finally:
+        import shutil as _shutil_cleanup
+
+        _shutil_cleanup.rmtree(tmp, ignore_errors=True)
 
 
 def run_product_bench(
