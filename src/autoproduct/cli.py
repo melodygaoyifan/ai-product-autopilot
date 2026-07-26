@@ -1283,6 +1283,143 @@ def claim_lint_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("prd-lint")
+def prd_lint_cmd(
+    prd_yaml: str = typer.Argument(..., help="PRD yaml (a 'prd:' mapping, §20.56.2)"),
+    prose: str = typer.Option(..., help="Path to the prd.md prose document"),
+    metrics_dir: str = typer.Option("metrics", help="Metric vocabulary directory"),
+    ledger: str = typer.Option(None, help="claims/*.claim.yaml the PRD cites"),
+):
+    """PRD lint (§20.56): EARS/module leakage, non-goals, kill criteria,
+    vocabulary metrics, instrumentation-or-task. Exit 0 clean / 1 findings
+    (JSONL) / 2 malformed. Generated Planning tasks print to stderr."""
+    import json
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    import yaml as _yaml
+
+    from autoproduct.evidence import load_metric_vocabulary
+    from autoproduct.product import PRD, load_ledger, prd_lint
+
+    try:
+        raw = _yaml.safe_load(_Path(prd_yaml).read_text())
+        prd = PRD(**(raw.get("prd") or raw))
+        prose_text = _Path(prose).read_text()
+        claim_ids = set()
+        if ledger:
+            claim_ids = {
+                str(c.get("id"))
+                for c in load_ledger(ledger).get("claims") or []
+                if isinstance(c, dict)
+            }
+        vocabulary = load_metric_vocabulary(metrics_dir)
+    except Exception as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    issues, tasks = prd_lint(
+        prd, prose_text, vocabulary=vocabulary,
+        ledger_claim_ids=claim_ids or set(prd.evidence_refs),
+    )
+    for issue in issues:
+        print(json.dumps(issue.model_dump()))
+    for task in tasks:
+        print(f"PLANNING TASK: {task.title}", file=_sys.stderr)
+    if issues:
+        raise typer.Exit(code=1)
+
+
+@app.command("handoff-check")
+def handoff_check_cmd(
+    handoff: str = typer.Argument(..., help="handoff/p2_to_stage1.yaml"),
+    prd_document: str = typer.Option(..., help="The exact PRD document the handoff pins"),
+):
+    """Discovery's DoR check (§20.56.3): a malformed handoff fails here
+    with a named error rather than being interpreted. Exit 0 / 2."""
+    from pathlib import Path as _Path
+
+    from autoproduct.product import HandoffError, validate_handoff_at_dor
+
+    try:
+        accepted = validate_handoff_at_dor(
+            handoff, prd_document_text=_Path(prd_document).read_text()
+        )
+    except (HandoffError, OSError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    console.print(
+        f"[green]handoff ok[/green]: {accepted.prd_ref} "
+        f"({len(accepted.hypothesis_seed)} hypothesis(es), "
+        f"tier {accepted.scope_tier})"
+    )
+
+
+@app.command("experiment-check")
+def experiment_check_cmd(
+    design: str = typer.Argument(..., help="experiments/EXP-*.yaml"),
+    weekly_traffic: int = typer.Option(..., help="Current eligible traffic per week"),
+    max_days: int = typer.Option(60, help="Longest acceptable run window"),
+):
+    """Gate PL3-exp preflight (§21.61): schema, FDR plan, power, and the
+    pre-registration pin if present. Exit 0 / 1 findings / 2 malformed."""
+    import json
+    from pathlib import Path as _Path
+
+    from autoproduct.experiment import (
+        PreregistrationError,
+        fdr_plan_check,
+        load_design,
+        power_calc,
+        verify_at_analysis,
+    )
+
+    try:
+        text = _Path(design).read_text()
+        parsed = load_design(text)
+    except Exception as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    findings = [i.model_dump() for i in fdr_plan_check(parsed)]
+    power_result = power_calc(
+        baseline=parsed.power.baseline,
+        mde_relative=parsed.power.mde_relative,
+        arms=parsed.design_stage1.arms,
+        weekly_traffic=weekly_traffic,
+        max_days=max_days,
+        alpha=parsed.power.alpha,
+        power=parsed.power.power,
+    )
+    if power_result.status != "ok":
+        findings.append({"rule": power_result.status, "message": power_result.detail})
+    if parsed.preregistration_hash:
+        try:
+            verify_at_analysis(text, parsed.preregistration_hash)
+        except PreregistrationError as exc:
+            findings.append({"rule": "preregistration_mismatch", "message": str(exc)})
+    for finding in findings:
+        print(json.dumps(finding))
+    if findings:
+        raise typer.Exit(code=1)
+    console.print(
+        f"[green]design ok[/green]: n={power_result.n_per_arm}/arm, "
+        f"~{power_result.expected_days} days"
+    )
+
+
+@app.command("preregister")
+def preregister_cmd(
+    design: str = typer.Argument(..., help="experiments/EXP-*.yaml to pin"),
+):
+    """Compute the pre-registration hash for a design (§21.61.3). Record it
+    in the file's preregistration_hash field BEFORE any exposure — writing
+    the pin in does not change the pin."""
+    from pathlib import Path as _Path
+
+    from autoproduct.experiment import lock_preregistration
+
+    print(lock_preregistration(_Path(design).read_text()))
+
+
 @app.command("evidence-bundle")
 def evidence_bundle(
     review_id: str = typer.Argument(..., help="Review ID (directory under .mas/reviews/)"),

@@ -166,7 +166,8 @@ unaveraged in the product benchmark, including the runs that fail.
 | `serve` | webhook mode: PRs review themselves; incidents POST in |
 | `worker` | queue worker — set `AUTOPRODUCT_QUEUE_DB` on `serve` and run N workers to drain bursts in parallel (SQLite, one host; multi-host needs a shared broker) |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
-| `claim-lint` | outer-loop claim-ledger lint (docs 20–23): unsourced numbers, causal-without-holdout, missing falsifiers, inference ceilings |
+| `claim-lint` · `prd-lint` · `handoff-check` | outer-loop gates standalone (docs 20–23): claim ledgers, PRD boundary/kill-criteria/instrumentation, the machine-checked P2→Stage-1 handoff |
+| `preregister` · `experiment-check` | pin an experiment design before exposure; preflight schema + FDR plan + power + pin integrity (§21.61) |
 
 Setup: `uv sync`, `ANTHROPIC_API_KEY` (yours — keys live only in your
 environment, are never written to the workspace or git, and every
@@ -181,10 +182,12 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
 
 ## Honest limits (today)
 
-- Screenshots, the in-Studio correction loop, generated 验收清单,
-  built-in telemetry, and a pre-built 微信支付/登录 blocks catalog are the
-  active roadmap (M2–M7) — the product works, but you validate it by
-  using it, not yet by looking at it.
+- The outer product loop's deterministic layer is complete (v0.13–v0.18);
+  its LLM stage rosters (OpportunityWriter, MarketWriter, PRDWriter,
+  EvidenceWriter with their voter fan-outs) run today via the standing
+  charters + the generic MAS machinery, not yet as one-command stages.
+  And the loop's own release bar is honest: it is unproven until a real
+  Gate PL5 records a real kill or pivot.
 - Cloud services are guided, not auto-provisioned; deploys generate
   artifacts + instructions, the button stays yours.
 - 小程序 page-level testing needs `miniprogram-simulate` installed;
@@ -207,7 +210,7 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.16 ✅ | upstream (weeks P9–P13): P0 opportunity sensing (deterministic clustering, kill-registry read path, Gate PL0), P1 market & viability (`sizing_calc` ranges not points, `injection_scan`, standing-checked probes, Gate PL1), P2 PRD (`prd_lint`, kill criteria required, instrumentation-or-task), and the machine-checked `p2_to_stage1` handoff validated at Discovery's DoR gate — plus 16 upstream voter charters |
 | v0.17 ✅ | experiments (weeks P12–P14): hash-pinned pre-registration (post-hoc edits void the analysis), one primary metric, BH-controlled two-stage screening→validation, O'Brien–Fleming sequential peeking, guardrail vetoes, `BLOCKED(INSUFFICIENT_POWER)` as a supported outcome, and inconclusive-enters-nothing at the compounding boundary |
 | v0.18 ✅ | closed loop (weeks P15–P16): `evaluate_kill_criteria` (a fired criterion cannot be closed without a recorded human decision), the append-only kill registry writer, hypothesis reconciliation with claim-ID invalidation, Gate PL5 (routes to P0/P1/P2, never the inner loop), and the five outer-loop metrics — including attention cost per resolved hypothesis, the number by which the whole product loop is falsifiable. Completes the docs 20–23 track at the deterministic layer; the v3.0.0 design gate closes with the operator's first real recorded kill-or-pivot |
-| M2–M7 🔜 | screenshots of the built product, in-Studio correction loop, generated 验收清单, built-in telemetry, pre-built 微信支付/登录 blocks catalog |
+| M2–M7 ✅ | screenshots of the built product (gated, visible when absent), in-Studio correction loop with SCR-backed scope changes, generated 验收清单 walkthrough covering every built criterion, built-in telemetry with digest reconciliation, 微信支付/登录/订阅 blocks catalog, estimate hints + checkpoint undo |
 
 ## Star history
 
