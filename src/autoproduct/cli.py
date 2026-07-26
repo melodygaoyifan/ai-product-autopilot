@@ -1283,6 +1283,259 @@ def claim_lint_cmd(
         raise typer.Exit(code=1)
 
 
+def _run_stage(spec, user_input: str, workspace: str, provider: str) -> None:
+    """Run one product stage, persist the report, exit per outcome."""
+    import yaml as _yaml
+    from pathlib import Path as _Path
+
+    from autoproduct.product.stage_engine import run_product_stage
+
+    report = run_product_stage(spec, user_input, workspace, provider=provider)
+    report_path = _Path(workspace) / ".mas" / "product" / f"{spec.name}-report.yaml"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        _yaml.safe_dump(report.model_dump(), sort_keys=False, allow_unicode=True)
+    )
+    console.print(f"[bold]{spec.name}[/bold]: {report.status} "
+                  f"({len(report.voter_findings)} verified finding(s), "
+                  f"{report.revisions} revision(s))")
+    console.print(report.leader_summary)
+    for path in report.artifacts:
+        console.print(f"  wrote {path}")
+    if report.status != "ok":
+        for finding in report.det_findings:
+            console.print(f"  [red]{finding.get('rule')}[/red]: {finding.get('message')}")
+        for key, value in report.gate.items():
+            if key != "passed":
+                console.print(f"  gate.{key}: {value}")
+        raise typer.Exit(code=1)
+
+
+@app.command("opportunity")
+def opportunity_cmd(
+    signals: str = typer.Argument(..., help="YAML list of raw signals "
+                                            "({id, source_id, text, locator})"),
+    workspace: str = typer.Option(".", help="Product workspace"),
+    provider: str = typer.Option("anthropic", help="LLM provider (mock for offline)"),
+):
+    """P0 Opportunity Sensing (§20.54): cluster real signals, draft >=3
+    candidates, det-tools + five voters + verify + leader, Gate PL0."""
+    import yaml as _yaml
+    from pathlib import Path as _Path
+
+    from autoproduct.product import RawSignal, cluster_signals
+    from autoproduct.product.sources import SignalSourceError, load_signal_sources
+    from autoproduct.product.stages import opportunity_spec
+
+    try:
+        raw = _yaml.safe_load(_Path(signals).read_text()) or []
+        parsed = [RawSignal(**s) for s in raw]
+        declared = {s.id for s in load_signal_sources(_Path(workspace) / ".mas")}
+        undeclared = sorted({s.source_id for s in parsed} - declared)
+        if undeclared:
+            raise SignalSourceError(
+                f"signal sources {undeclared} not declared in "
+                ".mas/signal-sources.yaml — no standing, no source (§20.54.2)"
+            )
+    except (SignalSourceError, ValueError, OSError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    clusters = cluster_signals(parsed)
+    user_input = _yaml.safe_dump(
+        {"clusters": [c.model_dump() for c in clusters]},
+        sort_keys=False, allow_unicode=True,
+    )
+    _run_stage(opportunity_spec(workspace), user_input, workspace, provider)
+
+
+@app.command("market")
+def market_cmd(
+    candidate: str = typer.Argument(..., help="Candidate id or statement from "
+                                              "product/opportunities.md"),
+    workspace: str = typer.Option(".", help="Product workspace"),
+    provider: str = typer.Option("anthropic"),
+    disconfirmation_answered: bool = typer.Option(
+        False, help="Set once every Disconfirmation finding has an evidence answer"),
+    regulatory_triaged: bool = typer.Option(
+        False, help="Set once regulatory findings are triaged"),
+):
+    """P1 Market & Viability (§20.55): bottom-up sizing, probe-derived
+    facts, six voters incl. Disconfirmation, deterministic Gate PL1 entry.
+    The decision itself is `market-approve`."""
+    from pathlib import Path as _Path
+
+    from autoproduct.product.stages import market_spec
+
+    context = ""
+    opportunities = _Path(workspace) / "product" / "opportunities.md"
+    if opportunities.exists():
+        context = f"\n\n<opportunities>\n{opportunities.read_text()}\n</opportunities>"
+    _run_stage(
+        market_spec(workspace,
+                    disconfirmation_answered=disconfirmation_answered,
+                    regulatory_triaged=regulatory_triaged),
+        f"<candidate>\n{candidate}\n</candidate>{context}",
+        workspace, provider,
+    )
+
+
+@app.command("market-approve")
+def market_approve_cmd(
+    outcome: str = typer.Option(..., help="pursue | test_first | park | reject"),
+    decider: str = typer.Option(..., help="The named human deciding"),
+    scope_tier: str = typer.Option("", help="Required for pursue"),
+    named_test: str = typer.Option("", help="Required for test_first"),
+    park_reason: str = typer.Option("", help="Required for park"),
+    workspace: str = typer.Option("."),
+):
+    """Record the human Gate PL1 decision (§20.55.5). forbidden_autonomous:
+    this gate, always."""
+    import yaml as _yaml
+    from pathlib import Path as _Path
+
+    from autoproduct.product import GatePL1Decision
+
+    try:
+        decision = GatePL1Decision(
+            outcome=outcome, decider=decider, scope_tier=scope_tier,
+            named_test=named_test, park_reason=park_reason,
+        )
+        decision.validate_completeness()
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    path = _Path(workspace) / ".mas" / "product" / "gate-pl1.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_yaml.safe_dump(decision.model_dump(), sort_keys=False))
+    console.print(f"[green]Gate PL1 recorded[/green]: {outcome} by {decider}")
+
+
+@app.command("prd")
+def prd_cmd(
+    workspace: str = typer.Option(".", help="Product workspace"),
+    provider: str = typer.Option("anthropic"),
+    metrics_dir: str = typer.Option(None, help="Metric vocabulary directory "
+                                               "(default: <workspace>/metrics)"),
+):
+    """P2 Product Definition (§20.56): the PRD with outcomes, non-goals,
+    kill criteria; prd_lint deterministic; five voters. Approval + handoff
+    is `prd-approve`."""
+    from pathlib import Path as _Path
+
+    from autoproduct.product.stages import prd_spec
+
+    parts = []
+    for rel in ("market/market.md", "product/opportunities.md"):
+        path = _Path(workspace) / rel
+        if path.exists():
+            parts.append(f"<{path.stem}>\n{path.read_text()}\n</{path.stem}>")
+    ledger = _Path(workspace) / "claims" / "market.claim.yaml"
+    if ledger.exists():
+        parts.append(f"<market_claims>\n{ledger.read_text()}\n</market_claims>")
+    _run_stage(
+        prd_spec(workspace, metrics_dir=metrics_dir),
+        "\n\n".join(parts) or "No upstream artifacts found — state that and stop.",
+        workspace, provider,
+    )
+
+
+@app.command("prd-approve")
+def prd_approve_cmd(
+    decider: str = typer.Option(..., help="The named human at Gate PL2"),
+    workspace: str = typer.Option("."),
+):
+    """Record Gate PL2 (§20.56.4) and emit the machine-checked
+    p2_to_stage1.yaml handoff. Cheap on purpose — the expensive judgment
+    was Gate PL1's."""
+    import yaml as _yaml
+    from pathlib import Path as _Path
+
+    from autoproduct.product import (
+        PRD,
+        GatePL2Decision,
+        emit_handoff,
+        validate_handoff_at_dor,
+        write_handoff,
+    )
+
+    root = _Path(workspace)
+    try:
+        prd_raw = _yaml.safe_load((root / "product" / "prd.yaml").read_text())
+        prd = PRD(**prd_raw["prd"])
+        prose = (root / "product" / "prd.md").read_text()
+        decision = GatePL2Decision(
+            acknowledged_kill_criteria=True, scope_tier=prd.scope_tier,
+            decider=decider,
+        )
+    except (OSError, KeyError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    handoff = emit_handoff(
+        prd, prose, claim_ledger_ref="claims/prd.claim.yaml",
+        outcomes_ref="product/outcomes.yaml",
+    )
+    path = write_handoff(handoff, root / "handoff" / "p2_to_stage1.yaml")
+    validate_handoff_at_dor(path, prd_document_text=prose)  # prove it lands
+    gate = root / ".mas" / "product" / "gate-pl2.yaml"
+    gate.parent.mkdir(parents=True, exist_ok=True)
+    gate.write_text(_yaml.safe_dump(decision.model_dump(), sort_keys=False))
+    console.print(f"[green]Gate PL2 recorded[/green]; handoff at {path} "
+                  "(validated at Discovery's DoR)")
+
+
+@app.command("evidence")
+def evidence_cmd(
+    events: str = typer.Argument(..., help="YAML list of analytics events"),
+    metric: str = typer.Option("activation_rate", help="Vocabulary metric to read"),
+    cohort_field: str = typer.Option("signup_week"),
+    cohort_start: str = typer.Option(..., help="ISO date the cohort window opened"),
+    workspace: str = typer.Option("."),
+    provider: str = typer.Option("anthropic"),
+    metrics_dir: str = typer.Option(None, help="Default: <workspace>/metrics"),
+):
+    """P4 Product Evidence (§22.62): deterministic cohort reading through
+    the privacy boundary FIRST, then the writer narrates and assigns
+    verdicts against pre-stated falsifiers; Gate PL4."""
+    import datetime as _dt
+    import yaml as _yaml
+    from pathlib import Path as _Path
+
+    from autoproduct.evidence import AnalyticsStore, cohort_calc, load_metric_vocabulary
+    from autoproduct.product import PRD
+    from autoproduct.product.stages import evidence_spec
+
+    root = _Path(workspace)
+    try:
+        rows = _yaml.safe_load(_Path(events).read_text()) or []
+        vocabulary = load_metric_vocabulary(metrics_dir or root / "metrics")
+        definition = vocabulary[metric]
+        prd = PRD(**_yaml.safe_load((root / "product" / "prd.yaml").read_text())["prd"])
+        readings_list = cohort_calc(
+            AnalyticsStore(rows), definition,
+            cohort_field=cohort_field,
+            cohort_start=_dt.date.fromisoformat(cohort_start),
+            today=_dt.date.today(),
+        )
+    except (OSError, KeyError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    reading = readings_list[0] if readings_list else None
+    readings = {
+        o.id: reading for o in prd.outcomes if o.metric == metric and reading
+    }
+    user_input = _yaml.safe_dump(
+        {"outcomes": [o.model_dump() for o in prd.outcomes],
+         "hypotheses": [h.model_dump() for h in prd.demand_hypotheses],
+         "cohort_readings": {k: v.model_dump() for k, v in readings.items()}},
+        sort_keys=False, allow_unicode=True,
+    )
+    _run_stage(
+        evidence_spec(workspace, prd_outcome_ids=[o.id for o in prd.outcomes],
+                      readings=readings),
+        user_input, workspace, provider,
+    )
+
+
 @app.command("prd-lint")
 def prd_lint_cmd(
     prd_yaml: str = typer.Argument(..., help="PRD yaml (a 'prd:' mapping, §20.56.2)"),

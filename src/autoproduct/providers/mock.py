@@ -118,6 +118,37 @@ class MockProvider(Provider):
                 ]},
                 sort_keys=False,
             )
+        from autoproduct.product.stage_engine import (
+            PRODUCT_LEADER_MARKER,
+            PRODUCT_VERIFIER_MARKER,
+            PRODUCT_VOTER_MARKER,
+        )
+        from autoproduct.product.stages import (
+            EVIDENCE_WRITER_MARKER,
+            MARKET_WRITER_MARKER,
+            OPPORTUNITY_WRITER_MARKER,
+            PRD_WRITER_MARKER,
+        )
+
+        if PRODUCT_VOTER_MARKER in system:
+            return yaml.safe_dump(
+                {"findings": [{"severity": "minor",
+                               "problem": "mock nit: one sentence could be tighter",
+                               "evidence": user.strip().splitlines()[0][:80]}]},
+                sort_keys=False, allow_unicode=True,
+            )
+        if PRODUCT_VERIFIER_MARKER in system:
+            return yaml.safe_dump({"verdict": "verified", "reason": "mock re-derivation"})
+        if PRODUCT_LEADER_MARKER in system:
+            return yaml.safe_dump({"summary": "mock leader synthesis for the gate."})
+        if OPPORTUNITY_WRITER_MARKER in system:
+            return self._opportunity_writer()
+        if MARKET_WRITER_MARKER in system:
+            return self._market_writer()
+        if PRD_WRITER_MARKER in system:
+            return self._prd_writer()
+        if EVIDENCE_WRITER_MARKER in system:
+            return self._evidence_writer(user)
         from autoproduct.upstream.discover import BRIEF_CRITIC_MARKER, BRIEFWRITER_MARKER
         from autoproduct.upstream.plan import PLAN_CRITIC_MARKER, PLANNER_MARKER
 
@@ -391,4 +422,139 @@ class MockProvider(Provider):
                 "verdict": "VERIFIED" if verified else "NOT_REPRODUCIBLE",
                 "reason": "mock quote check",
             }
+        )
+
+    # --- product-loop stage writers (P0/P1/P2/P4) ---------------------------
+
+    def _opportunity_writer(self) -> str:
+        claim = {
+            "id": "C-O1",
+            "text": "Support tickets cluster on manual CSV export pain",
+            "kind": "user_need",
+            "source_type": "user_reported",
+            "n": 12,
+            "evidence": [{"method": "ticket_cluster",
+                          "locator": "evidence://tickets/export-pain",
+                          "retrieved_at": "2026-07-23T16:20:00Z"}],
+            "falsifier": "the cluster resolves to fewer than 5 distinct reporters",
+        }
+        candidates = [
+            {"id": f"cand-{letter}",
+             "statement": f"Reduce manual export pain, framing {letter}",
+             "hypothesis": "admins will adopt one-click bulk export",
+             "falsifier": "under 5% of active workspaces click the stub in 2 weeks",
+             "cheapest_test": "bulk-export stub behind a click counter",
+             "claims": [dict(claim, id=f"C-O{i}")]}
+            for i, letter in enumerate("abc", start=1)
+        ]
+        return yaml.safe_dump({"candidates": candidates}, sort_keys=False)
+
+    def _market_writer(self) -> str:
+        return yaml.safe_dump(
+            {
+                "narrative": "Mock market assessment: bottom-up build from "
+                "closed deals and the ticket cluster.",
+                "claims": [
+                    {"id": "C-M1",
+                     "text": "Our closed deals in the segment averaged $3,600 "
+                             "annual contract value",
+                     "kind": "pricing",
+                     "source_type": "primary_measured",
+                     "n": 27,
+                     "evidence": [{"method": "crm_query",
+                                   "locator": "crm://reports/closed-won-2026H1",
+                                   "retrieved_at": "2026-07-22T08:30:00Z"}],
+                     "falsifier": "recomputing over the same set lands outside "
+                                  "$3,300-$3,900"},
+                    {"id": "C-M2",
+                     "text": "Recruiting-ops users file tickets about manual "
+                             "export pain",
+                     "kind": "user_need",
+                     "source_type": "user_reported",
+                     "n": 12,
+                     "evidence": [{"method": "ticket_cluster",
+                                   "locator": "evidence://tickets/export-pain",
+                                   "retrieved_at": "2026-07-23T16:20:00Z"}],
+                     "falsifier": "the cluster resolves to fewer than 5 "
+                                  "distinct reporters"},
+                ],
+                "sizing": {
+                    "factors": [
+                        {"name": "active_workspaces", "value": 900,
+                         "source_type": "primary_measured", "n": 900},
+                        {"name": "annual_contract_value", "value": 3600,
+                         "source_type": "primary_measured", "n": 27},
+                    ]
+                },
+            },
+            sort_keys=False,
+        )
+
+    def _prd_writer(self) -> str:
+        return yaml.safe_dump(
+            {
+                "prd": {
+                    "id": "PRD-2026-014",
+                    "problem_statement": "Recruiting ops teams lose hours "
+                    "weekly to manual exports.",
+                    "evidence_refs": ["C-M1", "C-M2"],
+                    "affected_segment": {"name": "mid-market recruiting ops",
+                                         "size_claim": "C-M1"},
+                    "non_goals": ["No custom report builder this cycle.",
+                                  "No new segment beyond workspace admins."],
+                    "outcomes": [{
+                        "id": "O-1",
+                        "metric": "activation_rate",
+                        "definition_ref": "metrics/activation_rate.md",
+                        "baseline": {"value": 0.11,
+                                     "source_type": "primary_measured",
+                                     "n": 1840},
+                        "target": {"value": 0.18, "by": "2026-11-30"},
+                        "instrumentation": {"event": "workspace.first_export",
+                                            "exists": False},
+                    }],
+                    "demand_hypotheses": [{
+                        "id": "H-1",
+                        "statement": "admins will adopt one-click bulk export",
+                        "falsifier": "under 10% of active workspaces use it "
+                                     "within 30 days",
+                        "check": {"stage": "P4", "method": "cohort",
+                                  "window_days": 30},
+                    }],
+                    "scope_tier": "standard",
+                    "kill_criteria": ["O-1 misses 50% of target lift after 2 "
+                                      "loops => Gate PL5 review"],
+                },
+                "prose": "Who: mid-market recruiting ops. Problem: hours lost "
+                "weekly to manual exports, per ticket cluster C-M2. Why now: "
+                "churn interviews name it.",
+                "claims": [],
+            },
+            sort_keys=False,
+        )
+
+    def _evidence_writer(self, user: str) -> str:
+        verdict = "not_supported" if "0.128" in user or "below" in user else "supported"
+        return yaml.safe_dump(
+            {
+                "narrative": "Mock evidence bundle: cohort reading against the "
+                "O-1 target, verdict against the pre-stated falsifier.",
+                "verdicts": [{"id": "H-1", "verdict": verdict,
+                              "falsifier_met": verdict == "not_supported"}],
+                "reasons": [],
+                "claims": [{
+                    "id": "C-E1",
+                    "text": "Cohort w1 activation reading recorded against "
+                            "the O-1 target",
+                    "kind": "demand",
+                    "source_type": "primary_measured",
+                    "n": 250,
+                    "evidence": [{"method": "cohort_calc",
+                                  "locator": "analytics://cohorts/w1",
+                                  "retrieved_at": "2026-07-26T09:00:00Z"}],
+                    "falsifier": "re-running the cohort query yields a "
+                                 "different numerator",
+                }],
+            },
+            sort_keys=False,
         )

@@ -168,6 +168,7 @@ unaveraged in the product benchmark, including the runs that fail.
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
 | `claim-lint` · `prd-lint` · `handoff-check` | outer-loop gates standalone (docs 20–23): claim ledgers, PRD boundary/kill-criteria/instrumentation, the machine-checked P2→Stage-1 handoff |
 | `preregister` · `experiment-check` | pin an experiment design before exposure; preflight schema + FDR plan + power + pin integrity (§21.61) |
+| `opportunity` · `market` / `market-approve` · `prd` / `prd-approve` · `evidence` | the outer loop as one-command stages: writer → det tools → charter voters → verify → leader → gate, human decisions recorded at PL1/PL2, handoff emitted and DoR-validated |
 
 Setup: `uv sync`, `ANTHROPIC_API_KEY` (yours — keys live only in your
 environment, are never written to the workspace or git, and every
@@ -182,12 +183,10 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
 
 ## Honest limits (today)
 
-- The outer product loop's deterministic layer is complete (v0.13–v0.18);
-  its LLM stage rosters (OpportunityWriter, MarketWriter, PRDWriter,
-  EvidenceWriter with their voter fan-outs) run today via the standing
-  charters + the generic MAS machinery, not yet as one-command stages.
-  And the loop's own release bar is honest: it is unproven until a real
-  Gate PL5 records a real kill or pivot.
+- The outer product loop runs end-to-end (`opportunity` → `market` →
+  `market-approve` → `prd` → `prd-approve` → `evidence`), but its release
+  bar is honest: it is unproven until a real Gate PL5 records a real kill
+  or pivot on a live cycle.
 - Cloud services are guided, not auto-provisioned; deploys generate
   artifacts + instructions, the button stays yours.
 - 小程序 page-level testing needs `miniprogram-simulate` installed;
