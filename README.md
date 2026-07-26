@@ -32,7 +32,7 @@ signals.yaml — support tickets + GitHub issues, verbatim:
 *(Every artifact above is unedited output from one real-provider run — see
 [A real run](#a-real-run-unedited) below.)*
 
-<!-- TODO: terminal GIF of the opportunity → evidence chain (vhs or asciinema) -->
+![The outer loop, one real run — condensed transcript; every number and quote is unedited pipeline output](docs/media/opportunity-run.svg)
 
 Two loops, one system. The **inner loop** builds: apps, web services, and
 微信小程序 from a single plain-language requirements doc (the **FDR**) —
@@ -48,6 +48,9 @@ shipping, killing — to a named human at a recorded gate.
 ```bash
 autoproduct studio myshop --profile miniprogram    # browser UI: the whole flow
 ```
+
+<img src="docs/media/studio.png" alt="Founder Studio — the FDR entry screen: describe your product in your own words, Chinese or English; the system checks it and makes the plan" width="720">
+
 
 or the same flow in the terminal:
 
