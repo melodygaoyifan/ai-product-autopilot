@@ -1290,7 +1290,11 @@ def _run_stage(spec, user_input: str, workspace: str, provider: str) -> None:
 
     from autoproduct.product.stage_engine import run_product_stage
 
-    report = run_product_stage(spec, user_input, workspace, provider=provider)
+    try:
+        report = run_product_stage(spec, user_input, workspace, provider=provider)
+    except ValueError as exc:  # writer exhausted its revisions on the contract
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
     report_path = _Path(workspace) / ".mas" / "product" / f"{spec.name}-report.yaml"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
@@ -1341,8 +1345,13 @@ def opportunity_cmd(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
     clusters = cluster_signals(parsed)
+    # The writer must cite the signals' own locators verbatim — so the
+    # signals travel with their locators, not just cluster membership
+    # (found by the first real-provider smoke: a locator the prompt never
+    # contained cannot be cited, and the standing check rightly blocked).
     user_input = _yaml.safe_dump(
-        {"clusters": [c.model_dump() for c in clusters]},
+        {"clusters": [c.model_dump() for c in clusters],
+         "signals": [s.model_dump() for s in parsed]},
         sort_keys=False, allow_unicode=True,
     )
     _run_stage(opportunity_spec(workspace), user_input, workspace, provider)
@@ -1358,6 +1367,10 @@ def market_cmd(
         False, help="Set once every Disconfirmation finding has an evidence answer"),
     regulatory_triaged: bool = typer.Option(
         False, help="Set once regulatory findings are triaged"),
+    evidence: str = typer.Option(
+        None, help="YAML of recorded evidence the writer may cite: probe "
+                   "entries from record_probe (with artifact hashes) and "
+                   "owned crm://analytics figures (§20.55.3)"),
 ):
     """P1 Market & Viability (§20.55): bottom-up sizing, probe-derived
     facts, six voters incl. Disconfirmation, deterministic Gate PL1 entry.
@@ -1370,6 +1383,15 @@ def market_cmd(
     opportunities = _Path(workspace) / "product" / "opportunities.md"
     if opportunities.exists():
         context = f"\n\n<opportunities>\n{opportunities.read_text()}\n</opportunities>"
+    if evidence:
+        context += (
+            "\n\n<recorded_evidence>\n"
+            + _Path(evidence).read_text()
+            + "\n</recorded_evidence>\n"
+            "Cite ONLY the recorded evidence above (verbatim locators and "
+            "artifact hashes) plus clearly-labeled model_inference within the "
+            "ratio ceiling. Never invent a locator."
+        )
     _run_stage(
         market_spec(workspace,
                     disconfirmation_answered=disconfirmation_answered,

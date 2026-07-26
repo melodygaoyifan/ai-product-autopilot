@@ -82,6 +82,10 @@ clustered signals into >=3 candidate opportunities. Cluster and count real
 artifacts; never synthesize demand no signal shows. Every candidate needs a
 falsifiable demand hypothesis and a NAMED cheapest test ("build an MVP" is
 not a test).
+
+Evidence locators must be the signals' own `locator` values, VERBATIM —
+one evidence entry per underlying signal. A locator you invent (or a
+signal id used as a locator) has no declared standing and fails the build.
 {_CLAIM_RULES}
 Respond with ONLY YAML:
 candidates:
@@ -223,6 +227,13 @@ def market_spec(
         sizing = data.get("sizing") or {}
         factors = [SizingFactor(**f) for f in sizing.get("factors") or []]
         crosscheck = sizing.get("top_down_crosscheck")
+        # The cross-check is optional; an honest "unavailable"/null value is
+        # absence, not a schema violation (first real-provider smoke: the
+        # writer correctly reported no analyst figure exists for the niche).
+        if not isinstance(crosscheck, dict) or not isinstance(
+            crosscheck.get("value"), (int, float)
+        ):
+            crosscheck = None
         artifact = MarketAssessment(
             narrative=str(data.get("narrative", "")),
             ledger={"claims": data.get("claims") or []},
@@ -334,6 +345,20 @@ def prd_spec(
     policy = load_product_policy(mas)
     root = pathlib.Path(workspace)
     metrics_path = pathlib.Path(metrics_dir) if metrics_dir else root / "metrics"
+    # The writer can only cite metrics that exist (§22.62.3, human-owned) —
+    # so it must be told what exists (first real-provider smoke: it invented
+    # plausible metrics for two straight revisions because nothing said
+    # what the vocabulary contained).
+    vocabulary_now = load_metric_vocabulary(metrics_path)
+    vocabulary_note = (
+        "\nMetric vocabulary (outcomes may cite ONLY these ids; if none fits, "
+        "cite the closest and name the missing metric in open_questions — a "
+        "human must author its definition file first):\n"
+        + "\n".join(
+            f"- {m.id}: {m.definition}" for m in vocabulary_now.values()
+        )
+        + "\n"
+    )
 
     def _known_claim_ids() -> set[str]:
         if ledger_claim_ids is not None:
@@ -401,7 +426,7 @@ def prd_spec(
 
     return StageSpec(
         name="prd",
-        writer_system=_PRD_SYSTEM,
+        writer_system=_PRD_SYSTEM + vocabulary_note,
         expected_keys=("prd",),
         skills_subdir="prd",
         parse=parse,
