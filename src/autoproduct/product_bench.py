@@ -258,16 +258,22 @@ def run_case(
 def run_product_bench(
     cases_dir: str | Path, *, provider: str | None = None, limit: int | None = None
 ) -> BenchSummary:
+    import time
+
     cases = load_cases(cases_dir)[: limit or None]
     results = []
     for case in cases:
+        start = time.monotonic()
         try:
             results.append(run_case(case, provider=provider))
         except Exception as exc:  # noqa: BLE001 — one case never kills the bench
+            # A crashed case still spent real wall-clock — a 0.0s error row
+            # reads as "died instantly" when the failure may be an hour in.
             results.append(
                 CaseResult(
                     name=case.name,
                     autopilot_status=f"error: {type(exc).__name__}: {str(exc)[:120]}",
+                    duration_s=round(time.monotonic() - start, 1),
                 )
             )
 

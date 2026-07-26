@@ -59,3 +59,20 @@ def test_bench_is_honest_about_failing_probes(tmp_path):
     assert result.probe_pass_rate < 1.0  # …but the impossible probe fails, visibly
     failing = [p for p in result.probes if not p.passed]
     assert failing and "unreasonable-demand" in failing[0].name
+
+
+def test_crashed_case_still_records_duration(monkeypatch):
+    import autoproduct.product_bench as pb
+
+    def _boom(case, provider=None):
+        import time
+
+        time.sleep(0.05)
+        raise KeyError("new_content")
+
+    monkeypatch.setattr(pb, "run_case", _boom)
+    summary = pb.run_product_bench(CASES, limit=1)
+    (case,) = summary.cases
+    assert case.autopilot_status.startswith("error: KeyError")
+    # A crashed case spent real wall-clock; 0.0 would read as "died instantly".
+    assert case.duration_s > 0.0
