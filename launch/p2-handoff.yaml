@@ -1,0 +1,14 @@
+handoff:
+  prd_ref: PRD-LAUNCH-2026-01
+  prd_hash: sha256:ba766cbfaebd39d180f00eec132459045d08aeb5a8c18d32e3eb40bea0b7dcc9
+  claim_ledger_ref: claims/prd.claim.yaml
+  hypothesis_seed:
+  - id: H-L1
+    statement: the no-key replay rung is the entry adopters actually use before configuring
+      a key
+    class: assumed
+    falsifier: fewer than half of the first 10 key-configured adopters report trying
+      replay --demo first (asked directly, n recorded)
+  scope_tier: thin
+  outcomes_ref: product/outcomes.yaml
+  constraints_inherited: []

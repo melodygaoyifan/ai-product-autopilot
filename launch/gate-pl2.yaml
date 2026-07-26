@@ -1,0 +1,3 @@
+acknowledged_kill_criteria: true
+scope_tier: thin
+decider: melody

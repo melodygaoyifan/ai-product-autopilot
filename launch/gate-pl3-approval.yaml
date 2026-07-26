@@ -1,0 +1,17 @@
+gate: PL3
+approval:
+  scope:
+    artifact_hash: sha256:b60145615165c3963c06564453e241389e6d49359d7a330390a84ee2c14bba46
+    channel: content_geo
+    window_start: '2026-07-26'
+    window_end: '2026-08-02'
+  approver: melody
+  decision: approve
+substantiation_map_entries: 14
+preflight:
+  claim_substantiation_check: clean
+  disclosure_lint: clean
+  brand_and_safety_scan: clean
+  geo_extractability_check: clean
+  spam_policy_check: clean
+published_to: github-release v0.22.0 (owned surface, content_geo defaults)
