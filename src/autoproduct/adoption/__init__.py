@@ -10,6 +10,16 @@
   (§19 G2 Day 9-10; unsigned v0 until the attestation ledger lands).
 """
 
+from autoproduct.adoption.data_gates import (
+    ContractViolation,
+    EvalGateResult,
+    IdempotencyResult,
+    contract_check,
+    eval_gate,
+    idempotency_check,
+    load_contract,
+    pin_baseline,
+)
 from autoproduct.adoption.evidence import build_evidence_bundle, write_evidence_bundle
 from autoproduct.adoption.gate_r import (
     ChangePackage,
@@ -45,7 +55,15 @@ from autoproduct.adoption.toolchains import (
 __all__ = [
     "BenchmarkResult",
     "ChangePackage",
+    "ContractViolation",
+    "EvalGateResult",
     "GateREntry",
+    "IdempotencyResult",
+    "contract_check",
+    "eval_gate",
+    "idempotency_check",
+    "load_contract",
+    "pin_baseline",
     "ToolchainRecord",
     "ToolchainReport",
     "benchmark_toolchain",
