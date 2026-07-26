@@ -1,0 +1,34 @@
+calibration:
+  catch_rate: 1.0
+  detection_factor: 3.0
+  environment: loopback
+  parity: low
+  readings:
+  - defect: n_plus_one_query
+    p95_ms: 7.029
+    control_p95_ms: 0.812
+    degradation: 8.66
+    caught: true
+  - defect: missing_index_on_filtered_column
+    p95_ms: 4.266
+    control_p95_ms: 0.812
+    degradation: 5.25
+    caught: true
+  - defect: unbounded_connection_pool
+    p95_ms: 4.238
+    control_p95_ms: 0.812
+    degradation: 5.22
+    caught: true
+  - defect: sync_call_in_async_handler
+    p95_ms: 27.7
+    control_p95_ms: 0.812
+    degradation: 34.11
+    caught: true
+  - defect: quadratic_serializer_on_list_endpoint
+    p95_ms: 18.936
+    control_p95_ms: 0.812
+    degradation: 23.32
+    caught: true
+  note: 'relative-detection calibration: proves the lane can see its seeded defects;
+    satisfies no AC (ADR-U30 precondition 4 still applies to AC runs)'
+  at: '2026-07-26'
