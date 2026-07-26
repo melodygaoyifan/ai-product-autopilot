@@ -390,6 +390,12 @@ def _fix_iteration(root: Path, provider: str, model: str, findings) -> bool:
         return False
     if _pytest_in_subprocess(root).status not in ("passed", "no_tests"):
         subprocess.run(["git", "checkout", "--", "."], cwd=root, capture_output=True, timeout=60)
+        # checkout restores tracked files only — NEW files the fix wrote
+        # would stay as untracked residue (run-4 workspace contamination).
+        subprocess.run(
+            ["git", "clean", "-qfd", "--", *written],
+            cwd=root, capture_output=True, timeout=60,
+        )
         return False
     subprocess.run(["git", "add", "-A"], cwd=root, capture_output=True, timeout=60)
     committed = subprocess.run(

@@ -65,6 +65,12 @@ Rules:
 - The design section states the module layout and, where the profile
   demands it, API contracts / domains / permissions.
 - Smallest spec that satisfies the request; no speculative features.
+- The request's scope is law: a capability it explicitly excludes or
+  defers must not appear in the spec. A profile constraint about an
+  excluded capability is inapplicable — never a reason to add it.
+- Test skeletons assert observable behavior (status codes, response
+  bodies, rendered text, the PRESENCE of a labeled control) — never
+  markup microstructure like specific id/class/attribute values.
 
 Respond with ONLY YAML:
 title: ...

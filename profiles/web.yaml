@@ -1,14 +1,15 @@
 name: web
 description: Web application (frontend + API)
 constraints:
-  - Every state-changing endpoint has CSRF protection and an auth check; every outbound fetch of a user-supplied URL goes through an allowlist.
-  - Core Web Vitals budgets are part of done — no unbounded bundles, no layout shift from late-loading content.
-  - Every user-facing flow has a Playwright-style E2E test skeleton before implementation starts.
-  - Accessibility is not optional — interactive elements are keyboard-reachable and labeled.
+  - The FDR's scope is law — a capability it explicitly excludes or defers ("暂时不要", "not now", "later") must not appear in any spec. A constraint below that concerns an excluded capability is inapplicable, never a reason to add the capability.
+  - Where the product includes accounts or login, every state-changing endpoint has CSRF protection and an auth check. Products without login expose their endpoints unauthenticated — do not invent sessions, tokens, or CSRF machinery for them.
+  - Every outbound fetch of a user-supplied URL goes through an allowlist.
+  - Where the product includes pages, Core Web Vitals budgets are part of done — no unbounded bundles, no layout shift from late-loading content — and accessibility is not optional — interactive elements are keyboard-reachable and labeled. Every user-facing flow gets a Playwright-style E2E test skeleton before implementation starts.
+  - API-only products need no browser E2E skeletons; behavioral tests against the HTTP surface are the contract.
 spec_extras:
-  - For each user-facing criterion, name the E2E flow that proves it.
+  - Where the product includes pages, name for each user-facing criterion the E2E flow that proves it.
   - State the API contract (method, path, request/response shape) for every endpoint the feature adds.
 checks:
   - playwright (availability-gated)
   - lighthouse budgets (availability-gated)
-stack_hint: Keep the stack boring — Python stdlib (http.server, sqlite3) or FastAPI; any other framework MUST be added to requirements.txt or it won't run. Vanilla JS frontend unless the brief demands otherwise.
+stack_hint: 'Keep the stack boring — Python stdlib (http.server, sqlite3) or FastAPI; any other framework MUST be added to requirements.txt or it won''t run. Vanilla JS frontend unless the brief demands otherwise. BOOT CONTRACT: the entry point app/main.py (or main.py / app.py) MUST start the server itself when executed directly — `python app/main.py` — binding 127.0.0.1 on the PORT env var (default 8000). For FastAPI end the file with: if __name__ == "__main__": import uvicorn; uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8000"))). The founder and every verification harness run the product exactly this way; an app that only boots via an external `uvicorn app.main:app` command is not done.'

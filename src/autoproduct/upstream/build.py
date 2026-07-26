@@ -80,6 +80,108 @@ def _run_tests(repo: Path):
     )
 
 
+_BOOT_GATE_TIMEOUT_S = 15
+_BOOT_CONTRACT_HINT = (
+    "the entry point must start its own server on the PORT env var when run "
+    "directly; for FastAPI append: if __name__ == \"__main__\": import uvicorn; "
+    "uvicorn.run(app, host=\"127.0.0.1\", port=int(os.environ.get(\"PORT\", \"8000\")))"
+)
+
+
+def _boot_gate(repo: Path) -> str | None:
+    """Web-profile extension of Gate U4: the product must SERVE, not just
+    pass its suite — the founder and every probe boot it as
+    `python <entry>` with $PORT set (product-bench run 4: every built web
+    task failed all probes on 'server never listened' because nothing
+    enforced this contract). Returns feedback text on failure; None when
+    the entry listens or when there is no entry point yet to boot."""
+    import os
+    import socket
+    import sys
+
+    entry = next(
+        (e for e in ("app/main.py", "main.py", "app.py") if (repo / e).exists()), None
+    )
+    if entry is None:
+        return None
+    with socket.socket() as picker:
+        picker.bind(("127.0.0.1", 0))
+        port = picker.getsockname()[1]
+    proc = subprocess.Popen(
+        [sys.executable, entry],
+        cwd=repo,
+        env={**os.environ, "PORT": str(port), "PYTHONPATH": str(repo)},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + _BOOT_GATE_TIMEOUT_S
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                err = (proc.stderr.read() or b"").decode(errors="replace")[-400:]
+                return (
+                    f"BOOT GATE: `python {entry}` exited with rc={proc.returncode} "
+                    f"instead of serving. stderr tail: {err.strip() or '(empty)'} — "
+                    + _BOOT_CONTRACT_HINT
+                )
+            try:
+                socket.create_connection(("127.0.0.1", port), 0.5).close()
+                return None
+            except OSError:
+                time.sleep(0.3)
+        return (
+            f"BOOT GATE: `python {entry}` ran {_BOOT_GATE_TIMEOUT_S}s without "
+            "listening on 127.0.0.1:$PORT — " + _BOOT_CONTRACT_HINT
+        )
+    finally:
+        proc.kill()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def _preserve_failed_attempt(repo: Path, slug: str, source: Path | None = None) -> str:
+    """Failure forensics that survives cleanup: copy the dirty tree to
+    .mas/failed-builds/<slug>. Before this, 'worktree left for inspection'
+    was untrue — worktrees are force-removed, and the run-4 postmortem had
+    to reconstruct failed attempts from workspace residue."""
+    import shutil
+
+    keep = repo / ".mas" / "failed-builds" / slug
+    shutil.rmtree(keep, ignore_errors=True)
+    keep.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        source or repo,
+        keep,
+        ignore=shutil.ignore_patterns(
+            ".git", ".mas", ".venv", "node_modules", "__pycache__", ".pytest_cache"
+        ),
+    )
+    return str(keep.relative_to(repo))
+
+
+def _reset_workspace(repo: Path, pre_existing: set[str]) -> None:
+    """In-place build failed: drop every file the attempt created and
+    restore tracked modifications. Uncommitted residue otherwise leaks into
+    sibling tasks, later stages, and the probes (run 4 left 724 inserted
+    lines dirtying the case-03 workspace the probes then measured)."""
+    for path in sorted(repo.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if ".git" in path.parts or ".mas" in path.parts:
+            continue
+        if path.is_file():
+            if str(path.relative_to(repo)) not in pre_existing:
+                path.unlink(missing_ok=True)
+        else:
+            try:
+                path.rmdir()  # only succeeds once emptied — intended
+            except OSError:
+                pass
+    subprocess.run(
+        ["git", "checkout", "--", "."], cwd=repo, capture_output=True, timeout=60
+    )
+
+
 def _write_files(
     repo: Path, files: list[dict], *, allowed_test_paths: set[str] | None = None
 ) -> tuple[list[str], list[str]]:
@@ -274,6 +376,7 @@ def run_build(
                 (worktree / ".mas" / config).write_text(
                     source.read_text(encoding="utf-8"), encoding="utf-8"
                 )
+        result: BuildResult | None = None
         try:
             result = _run_build_inner(
                 worktree, slug, provider=provider, model=model, started=started,
@@ -283,9 +386,15 @@ def run_build(
             result.detail = (result.detail + " " if result.detail else "") + f"branch build/{slug}"
             return result
         finally:
-            _run(["git", "worktree", "remove", "--force", str(worktree)], repo)
             import shutil as _shutil
 
+            if result is not None and result.status != "built":
+                preserved = _preserve_failed_attempt(repo, slug, source=worktree)
+                result.detail = (
+                    (result.detail + " " if result.detail else "")
+                    + f"(failed attempt preserved at {preserved})"
+                )
+            _run(["git", "worktree", "remove", "--force", str(worktree)], repo)
             _shutil.rmtree(worktree, ignore_errors=True)
     return _run_build_inner(
         repo, slug, provider=provider, model=model, started=started,
@@ -375,7 +484,14 @@ def _run_build_inner(
             # Structural walls stay: nothing was written; the model gets
             # the wall's text and a bounded retry.
             if iteration == MAX_ITERATIONS:
-                return BuildResult(slug=slug, status="error", iterations=iteration, detail=str(exc))
+                detail = str(exc)
+                if bookkeeping and written:
+                    # Earlier iterations already wrote into the shared
+                    # workspace — same residue rule as the failure returns.
+                    preserved = _preserve_failed_attempt(repo, slug)
+                    _reset_workspace(repo, pre_existing)
+                    detail += f" (failed attempt preserved at {preserved}; workspace reset)"
+                return BuildResult(slug=slug, status="error", iterations=iteration, detail=detail)
             feedback = (
                 f"WRITE REFUSED: {exc}. Resubmit ALL your files WITHOUT the "
                 "refused change — existing tests are read-only walls, not "
@@ -384,9 +500,14 @@ def _run_build_inner(
             continue
         if not written:
             if iteration == MAX_ITERATIONS:
+                detail = "implementer returned no files"
+                if bookkeeping:
+                    preserved = _preserve_failed_attempt(repo, slug)
+                    _reset_workspace(repo, pre_existing)
+                    detail += f" (failed attempt preserved at {preserved}; workspace reset)"
                 return BuildResult(
                     slug=slug, status="error", iterations=iteration,
-                    detail="implementer returned no files",
+                    detail=detail,
                 )
             feedback = (
                 "every file you returned was a weakened skeleton test and was "
@@ -404,7 +525,11 @@ def _run_build_inner(
         ):
             # skipped = JS tests exist but no node runtime; the skip is
             # visible in the report and review still judges the diff.
-            break
+            boot_failure = _boot_gate(repo) if project.profile == "web" else None
+            if boot_failure is None:
+                break
+            feedback = boot_failure
+            continue
         feedback = report.detail or report.summary
         if kept:
             feedback += (
@@ -414,26 +539,36 @@ def _run_build_inner(
                 + ". Make the CODE pass the skeleton as written."
             )
     else:
+        detail = "build gate still failing after max iterations; nothing committed"
+        if bookkeeping:
+            # bookkeeping=True means we built IN the shared workspace (the
+            # worktree path preserves + discards in the run_build wrapper).
+            preserved = _preserve_failed_attempt(repo, slug)
+            _reset_workspace(repo, pre_existing)
+            detail += f" (failed attempt preserved at {preserved}; workspace reset)"
         return BuildResult(
             slug=slug,
             status="build_failed",
             iterations=MAX_ITERATIONS,
             files_written=written,
-            test_summary=report.summary if report else "",
-            detail="suite still failing after max iterations; nothing committed "
-            "(worktree left for inspection)",
+            test_summary=(feedback or report.summary) if report else feedback,
+            detail=detail,
         )
 
     data_blockers = data_gate_blockers(repo, project.profile)
     if data_blockers:
+        detail = "data checks failed: " + "; ".join(data_blockers) + " — nothing committed"
+        if bookkeeping:
+            preserved = _preserve_failed_attempt(repo, slug)
+            _reset_workspace(repo, pre_existing)
+            detail += f" (failed attempt preserved at {preserved}; workspace reset)"
         return BuildResult(
             slug=slug,
             status="build_failed",
             iterations=iteration,
             files_written=written,
             test_summary=report.summary if report else "",
-            detail="data checks failed: " + "; ".join(data_blockers)
-            + " — nothing committed (worktree left for inspection)",
+            detail=detail,
         )
 
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
