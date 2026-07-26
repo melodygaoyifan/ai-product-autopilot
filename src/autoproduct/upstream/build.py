@@ -95,12 +95,18 @@ def _write_files(
         rel = str(f["path"]).lstrip("/")
         if any(rel.startswith(p) for p in _FORBIDDEN_PREFIXES) or ".." in rel:
             raise ValueError(f"implementer touched forbidden path {rel!r}")
-        # §13.29.5 write-lock: existing non-skeleton tests are read-only to
-        # the implementer. A blocking test is either its bug or a spec gap —
-        # never a test to edit. (Reward-hacking defense, structural.)
+        # §13.29.5 write-lock: existing non-skeleton TEST files are
+        # read-only to the implementer. A blocking test is either its bug
+        # or a spec gap — never a test to edit. (Reward-hacking defense,
+        # structural.) Support modules under tests/ (helpers, conftest,
+        # __init__) are NOT walled — feature tasks legitimately extend
+        # shared fixtures (run 3: t3 died here) — but they pass through
+        # the same weakening guard below, so gutting a helper's asserts
+        # still gets the file dropped, and sabotaged fixtures fail the
+        # other specs' tests in the suite gate.
         is_test = rel.startswith("tests/") or Path(rel).name.startswith("test_")
         if (
-            is_test
+            Path(rel).name.startswith("test_")
             and (repo / rel).exists()
             and allowed_test_paths is not None
             and rel not in allowed_test_paths

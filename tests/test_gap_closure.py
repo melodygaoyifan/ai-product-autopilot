@@ -56,6 +56,41 @@ def test_weakened_skeleton_is_kept_not_written(tmp_path):
     assert (tmp_path / "tests" / "test_s.py").read_text() == BEFORE
 
 
+def test_helper_files_under_tests_are_writable_but_guarded(tmp_path):
+    """tests/helpers, conftest, __init__ are shared fixtures, not walls —
+    run 3's t3 died refusing 'tests/helpers/__init__.py'. Weakening the
+    asserts inside one still drops the file (skeleton-wins guard)."""
+    from autoproduct.upstream.build import _write_files
+
+    (tmp_path / "tests" / "helpers").mkdir(parents=True)
+    helper = tmp_path / "tests" / "helpers" / "__init__.py"
+    helper.write_text("def check(x):\n    assert x > 0\n")
+    # Legitimate extension: asserts intact, new function added.
+    written, kept = _write_files(
+        tmp_path,
+        [{"path": "tests/helpers/__init__.py",
+          "new_content": "def check(x):\n    assert x > 0\n\ndef boot():\n    return 1\n"}],
+        allowed_test_paths=set(),
+    )
+    assert written == ["tests/helpers/__init__.py"] and kept == []
+    # Gutting the helper's assert: file dropped, original preserved.
+    written, kept = _write_files(
+        tmp_path,
+        [{"path": "tests/helpers/__init__.py", "new_content": "def check(x):\n    pass\n"}],
+        allowed_test_paths=set(),
+    )
+    assert written == [] and len(kept) == 1
+    assert "assert x > 0" in helper.read_text()
+    # Real test files stay hard-walled.
+    (tmp_path / "tests" / "test_prior.py").write_text("def test_a():\n    assert True\n")
+    with pytest.raises(ValueError, match="read-only"):
+        _write_files(
+            tmp_path,
+            [{"path": "tests/test_prior.py", "new_content": "def test_a():\n    pass\n"}],
+            allowed_test_paths=set(),
+        )
+
+
 def test_refused_write_is_atomic(tmp_path):
     """Two-pass write: a refusal mid-list leaves NOTHING written."""
     from autoproduct.upstream.build import _write_files
