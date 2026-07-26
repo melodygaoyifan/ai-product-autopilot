@@ -1,0 +1,16 @@
+# Edition E3: engineer (SDE / MLE / agent engineer) — doc 24 §71.
+edition: engineer
+version: 1
+defaults:
+  substrate_rung: S1
+  wip_limit: 2
+  channels_enabled: [content_geo, product_surface]
+  cadence_ceilings: {content_geo: 2/week}
+gate_policy:
+  consolidation: none
+  never_consolidate: [PL5, incident, consent_override, gate3_sensitive]
+  require_gate_owner: false
+attention:
+  weekly_review_minutes: 45
+  dwell_check_blocking: true
+docs_entry: editions/engineer/START-HERE.md

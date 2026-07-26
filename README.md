@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-595-brightgreen)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-608-brightgreen)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -42,6 +42,27 @@ opportunities, sizes markets bottom-up with mandatory sensitivity ranges,
 writes PRDs with required kill criteria, measures real cohorts through a
 privacy boundary, and routes every irreversible act — publishing, spending,
 shipping, killing — to a named human at a recorded gate.
+
+## Pick your door (one spine, three editions)
+
+```bash
+uvx autoproduct replay --demo    # 2 minutes, NO API key: a real review's audit
+                                 # trail, replayed offline — decide with evidence
+autoproduct init myco --profile web --edition solo         # or: enterprise | engineer
+```
+
+Editions are narrowing presets over the same unchanged pipeline — never
+forks, never fewer checks (`edition_lint` refuses anything that widens):
+
+- **[Solo / OPC 一人公司](editions/solo/START-HERE.md)** — built around your
+  attention: one product bet, a 45-minute weekly review with the kill
+  criteria first, safe publishing defaults.
+- **[Enterprise / traditional industry](editions/enterprise/START-HERE.md)** —
+  ships the procurement pack and the pilot-to-production contract; init
+  refuses without a named gate owner.
+- **[Engineer](editions/engineer/START-HERE.md)** — fixture-gated extension
+  points; nothing unfixtured registers, and you're invited to try to
+  break that.
 
 ## For founders (no technical background needed)
 
@@ -193,7 +214,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **595 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **608 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -251,6 +272,7 @@ Claude-written code; without it those seats visibly fall back
 | v0.18 ✅ | closed loop: `evaluate_kill_criteria` (a fired criterion cannot close without a recorded human decision), append-only kill registry, hypothesis reconciliation, the five loop metrics |
 | v0.19–v0.20 ✅ | the outer loop operable end-to-end: gate CLIs, then the four LLM stages as one-command runs; first real-provider smoke (three wiring bugs found by gates, fixed); 24 voter fixture-registration gates + `voter-gate` |
 | M2–M7 ✅ | build screenshots (gated-visible), in-Studio correction loop with SCR-backed scope changes, 验收清单 walkthrough, telemetry + digest, 微信支付/登录/订阅 blocks, estimate hints + undo |
+| v0.21 ✅ | platform editions + distribution (docs 24–25): `init --edition` with narrowing-only `edition_lint`, the three START-HERE doors + weekly founder review + procurement pack, `replay --demo` (a real audit trail, offline, no API key), `--from-bench` templates that are the benchmark fixtures, opt-in aggregate-only `telemetry`, the published [benchmark page](docs/benchmark.md), and ADR-U29: this README is checked against [claims/platform.yaml](claims/platform.yaml) by the test suite — asserting beyond the ledger fails the build |
 | next 🔜 | the v3.0.0 design gate: one live loop ending in a real recorded kill-or-pivot at Gate PL5 |
 
 ## Star history

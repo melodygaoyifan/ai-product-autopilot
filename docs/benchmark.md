@@ -1,0 +1,51 @@
+# The published benchmark (doc 25 §74)
+
+product-bench is the public trust artifact: four workspaces with seeded
+defects and pinned expected findings, runnable by anyone with one API key.
+**A benchmark you can only pass is marketing; one you can fail in public is
+evidence** — regressions publish too, because `eval-gate` baselines live
+in-repo and a version that drops recall shows in the diff.
+
+## Reporting rules (claim-lint semantics, applied to ourselves)
+
+- Every number carries model ID, date, harness version, and run count;
+  single-run numbers are labeled **n=1** and never headline.
+- Catch-rate claims come only from seeded-defect manifests
+  (`autoproduct toolchain --manifest`); uncalibrated lanes publish
+  **PROVISIONAL** in the same font size.
+- No cross-framework comparison tables: comparing our recall to another
+  framework's would require running *their* harness at equal effort, which
+  we have not done. The honest form is "here is ours, runnable."
+- Every figure below resolves against [claims/platform.yaml](../claims/platform.yaml);
+  the hermetic suite fails if this page asserts beyond the ledger (ADR-U29).
+
+## Review benchmark — 13 labeled cases
+
+recall 100%, precision 67% (bars: 40% / 50%) · `autoproduct bench` ·
+harness v0.12.0+, 2026-07-22. Cases: planted SQL injection, missing-WHERE,
+swallowed exceptions, eval-on-input, hardcoded secrets, typosquat deps,
+CSRF/SSRF, plus clean-diff controls and three real-bug regressions.
+
+## Product benchmark — full FDR → product runs
+
+Scored by independent behavioral probes executed against the built product
+(WebGen-Bench pattern); build rate, probe pass rate, and clean-review rate
+reported unaveraged.
+
+| Case set | build | probe pass | clean review | run |
+|---|---|---|---|---|
+| synthetic (3 cases incl. the honesty case) | 100% | 83.3% | 100% | n=1, 2026-07-23, claude-opus-4-8 writer |
+| real (4 cases, plain-Chinese FDRs) | 33% | 0% | 17% | n=1, 2026-07-26, run 5 — the pre-fix baseline; fixes landed after, re-run pending |
+
+The real-case row is the honest one and stays published: the probes are
+independent and they failed. The synthetic honesty case exists to prove
+probes *can* fail (one probe demands the impossible).
+
+## Reproduce
+
+```bash
+uvx autoproduct replay --demo        # no key: a real review's audit trail
+autoproduct bench                    # ~10 min, one key: the 13-case review bench
+autoproduct product-bench            # long: full FDR→product runs
+autoproduct init demo --profile web --from-bench 01-groupbuy-api   # templates ARE the fixtures
+```

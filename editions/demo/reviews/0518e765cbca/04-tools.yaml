@@ -1,0 +1,221 @@
+node: tools
+step: 4
+written_at: '2026-07-23T00:53:50.026909+00:00'
+tool_reports:
+- tool: secret_scan
+  status: ok
+  detail: ''
+  findings: []
+- tool: csrf_ssrf_probe
+  status: ok
+  detail: ''
+  findings: []
+- tool: slopsquat_check
+  status: ok
+  detail: no added dependencies
+  findings: []
+- tool: semgrep
+  status: skipped
+  detail: not installed (pip install semgrep)
+  findings: []
+- tool: bandit
+  status: ok
+  detail: ''
+  findings:
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 16
+    line_end: 16
+    evidence: '15     rep = load_replay(tmp_path / ".mas" / "reviews", state["review_id"])
+
+      16     assert [s.node for s in rep.steps] == [
+
+      17         "dor_gate", "init", "analyze", "tools", "vote", "verify", "leader"'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 19
+    line_end: 19
+    evidence: '18     ]
+
+      19     assert rep.verdict == "REQUEST_CHANGES"
+
+      20     assert rep.duration_s is not None and rep.duration_s >= 0'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 20
+    line_end: 20
+    evidence: '19     assert rep.verdict == "REQUEST_CHANGES"
+
+      20     assert rep.duration_s is not None and rep.duration_s >= 0
+
+      21     assert "passed" in summarize_step(rep.steps[0])'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 21
+    line_end: 21
+    evidence: '20     assert rep.duration_s is not None and rep.duration_s >= 0
+
+      21     assert "passed" in summarize_step(rep.steps[0])
+
+      22     assert "voter(s)" in summarize_step(rep.steps[4])'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 22
+    line_end: 22
+    evidence: '21     assert "passed" in summarize_step(rep.steps[0])
+
+      22     assert "voter(s)" in summarize_step(rep.steps[4])
+
+      23'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+- tool: pip_audit
+  status: ok
+  detail: no requirements.txt change
+  findings: []
+- tool: trufflehog
+  status: skipped
+  detail: not installed (brew install trufflehog)
+  findings: []
+voter_outputs:
+- voter: tool:bandit
+  model: deterministic
+  status: OK
+  substituted_from: null
+  findings:
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 16
+    line_end: 16
+    evidence: '15     rep = load_replay(tmp_path / ".mas" / "reviews", state["review_id"])
+
+      16     assert [s.node for s in rep.steps] == [
+
+      17         "dor_gate", "init", "analyze", "tools", "vote", "verify", "leader"'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 19
+    line_end: 19
+    evidence: '18     ]
+
+      19     assert rep.verdict == "REQUEST_CHANGES"
+
+      20     assert rep.duration_s is not None and rep.duration_s >= 0'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 20
+    line_end: 20
+    evidence: '19     assert rep.verdict == "REQUEST_CHANGES"
+
+      20     assert rep.duration_s is not None and rep.duration_s >= 0
+
+      21     assert "passed" in summarize_step(rep.steps[0])'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 21
+    line_end: 21
+    evidence: '20     assert rep.duration_s is not None and rep.duration_s >= 0
+
+      21     assert "passed" in summarize_step(rep.steps[0])
+
+      22     assert "voter(s)" in summarize_step(rep.steps[4])'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  - voter: tool:bandit
+    title: 'B101: assert_used'
+    severity: low
+    confidence: certain
+    file_path: tests/test_replay.py
+    line_start: 22
+    line_end: 22
+    evidence: '21     assert "passed" in summarize_step(rep.steps[0])
+
+      22     assert "voter(s)" in summarize_step(rep.steps[4])
+
+      23'
+    explanation: Use of assert detected. The enclosed code will be removed when compiling
+      to optimised byte code.
+    suggested_fix: null
+    taxonomy_hint: P6
+    verification: VERIFIED
+    score: 100
+  missing_sources: []
+  notes: ''
+  duration_s: 0.0

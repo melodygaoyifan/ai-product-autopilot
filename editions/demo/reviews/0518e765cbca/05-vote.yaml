@@ -1,0 +1,56 @@
+node: vote
+step: 5
+written_at: '2026-07-23T00:58:58.938879+00:00'
+voter_outputs:
+- voter: context
+  model: claude-sonnet-5
+  status: BLOCKED_TOOL_FAILURE
+  substituted_from: null
+  findings: []
+  missing_sources: []
+  notes: "failed after retries: ScannerError: mapping values are not allowed here\n\
+    \  in \"<unicode string>\", line 3, column 7:\n    status: OK\n          ^"
+  duration_s: 156.1456967908889
+- voter: correctness
+  model: claude-opus-4-8
+  status: BLOCKED_TOOL_FAILURE
+  substituted_from: null
+  findings: []
+  missing_sources: []
+  notes: "failed after retries: ScannerError: mapping values are not allowed here\n\
+    \  in \"<unicode string>\", line 3, column 13:\n    tool_request:\n          \
+    \      ^"
+  duration_s: 22.067455500364304
+- voter: performance
+  model: claude-sonnet-5
+  status: OK
+  substituted_from: google/gemini-3.1-pro (GEMINI_API_KEY / GOOGLE_API_KEY is not
+    set)
+  findings: []
+  missing_sources: []
+  notes: ''
+  duration_s: 9.577515456825495
+- voter: repo_graph
+  model: claude-sonnet-5
+  status: BLOCKED_TOOL_FAILURE
+  substituted_from: xai/grok-4 (XAI_API_KEY is not set)
+  findings: []
+  missing_sources: []
+  notes: 'failed after retries: ValueError: voter response is not a YAML mapping'
+  duration_s: 308.8997001685202
+- voter: security
+  model: claude-sonnet-5
+  status: OK
+  substituted_from: openai/gpt-5.4 (OPENAI_API_KEY is not set)
+  findings: []
+  missing_sources: []
+  notes: ''
+  duration_s: 8.466893373057246
+- voter: style
+  model: claude-haiku-4-5-20251001
+  status: OK
+  substituted_from: null
+  findings: []
+  missing_sources: []
+  notes: ''
+  duration_s: 1.5038017928600311

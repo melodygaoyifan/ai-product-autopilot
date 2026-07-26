@@ -132,11 +132,27 @@ def resume(
 def replay(
     review_id: str = typer.Argument(None, help="Review ID; omit to list reviews"),
     repo_dir: str = typer.Option(".", help="Repository the review ran in"),
+    demo: bool = typer.Option(
+        False, "--demo",
+        help="Replay the vendored demo review offline — no API key, no "
+             "workspace: proves the audit trail is real before you trust "
+             "us with a key (doc 25 §73.1, rung R1)"),
 ):
     """Replay a past review's audit trail from its YAML mirror."""
     from autoproduct.replay import load_replay, summarize_step
 
-    reviews_dir = Path(repo_dir) / ".mas" / "reviews"
+    if demo:
+        from autoproduct.editions import EDITIONS_ROOT
+
+        reviews_dir = EDITIONS_ROOT / "demo" / "reviews"
+        review_id = review_id or next(
+            p.name for p in sorted(reviews_dir.iterdir()) if p.is_dir()
+        )
+        console.print("[dim]offline demo bundle — a real review of this repo's "
+                      "own code, redacted; every step below was written by the "
+                      "pipeline at run time[/dim]")
+    else:
+        reviews_dir = Path(repo_dir) / ".mas" / "reviews"
     if review_id is None:
         rows = sorted(p.name for p in reviews_dir.iterdir() if p.is_dir())
         for name in rows:
@@ -425,11 +441,70 @@ def init(
     directory: str = typer.Argument(..., help="Workspace directory to create"),
     name: str = typer.Option(None, help="Project name (defaults to directory name)"),
     profile: str = typer.Option(..., help="Domain profile: web | miniprogram | app"),
+    edition: str = typer.Option(
+        None, help="Edition preset: enterprise | solo | engineer (doc 24; "
+                   "narrowing-only, linted at init)"),
+    gate_owner: str = typer.Option(
+        None, help="Named human per gate class — required by the enterprise "
+                   "edition (§69.1)"),
+    from_bench: str = typer.Option(
+        None, "--from-bench",
+        help="Seed FDR.md from a product-bench case (e.g. 01-groupbuy-api) — "
+             "templates are the same fixtures the benchmark runs, so a "
+             "template that rots fails CI, not you (doc 25 §73.2)"),
 ):
     """Create a greenfield workspace: profile constraints, CLAUDE.md, specs/."""
     from autoproduct.upstream import init_workspace
 
+    resolved_edition = None
+    if edition:
+        import yaml as _yaml
+
+        from autoproduct.editions import EditionError, load_edition_preset
+
+        try:
+            resolved_edition = load_edition_preset(edition)
+        except EditionError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
+        if resolved_edition.get("gate_policy", {}).get(
+            "require_gate_owner"
+        ) and not gate_owner:
+            console.print(
+                "[red]edition 'enterprise' requires --gate-owner: a named human "
+                "per gate class is the 12%-conversion profile, enforced at init "
+                "(§69.1)[/red]"
+            )
+            raise typer.Exit(code=2)
+
     root = init_workspace(directory, name or Path(directory).name, profile)
+    if from_bench:
+        import yaml as _yaml
+
+        bench_root = Path(__file__).resolve().parents[2] / "benchmarks"
+        case = next(
+            (p for sub in ("products-real", "products")
+             for p in [bench_root / sub / f"{from_bench}.yaml"] if p.exists()),
+            None,
+        )
+        if case is None:
+            console.print(f"[red]no bench case named {from_bench!r}[/red]")
+            raise typer.Exit(code=2)
+        fdr = str((_yaml.safe_load(case.read_text()) or {}).get("fdr", ""))
+        (Path(root) / "FDR.md").write_text(fdr, encoding="utf-8")
+        console.print(f"FDR.md seeded from bench case {from_bench}")
+    if resolved_edition:
+        import yaml as _yaml
+
+        if gate_owner:
+            resolved_edition["gate_policy"]["gate_owner"] = gate_owner
+        target = Path(root) / ".mas" / "edition.yaml"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_yaml.safe_dump(resolved_edition, sort_keys=False))
+        console.print(
+            f"edition [bold]{edition}[/bold] resolved → {target} · start at "
+            f"{resolved_edition.get('docs_entry', 'editions/')}"
+        )
     console.print(f"workspace ready: {root}")
     console.print(
         f"next: autoproduct spec \"<what you want to build>\" --repo-dir {root}"
@@ -1556,6 +1631,35 @@ def evidence_cmd(
                       readings=readings),
         user_input, workspace, provider,
     )
+
+
+@app.command("telemetry")
+def telemetry_cmd(
+    action: str = typer.Argument(..., help="on | off | show"),
+    workspace: str = typer.Option(".", help="Workspace directory"),
+):
+    """Opt-in usage telemetry (ADR-U28): default off, aggregate-only,
+    schema-pinned. `show` prints the exact payload — never FDR content,
+    code, prompts, outputs, repo names, or claim text. No endpoint is
+    configured in this version: nothing is ever sent."""
+    from autoproduct.usage_telemetry import (
+        render_payload,
+        set_telemetry,
+        telemetry_enabled,
+    )
+
+    if action == "show":
+        print(render_payload(workspace))
+        state = "on" if telemetry_enabled(workspace) else "off (default)"
+        console.print(f"[dim]telemetry is {state}; no endpoint is configured — "
+                      "nothing is sent either way[/dim]")
+    elif action in ("on", "off"):
+        set_telemetry(workspace, action == "on")
+        console.print(f"telemetry {action} — inspect the exact payload any time "
+                      "with `autoproduct telemetry show`")
+    else:
+        console.print("[red]action must be on | off | show[/red]")
+        raise typer.Exit(code=2)
 
 
 @app.command("voter-gate")

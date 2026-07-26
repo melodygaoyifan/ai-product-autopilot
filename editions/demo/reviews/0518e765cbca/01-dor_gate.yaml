@@ -1,0 +1,11 @@
+node: dor_gate
+step: 1
+written_at: '2026-07-23T00:53:49.846283+00:00'
+dor_pass: true
+dor_reasons: []
+diff:
+  changed_files:
+  - src/autoproduct/cli.py
+  - src/autoproduct/replay.py
+  - tests/test_replay.py
+  changed_lines: 162
