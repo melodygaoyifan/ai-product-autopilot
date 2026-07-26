@@ -63,6 +63,14 @@ Rules:
   each under {_MAX_FILE_LINES} lines. Include the test files.
 - Respect the project constraints; no new dependencies unless the spec's
   design names them.
+- Where a <source_contract> is provided, it is the founder's LITERAL
+  interface contract: use its exact paths, methods, field names, and
+  enumerated values verbatim (a field the contract calls "item" is never
+  "index"). The acceptance probes are written from that contract, not
+  from your code — inventing a synonym fails them all.
+- Endpoints never crash on user input: invalid JSON, wrong types, missing
+  or unknown fields get an explicit 4xx error response. An unhandled
+  exception on malformed input is a defect, not a shortcut.
 - Never touch paths under {_FORBIDDEN_PREFIXES}.
 
 Respond with ONLY YAML:
@@ -352,6 +360,7 @@ def run_build(
     in_branch: bool = False,
     task_lane: str = "core",
     task_estimate_hours: float = 0.0,
+    source_contract: str = "",
 ) -> BuildResult:
     """in_branch=True: build in an isolated worktree on branch
     build/<slug> (parallel-lane mode) — the caller merges and then calls
@@ -382,6 +391,7 @@ def run_build(
                 worktree, slug, provider=provider, model=model, started=started,
                 bookkeeping=False, task_lane=task_lane,
                 task_estimate_hours=task_estimate_hours,
+                source_contract=source_contract,
             )
             result.detail = (result.detail + " " if result.detail else "") + f"branch build/{slug}"
             return result
@@ -400,6 +410,7 @@ def run_build(
         repo, slug, provider=provider, model=model, started=started,
         bookkeeping=True, task_lane=task_lane,
         task_estimate_hours=task_estimate_hours,
+        source_contract=source_contract,
     )
 
 
@@ -413,8 +424,17 @@ def _run_build_inner(
     bookkeeping: bool,
     task_lane: str = "core",
     task_estimate_hours: float = 0.0,
+    source_contract: str = "",
 ) -> BuildResult:
     project = load_project(repo)
+    if not source_contract:
+        # Same fallback as the spec stage: the workspace FDR is the
+        # founder's literal contract. The live post-fix test showed drift
+        # migrating to the implementer once specs held (scores handler
+        # invented "index" for the FDR's "item" — every probe died on it).
+        fdr_file = repo / "FDR.md"
+        if fdr_file.exists():
+            source_contract = fdr_file.read_text(encoding="utf-8")
     spec: Spec = load_spec(repo, slug)
     if spec.status != "approved":
         return BuildResult(
@@ -448,7 +468,9 @@ def _run_build_inner(
         "(a version missing any existing assert is silently discarded and "
         "the skeleton kept) — write the SOURCE files that make them pass, "
         "plus any NEW test files.\n\n"
-        f"<spec>\n{yaml.safe_dump(spec.model_dump(include={'title', 'design', 'criteria'}), sort_keys=False, allow_unicode=True)}"
+        + (f"<source_contract>\n{source_contract[:3000]}\n</source_contract>\n\n"
+           if source_contract.strip() else "")
+        + f"<spec>\n{yaml.safe_dump(spec.model_dump(include={'title', 'design', 'criteria'}), sort_keys=False, allow_unicode=True)}"
         f"test_skeletons:\n"
         + "\n".join(f"- {s.path}: {s.purpose} (covers {s.covers})" for s in spec.test_skeletons)
         + "\n</spec>"

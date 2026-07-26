@@ -90,3 +90,33 @@ def test_web_profile_carries_scope_law_and_boot_contract():
     assert "Where the product includes accounts or login" in text
     assert "BOOT CONTRACT" in profile["stack_hint"]
     assert "PORT" in profile["stack_hint"]
+    assert "never crash on user input" in text
+
+
+def test_implementer_receives_the_literal_source_contract(tmp_path, monkeypatch):
+    """Contract drift migrated to the implementer once specs held it (live
+    post-fix test: the scores handler invented "index" for the FDR's
+    "item" and every probe died) — the implementer prompt must carry the
+    FDR verbatim, via the workspace FDR.md fallback."""
+    import autoproduct.upstream.build as build_mod
+    from autoproduct.upstream import approve_spec, init_workspace, run_spec_stage
+
+    root = init_workspace(tmp_path / "p", "p", "web")
+    spec = run_spec_stage(root, "an item store API", provider="mock")
+    approve_spec(root, spec.slug)
+    contract = 'scores use the field name "item" and rounds "day5"/"day12"'
+    (root / "FDR.md").write_text(contract, encoding="utf-8")
+
+    seen = []
+
+    class Stub:
+        def complete(self, **kwargs):
+            seen.append(kwargs)
+            return "not: [parseable"
+
+    monkeypatch.setattr(build_mod, "get_provider", lambda name: Stub())
+    result = build_mod.run_build(root, spec.slug, provider="stub")
+    assert result.status == "error"
+    prompt = seen[0]["user"]
+    assert "<source_contract>" in prompt and '"item"' in prompt
+    assert "LITERAL" in seen[0]["system"] and "4xx" in seen[0]["system"]

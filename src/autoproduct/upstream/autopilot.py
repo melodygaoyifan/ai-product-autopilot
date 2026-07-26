@@ -161,7 +161,8 @@ def run_autopilot(
             f"Gate U3 ({spec.slug}): auto — ears_lint + coverage passed"
         )
         built = run_build(root, spec.slug, provider=provider, model=model,
-                          task_lane=task.lane, task_estimate_hours=task.estimate_hours)
+                          task_lane=task.lane, task_estimate_hours=task.estimate_hours,
+                          source_contract=fdr_text)
         verdict = None
         detail = built.detail
         if built.status == "built":
@@ -547,7 +548,8 @@ def run_feature(
         approve_spec(root, spec.slug)
         auto_approvals.append(f"Gate U3 ({spec.slug}): auto — ears_lint + coverage passed")
         built = run_build(root, spec.slug, provider=provider, model=model,
-                          task_lane=task.lane, task_estimate_hours=task.estimate_hours)
+                          task_lane=task.lane, task_estimate_hours=task.estimate_hours,
+                          source_contract=fdr_text)
         verdict = None
         if built.status == "built":
             review = _review_head(root, provider)
@@ -631,6 +633,7 @@ def _build_wave_parallel(root, wave, *, provider, model, auto_approvals, fdr_tex
         return task, run_build(
             root, spec_slug, provider=provider, model=model, in_branch=True,
             task_lane=task.lane, task_estimate_hours=task.estimate_hours,
+            source_contract=fdr_text,
         )
 
     prepared = []

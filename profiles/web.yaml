@@ -6,6 +6,7 @@ constraints:
   - Every outbound fetch of a user-supplied URL goes through an allowlist.
   - Where the product includes pages, Core Web Vitals budgets are part of done — no unbounded bundles, no layout shift from late-loading content — and accessibility is not optional — interactive elements are keyboard-reachable and labeled. Every user-facing flow gets a Playwright-style E2E test skeleton before implementation starts.
   - API-only products need no browser E2E skeletons; behavioral tests against the HTTP surface are the contract.
+  - Endpoints never crash on user input. Invalid JSON, wrong types, missing or unknown fields get an explicit 4xx error response; an unhandled exception on malformed input is a defect. Every endpoint spec includes at least one malformed-input criterion.
 spec_extras:
   - Where the product includes pages, name for each user-facing criterion the E2E flow that proves it.
   - State the API contract (method, path, request/response shape) for every endpoint the feature adds.
