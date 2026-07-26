@@ -71,6 +71,13 @@ Rules:
 - Test skeletons assert observable behavior (status codes, response
   bodies, rendered text, the PRESENCE of a labeled control) — never
   markup microstructure like specific id/class/attribute values.
+- Where the project context includes a source_contract, that is the
+  founder's LITERAL interface contract: reproduce its exact paths,
+  methods, field names, and enumerated values verbatim in the design
+  and criteria. Never rename, split, add to, or generalize them — a
+  field the contract calls "name" stays "name"; a value it writes as
+  "day5" stays the string "day5". The probes that judge the product
+  are written from that contract, not from your spec.
 
 Respond with ONLY YAML:
 title: ...
@@ -144,8 +151,19 @@ def run_spec_stage(
     provider: str = "anthropic",
     writer_model: str = "claude-opus-4-8",
     critic_model: str = "claude-sonnet-5",
+    source_contract: str = "",
 ) -> Spec:
     project: Project = load_project(repo_dir)
+    if not source_contract:
+        # The founder's FDR, when the workspace carries one, IS the
+        # interface contract. Without it the writer only ever sees the
+        # planner's paraphrase and re-invents field names and enums the
+        # probes then reject (product-bench run 5, case 04: FDR said
+        # {"name"} and "day5"; the built API demanded "direction" and
+        # integer rounds — every probe 400'd).
+        fdr_file = Path(repo_dir) / "FDR.md"
+        if fdr_file.exists():
+            source_contract = fdr_file.read_text(encoding="utf-8")
     provider_impl = get_provider(provider)
     profile = project.profile_data
     design_memory = ""
@@ -164,6 +182,12 @@ def run_spec_stage(
     ) + (
         f"\nexisting_architecture: |\n  (extend this — do not re-derive)\n{design_memory}"
         if design_memory
+        else ""
+    ) + (
+        f"\nsource_contract: |\n  (the founder's literal interface contract — "
+        f"reproduce exact paths, methods, field names, and values verbatim)\n"
+        + "".join(f"  {line}\n" for line in source_contract[:3000].splitlines())
+        if source_contract.strip()
         else ""
     )
 

@@ -98,3 +98,46 @@ def test_brief_writer_survives_a_bad_parse_streak(tmp_path, monkeypatch):
     root = init_workspace(tmp_path / "p", "p", "web")
     brief = discover.run_discovery(root, "an idea", provider="stub")
     assert brief.revisions == 3
+
+
+def test_spec_writer_receives_the_literal_source_contract(tmp_path, monkeypatch):
+    """The founder's FDR must reach the spec writer verbatim — run 5,
+    case 04: the writer only saw the planner's paraphrase and re-invented
+    field names ("direction" for "name") and enums (integer rounds for
+    "day5"), so every probe 400'd against a fully built product."""
+    import autoproduct.upstream.spec as spec_mod
+
+    contract = 'POST /api/candidates {"name": 候选方向名} → {"id"}; round is "day5" or "day12"'
+    seen = []
+    responses = iter([
+        'title: "t"\ndesign: |\n  d\ncriteria:\n  - "When a request arrives, '
+        'the system shall respond."\ntest_skeletons:\n  - path: tests/test_a.py\n'
+        '    purpose: "p"\n    covers: [0]\n',
+        "issues: []",
+        "issues: []",
+    ])
+
+    class Stub:
+        def complete(self, **kwargs):
+            seen.append(kwargs)
+            return next(responses)
+
+    monkeypatch.setattr(spec_mod, "get_provider", lambda name: Stub())
+    root = init_workspace(tmp_path / "p", "p", "web")
+    spec_mod.run_spec_stage(root, "a task description", provider="stub",
+                            source_contract=contract)
+    writer_prompt = seen[0]["user"]
+    assert "source_contract" in writer_prompt and '"day5"' in writer_prompt
+
+    # Fallback: no explicit contract, but the workspace carries FDR.md.
+    seen.clear()
+    responses = iter([
+        'title: "t2"\ndesign: |\n  d\ncriteria:\n  - "When a request arrives, '
+        'the system shall respond."\ntest_skeletons:\n  - path: tests/test_b.py\n'
+        '    purpose: "p"\n    covers: [0]\n',
+        "issues: []",
+        "issues: []",
+    ])
+    (root / "FDR.md").write_text(contract, encoding="utf-8")
+    spec_mod.run_spec_stage(root, "another task", provider="stub")
+    assert '"day5"' in seen[0]["user"]

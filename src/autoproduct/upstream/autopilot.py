@@ -141,12 +141,14 @@ def run_autopilot(
         auto_approvals.append("parallel lanes: wave scheduling (one task per lane per wave)")
         for wave in schedule_waves(ordered):
             outcomes += _build_wave_parallel(
-                root, wave, provider=provider, model=model, auto_approvals=auto_approvals
+                root, wave, provider=provider, model=model,
+                auto_approvals=auto_approvals, fdr_text=fdr_text,
             )
         ordered = []
     for task in ordered:
         spec = run_spec_stage(
-            root, f"{task.description} (task:{task.id})", provider=provider
+            root, f"{task.description} (task:{task.id})", provider=provider,
+            source_contract=fdr_text,
         )
         if spec.status != "proposed":
             outcomes.append(
@@ -535,7 +537,8 @@ def run_feature(
     outcomes: list[TaskOutcome] = []
     for task in _topo_order(tasks):
         spec = run_spec_stage(
-            root, f"{task.description} (task:{slug}-{task.id})", provider=provider
+            root, f"{task.description} (task:{slug}-{task.id})", provider=provider,
+            source_contract=fdr_text,
         )
         if spec.status != "proposed":
             outcomes.append(TaskOutcome(task_id=task.id, title=task.title,
@@ -615,7 +618,7 @@ def schedule_waves(tasks) -> list[list]:
     return waves
 
 
-def _build_wave_parallel(root, wave, *, provider, model, auto_approvals):
+def _build_wave_parallel(root, wave, *, provider, model, auto_approvals, fdr_text=""):
     """Each task of the wave builds in its own worktree branch; merges are
     applied serially afterwards; bookkeeping runs post-merge."""
     import subprocess
@@ -633,7 +636,10 @@ def _build_wave_parallel(root, wave, *, provider, model, auto_approvals):
     prepared = []
     outcomes = []
     for task in wave:
-        spec = run_spec_stage(root, f"{task.description} (task:{task.id})", provider=provider)
+        spec = run_spec_stage(
+            root, f"{task.description} (task:{task.id})", provider=provider,
+            source_contract=fdr_text,
+        )
         if spec.status != "proposed":
             outcomes.append(
                 TaskOutcome(task_id=task.id, title=task.title, status="spec_blocked")
