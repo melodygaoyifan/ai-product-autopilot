@@ -1,0 +1,111 @@
+# spam_policy_check fixture gate (§21.58.4) — 8 cases.
+# Similarity texts are empirically tuned: benchA vs benchA-variant = 0.831
+# jaccard (template band), long vs long-one-word = 0.914 (fan-out band).
+_ledger_ok: &ledger_ok
+  claims:
+    - {id: C-1, text: "median export 3.8 seconds, n=12", source_type: primary_measured}
+_bench_a: &bench_a
+  "Our July benchmark measured export throughput across twelve tenant databases
+  with production scale row counts. The harness recorded a median of 3.8 seconds
+  for full workspace exports and every run passed integrity verification. We
+  publish the raw numbers, the harness source, and the exact dataset shapes so
+  any team can reproduce the measurement on their own hardware."
+_bench_long: &bench_long
+  "Our July benchmark measured export throughput across twelve tenant databases
+  with production scale row counts. The harness recorded a median of 3.8 seconds
+  for full workspace exports and every run passed integrity verification. We
+  publish the raw numbers, the harness source, and the exact dataset shapes so
+  any team can reproduce the measurement on their own hardware. The methodology
+  follows the WebGen Bench pattern of independent behavioral probes executed
+  against the built product, with build rate and probe pass rate reported
+  unaveraged across all cases. Every probe boots the server from a cold start,
+  drives the public API with plain requests, and checks the arithmetic of the
+  summary endpoints one row at a time."
+_other: &other
+  "Gate PL3 presents the exact artifact, the substantiation map, and the diff
+  against the last approved version. Approvals are scoped to one artifact, one
+  channel, one window, and never generalize to a campaign."
+
+fixtures:
+  - label: publish-rate-over-ceiling
+    expect: {rules: [publish_rate]}
+    input:
+      already_published_this_period: 2
+      config: {thin_page_words: 1}
+      batch:
+        - {path: /blog/a, text: *bench_a, reviewer: melody, claim_ledger: *ledger_ok}
+  - label: template-similarity
+    expect: {rules: [template_similarity]}
+    input:
+      config: {thin_page_words: 1}
+      batch:
+        - {path: /blog/a, text: *bench_a, reviewer: melody, claim_ledger: *ledger_ok}
+        - path: /blog/a2
+          reviewer: melody
+          claim_ledger: *ledger_ok
+          text: "Our July benchmark measured export throughput across twenty
+            tenant databases with production scale row counts. The harness
+            recorded a median of 3.8 seconds for full workspace exports and
+            every run passed integrity verification. We publish the raw
+            numbers, the harness source, and the exact dataset shapes so any
+            team can reproduce the measurement on their own hardware."
+  - label: query-variant-fanout
+    expect: {rules: [query_variant_fanout]}
+    input:
+      config: {thin_page_words: 1, max_publishes_per_period: 3}
+      batch:
+        - {path: /blog/long, text: *bench_long, reviewer: melody, claim_ledger: *ledger_ok}
+        - path: /blog/long2
+          reviewer: melody
+          claim_ledger: *ledger_ok
+          text: "Our July benchmark measured export throughput across twenty
+            tenant databases with production scale row counts. The harness
+            recorded a median of 3.8 seconds for full workspace exports and
+            every run passed integrity verification. We publish the raw
+            numbers, the harness source, and the exact dataset shapes so any
+            team can reproduce the measurement on their own hardware. The
+            methodology follows the WebGen Bench pattern of independent
+            behavioral probes executed against the built product, with build
+            rate and probe pass rate reported unaveraged across all cases.
+            Every probe boots the server from a cold start, drives the public
+            API with plain requests, and checks the arithmetic of the summary
+            endpoints one row at a time."
+  - label: no-original-contribution
+    expect: {rules: [original_contribution_floor]}
+    input:
+      config: {thin_page_words: 1}
+      batch:
+        - path: /blog/restated
+          text: *bench_a
+          reviewer: melody
+          claim_ledger:
+            claims:
+              - {id: C-2, text: "analysts expect growth", source_type: third_party_report}
+  - label: no-editorial-attestation
+    expect: {rules: [editorial_attestation]}
+    input:
+      config: {thin_page_words: 1}
+      batch:
+        - {path: /blog/unreviewed, text: *bench_a, reviewer: "", claim_ledger: *ledger_ok}
+  - label: thin-page-ratio
+    expect: {rules: [thin_page_ratio]}
+    input:
+      batch:
+        - path: /blog/thin
+          text: "Short teaser page with nothing on it."
+          reviewer: melody
+          claim_ledger: *ledger_ok
+  - label: boundary-at-publish-ceiling
+    expect: {rules: []}
+    input:
+      already_published_this_period: 1
+      config: {thin_page_words: 1}
+      batch:
+        - {path: /blog/a, text: *bench_a, reviewer: melody, claim_ledger: *ledger_ok}
+  - label: boundary-distinct-pages
+    expect: {rules: []}
+    input:
+      config: {thin_page_words: 1}
+      batch:
+        - {path: /blog/a, text: *bench_a, reviewer: melody, claim_ledger: *ledger_ok}
+        - {path: /blog/gate, text: *other, reviewer: melody, claim_ledger: *ledger_ok}

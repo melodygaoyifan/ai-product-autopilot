@@ -1,0 +1,64 @@
+# disclosure_lint fixture gate (§21.58.2) — 8 cases.
+fixtures:
+  - label: testimonial-without-endorser
+    expect: {rules: [endorsement_without_endorser]}
+    input:
+      draft:
+        id: d1
+        text: '"I cut my review time in half," says Maria Chen, recruiting lead.'
+        ai_generated: false
+  - label: ai-ad-without-disclosure
+    expect: {rules: [missing_ai_disclosure]}
+    input:
+      draft:
+        id: d2
+        text: "Meet the review pipeline your team deserves."
+        ai_generated: true
+        advertising: true
+  - label: affiliate-without-material-connection
+    expect: {rules: [missing_material_connection]}
+    input:
+      draft:
+        id: d3
+        text: "Try it via the link below. Created with AI."
+        affiliate: true
+  - label: outcome-claim-unqualified
+    expect: {rules: [atypical_results_unqualified]}
+    input:
+      draft:
+        id: d4
+        text: "Teams save 6 hours per week on review."
+        ai_generated: false
+  - label: regulated-vertical-unrouted
+    expect: {rules: [regulated_review_unrouted]}
+    input:
+      draft:
+        id: d5
+        text: "Built for modern hiring workflows. Created with AI."
+        regulated_vertical: employment_decisions
+  - label: clean-disclosed-ai-ad
+    expect: {rules: []}
+    input:
+      draft:
+        id: d6
+        text: "Meet the review pipeline your team deserves. Created with AI."
+        ai_generated: true
+        advertising: true
+  - label: boundary-testimonial-with-endorser
+    expect: {rules: []}
+    input:
+      draft:
+        id: d7
+        text: '"I cut my review time in half," says Maria Chen, recruiting lead.'
+        ai_generated: false
+        endorser:
+          name: Maria Chen
+          material_connection_disclosed: true
+          artifact_locator: "evidence://interviews/maria-chen-2026-06"
+  - label: boundary-outcome-claim-qualified
+    expect: {rules: []}
+    input:
+      draft:
+        id: d8
+        text: "Teams save 6 hours per week on review. Results vary by team size."
+        ai_generated: false

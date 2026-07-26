@@ -1,0 +1,40 @@
+# brand_and_safety_scan fixture gate (§21.58.5) — 8 cases.
+fixtures:
+  - label: banned-phrase
+    expect: {rules: [banned_phrase]}
+    input:
+      draft: {id: b1, text: "Guaranteed results in your first week."}
+  - label: competitor-mention-review-flag
+    expect: {rules: [competitor_mention]}
+    input:
+      draft: {id: b2, text: "Unlike HireFlow, we ship the audit trail."}
+      brand: {competitor_names: [HireFlow]}
+  - label: unresolved-template-variable
+    expect: {rules: [unresolved_template_variable]}
+    input:
+      draft: {id: b3, text: "Hi {{first_name}}, welcome aboard."}
+  - label: pii-in-copy
+    expect: {rules: [pii_in_copy]}
+    input:
+      draft: {id: b4, text: "Questions? Mail dana.k@customer-corp.com directly."}
+  - label: malformed-link
+    expect: {rules: [malformed_link]}
+    input:
+      draft: {id: b5, text: 'See the docs at <a href="/docs/start">quickstart</a>.'}
+  - label: clean-copy
+    expect: {rules: []}
+    input:
+      draft:
+        id: b6
+        text: "The review pipeline records every automated decision.
+          Docs: https://autoproduct-ai.example/docs"
+  - label: boundary-own-domain-contact
+    expect: {rules: []}
+    input:
+      draft: {id: b7, text: "Reach us at support@autoproduct-ai.example any time."}
+      brand: {own_domains: [autoproduct-ai.example]}
+  - label: boundary-competitor-substring
+    expect: {rules: []}
+    input:
+      draft: {id: b8, text: "Healthy rivalry keeps the benchmark honest."}
+      brand: {competitor_names: [Rival]}

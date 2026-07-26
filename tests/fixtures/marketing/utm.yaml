@@ -1,0 +1,66 @@
+# utm_and_instrumentation_lint fixture gate (§21.58.7) — 8 cases.
+_taxonomy: &taxonomy {sources: [newsletter, blog], mediums: [email, organic]}
+
+fixtures:
+  - label: missing-utm-medium
+    expect: {rules: [utm_grammar]}
+    input:
+      taxonomy: *taxonomy
+      analytics_events: [signup_start]
+      assets:
+        - {id: a1, url: "https://x.example/?utm_source=newsletter&utm_campaign=launch",
+           conversion_event: signup_start}
+  - label: source-outside-taxonomy
+    expect: {rules: [utm_taxonomy]}
+    input:
+      taxonomy: *taxonomy
+      analytics_events: [signup_start]
+      assets:
+        - {id: a2, url: "https://x.example/?utm_source=growthhack&utm_medium=email&utm_campaign=launch",
+           conversion_event: signup_start}
+  - label: pii-in-url
+    expect: {rules: [pii_in_url]}
+    input:
+      taxonomy: *taxonomy
+      analytics_events: [signup_start]
+      assets:
+        - {id: a3, url: "https://x.example/?utm_source=newsletter&utm_medium=email&utm_campaign=launch&ref=dana.k%40corp.com",
+           conversion_event: signup_start}
+  - label: unknown-conversion-event
+    expect: {rules: [unknown_conversion_event]}
+    input:
+      taxonomy: *taxonomy
+      analytics_events: [signup_start]
+      assets:
+        - {id: a4, url: "https://x.example/?utm_source=newsletter&utm_medium=email&utm_campaign=launch",
+           conversion_event: workspace_export_click}
+  - label: experiment-arm-without-assignment
+    expect: {rules: [missing_assignment_param]}
+    input:
+      taxonomy: *taxonomy
+      analytics_events: [signup_start]
+      assets:
+        - {id: a5, url: "https://x.example/?utm_source=newsletter&utm_medium=email&utm_campaign=launch",
+           conversion_event: signup_start, experiment_id: EXP-2026-031}
+  - label: missing-conversion-event
+    expect: {rules: [missing_conversion_event]}
+    input:
+      taxonomy: *taxonomy
+      analytics_events: [signup_start]
+      assets:
+        - {id: a6, url: "https://x.example/?utm_source=newsletter&utm_medium=email&utm_campaign=launch"}
+  - label: clean-instrumented-asset
+    expect: {rules: []}
+    input:
+      taxonomy: *taxonomy
+      analytics_events: [signup_start]
+      assets:
+        - {id: a7, url: "https://x.example/?utm_source=newsletter&utm_medium=email&utm_campaign=launch&exp_arm=b",
+           conversion_event: signup_start, experiment_id: EXP-2026-031}
+  - label: boundary-no-taxonomy-configured
+    expect: {rules: []}
+    input:
+      analytics_events: [signup_start]
+      assets:
+        - {id: a8, url: "https://x.example/?utm_source=anything&utm_medium=carrier-pigeon&utm_campaign=launch",
+           conversion_event: signup_start}

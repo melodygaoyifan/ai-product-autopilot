@@ -1,0 +1,88 @@
+# deliverability_preflight fixture gate (§21.58.3) — 8 cases.
+# _domain_ok / _recipient_ok anchors keep unrelated rules quiet per case.
+_domain_ok: &domain_ok
+  spf: true
+  dkim: true
+  dmarc: true
+  aligned: true
+  age_days: 400
+  daily_volume: 500
+  trailing_complaint_rate: 0.0005
+  trailing_bounce_rate: 0.005
+_headers_ok: &headers_ok
+  List-Unsubscribe: "<https://autoproduct-ai.example/u>"
+  List-Unsubscribe-Post: "List-Unsubscribe=One-Click"
+_recipient_ok: &recipient_ok
+  id: r-ok
+  consent_basis: "newsletter opt-in 2026-05-02"
+  provenance: "signup form, recorded"
+  suppressed: false
+_draft: &draft {id: e1, text: "Launch note."}
+
+fixtures:
+  - label: unaligned-authentication
+    expect: {rules: [authentication]}
+    input:
+      email:
+        draft: *draft
+        sending_domain: {<<: *domain_ok, dmarc: false, aligned: false}
+        headers: *headers_ok
+        recipients: [*recipient_ok]
+  - label: missing-one-click-unsubscribe
+    expect: {rules: [one_click_unsubscribe]}
+    input:
+      email:
+        draft: *draft
+        sending_domain: *domain_ok
+        headers: {List-Unsubscribe: "<https://autoproduct-ai.example/u>"}
+        recipients: [*recipient_ok]
+  - label: complaint-rate-over-ceiling
+    expect: {rules: [complaint_rate]}
+    input:
+      email:
+        draft: *draft
+        sending_domain: {<<: *domain_ok, trailing_complaint_rate: 0.005}
+        headers: *headers_ok
+        recipients: [*recipient_ok]
+  - label: recipient-without-consent
+    expect: {rules: [list_provenance]}
+    input:
+      email:
+        draft: *draft
+        sending_domain: *domain_ok
+        headers: *headers_ok
+        recipients:
+          - {id: r-scraped, consent_basis: "", provenance: "", suppressed: false}
+  - label: suppressed-recipient
+    expect: {rules: [suppression]}
+    input:
+      email:
+        draft: *draft
+        sending_domain: *domain_ok
+        headers: *headers_ok
+        recipients:
+          - {<<: *recipient_ok, id: r-unsub, suppressed: true}
+  - label: clean-authenticated-consented
+    expect: {rules: []}
+    input:
+      email:
+        draft: *draft
+        sending_domain: *domain_ok
+        headers: *headers_ok
+        recipients: [*recipient_ok]
+  - label: boundary-complaint-rate-at-ceiling
+    expect: {rules: []}
+    input:
+      email:
+        draft: *draft
+        sending_domain: {<<: *domain_ok, trailing_complaint_rate: 0.003}
+        headers: *headers_ok
+        recipients: [*recipient_ok]
+  - label: boundary-warmup-within-ramp
+    expect: {rules: []}
+    input:
+      email:
+        draft: *draft
+        sending_domain: {<<: *domain_ok, age_days: 10, daily_volume: 150}
+        headers: *headers_ok
+        recipients: [*recipient_ok]
