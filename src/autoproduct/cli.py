@@ -13,6 +13,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from autoproduct.adoption import StageInactiveError, check_stage
 from autoproduct.orchestrator import is_interrupted, resume_review, run_review
 from autoproduct.state import Verdict
 
@@ -39,6 +40,15 @@ def review(
         "heterogeneity is the default posture)",
     ),
 ):
+    # Substrate ladder guard (ADR-U15): no-op unless the workspace declares
+    # .mas/substrate-profile.yaml; below-floor stages refuse loudly.
+    try:
+        check_stage(repo_dir, "code_review")
+    except StageInactiveError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Run `autoproduct readiness` for the rung roadmap.")
+        raise typer.Exit(code=4) from exc
+
     result, state = run_review(
         target,
         repo_dir=repo_dir,
@@ -267,6 +277,15 @@ def deploy_review(
 ):
     """Gate 5 — Deployment Review MAS (§09.11). Recommends; never deploys."""
     from autoproduct.deploy import run_deploy_review
+
+    try:
+        activation = check_stage(repo_dir, "deploy_review")
+    except StageInactiveError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Run `autoproduct readiness` for the rung roadmap.")
+        raise typer.Exit(code=4) from exc
+    if activation is not None and activation.status.value == "DEGRADED":
+        console.print(f"[yellow]deploy_review DEGRADED — {activation.note}[/yellow]")
 
     result = run_deploy_review(
         target, repo_dir=repo_dir, skills_dir=skills_dir, provider_override=provider
@@ -904,6 +923,40 @@ def services_cloud(repo_dir: str = typer.Option(".", help="Workspace directory")
     result = auto_provision_cloud(repo_dir, profile)
     color = {"provisioned": "green"}.get(result["status"], "yellow")
     console.print(f"[bold {color}]{result['status']}[/bold {color}] — {result['detail']}")
+
+
+@app.command()
+def readiness(repo_dir: str = typer.Option(".", help="Workspace directory")):
+    """Substrate readiness report (docs 18-19): active stages at the
+    declared rung and what each missing rung would unlock."""
+    from autoproduct.adoption import load_substrate_profile, readiness_report
+
+    profile = load_substrate_profile(repo_dir)
+    if profile is None:
+        console.print(
+            "No .mas/substrate-profile.yaml — the adoption ladder is not "
+            "declared, so every stage runs ungated (effective S4).\n"
+            "Declare one to get a rung-by-rung modernization roadmap (§18.47.1)."
+        )
+        raise typer.Exit(code=0)
+    console.print(readiness_report(profile, project_name=Path(repo_dir).resolve().name))
+
+
+@app.command("evidence-bundle")
+def evidence_bundle(
+    review_id: str = typer.Argument(..., help="Review ID (directory under .mas/reviews/)"),
+    repo_dir: str = typer.Option(".", help="Repository the review ran in"),
+):
+    """Export the Gate-R evidence bundle (unsigned v0) for one review's
+    audit trail — the artifact a human attaches to a CAB submission."""
+    from autoproduct.adoption import write_evidence_bundle
+
+    try:
+        path = write_evidence_bundle(repo_dir, review_id)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    console.print(f"Evidence bundle written: {path}")
 
 
 def main() -> None:

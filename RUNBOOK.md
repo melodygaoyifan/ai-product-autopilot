@@ -17,6 +17,20 @@ voters fall back visibly without them).
 | `autoproduct bench` | Regression benchmark (bars: recall ≥40%, precision ≥50%) |
 | `autoproduct compound [--pr]` | Weekly signal aggregation → CLAUDE.md proposal |
 | `autoproduct serve` | Webhook mode (needs `AUTOPRODUCT_WEBHOOK_SECRET`) |
+| `autoproduct readiness` | Substrate-ladder report (docs 18–19): active stages at the declared rung, what each missing rung unlocks |
+| `autoproduct evidence-bundle <review-id>` | Export the Gate-R evidence bundle (unsigned v0) for CAB/change-control submission |
+
+## Substrate ladder (traditional-industry adoption, docs 18–19)
+
+Opt-in: declare `.mas/substrate-profile.yaml` (schema in §18.47.1) and
+stages below their infrastructure floor refuse with `STAGE_INACTIVE`
+(exit code 4) instead of running vacuously — `deploy-review` degrades to
+config-lint-only from S1 and says so. No profile file = no gating
+(effective S4, unchanged behavior). Gate R rejections are recorded with
+`autoproduct.adoption.record_rejection` — mechanizable reasons become
+preflight fixtures in `.mas/cab-preflight.yaml`, the rest land in
+`.mas/cab-rejections.yaml` for the compounding loop. CAB submission
+itself is human-only, always.
 
 ## Weekly rhythm
 
