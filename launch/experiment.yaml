@@ -1,0 +1,19 @@
+# Launch-week experiment, pre-registered per §21.61 BEFORE any exposure.
+# Honest expectation: at this repo's current traffic, power_calc returns
+# BLOCKED(INSUFFICIENT_POWER) — the supported outcome — and the qualitative
+# fallback below is the actual plan. The pin makes post-hoc edits void.
+experiment:
+  id: EXP-LAUNCH-2026-01
+  hypothesis: "Leading the README with the no-key replay rung increases the share of visitors who run replay --demo within their first session"
+  primary_metric: demo_replay_rate
+  guardrail_metrics: [weekly_maintenance_attention_hours]
+  design:
+    stage1: {arms: 2, allocation: equal, correction: benjamini_hochberg, q: 0.10}
+    stage2: {arms: 2, allocation: equal, fresh_sample: true}
+  power: {baseline: 0.05, mde_relative: 0.5, alpha: 0.05, power: 0.80}
+  monitoring: {method: sequential, spending: obrien_fleming, peeks: 4}
+  stopping_rule: "Stop at planned horizon or sequential boundary. No other stop is legal."
+  decision_rule: "Adopt only if stage2 primary is significant AND maintenance attention holds its bound."
+  qualitative_fallback: "ask the first 10 key-configured adopters, directly, whether they ran replay --demo first; record n and answers (H-L1's check)"
+  preregistered_at: "2026-07-26T18:30:00Z"
+  preregistration_hash: sha256:a44b336a029fefa3d85905c87e9283d74eb376736500223aa6599692314c044e

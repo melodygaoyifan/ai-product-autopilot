@@ -3,10 +3,10 @@
 # the hermetic suite enforces it (tests/test_editions_platform.py).
 claims:
   - id: PC-1
-    text: "608 hermetic tests pass via uv run pytest at v0.21.0"
+    text: "611 hermetic tests pass via uv run pytest at the current tag"
     kind: demand
     source_type: primary_measured
-    n: 608
+    n: 611
     evidence:
       - {method: pytest_run, locator: "repo://tests (uv run pytest)",
          retrieved_at: "2026-07-26T17:30:00Z"}
@@ -21,7 +21,7 @@ claims:
          retrieved_at: "2026-07-22T00:00:00Z"}
     falsifier: "a bench re-run at the same tag reporting different recall or precision"
   - id: PC-3
-    text: "outer-loop smoke evidence read: 24.0% panel-open, n=250, CI [0.191, 0.297] i.e. 19.1% to 29.7%, against a 30% kill threshold; verdict insufficient_evidence"
+    text: "outer-loop smoke evidence read: 24.0% panel-open, n=250, CI [0.191, 0.297], against a 30% kill threshold (interval spans 19.1% to 29.7%); verdict insufficient_evidence returned instead of a win"
     kind: demand
     source_type: primary_measured
     n: 250
@@ -65,3 +65,39 @@ claims:
       - {method: product_bench_run, locator: "repo://.mas/product-bench (run 5)",
          retrieved_at: "2026-07-26T10:00:00Z"}
     falsifier: "the preserved run-5 result containing different rates"
+  - id: PC-8
+    text: "builds, tests, and reviews working products from one plain-language requirements document, English or Chinese, scored by independent behavioral probes"
+    kind: demand
+    source_type: primary_measured
+    n: 7
+    evidence:
+      - {method: product_bench_run, locator: "repo://benchmarks (synthetic + real case sets)",
+         retrieved_at: "2026-07-26T10:00:00Z"}
+    falsifier: "a product-bench run in which no case builds and passes its probes"
+  - id: PC-9
+    text: "finds candidate opportunities from real support tickets and issues, sizes the market with its own voters attacking the case, writes the PRD with kill criteria, and reads the outcome cohort honestly"
+    kind: demand
+    source_type: primary_measured
+    n: 1
+    evidence:
+      - {method: stage_chain_run, locator: "repo://docs/media/opportunity-run.svg (smoke 2026-07-26)",
+         retrieved_at: "2026-07-26T12:00:00Z"}
+    falsifier: "the preserved smoke reports not containing these stages and verdicts"
+  - id: PC-10
+    text: "replays a real review of the repo's own code offline with no API key, including the run where the pipeline escalated to a human"
+    kind: demand
+    source_type: primary_measured
+    n: 1
+    evidence:
+      - {method: demo_replay, locator: "repo://editions/demo/reviews (uvx autoproduct replay --demo)",
+         retrieved_at: "2026-07-26T18:00:00Z"}
+    falsifier: "the vendored bundle failing to replay offline or containing no escalation step"
+  - id: PC-11
+    text: "the README is parsed by its own test suite against its own claim ledger — assert a number that was not measured and the build fails"
+    kind: demand
+    source_type: primary_measured
+    n: 1
+    evidence:
+      - {method: test_run, locator: "repo://tests/test_editions_platform.py (ADR-U29)",
+         retrieved_at: "2026-07-26T18:00:00Z"}
+    falsifier: "a doctored README number passing the suite"

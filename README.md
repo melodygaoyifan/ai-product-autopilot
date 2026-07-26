@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-608-brightgreen)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-611-brightgreen)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -214,7 +214,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **608 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **611 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -273,6 +273,7 @@ Claude-written code; without it those seats visibly fall back
 | v0.19–v0.20 ✅ | the outer loop operable end-to-end: gate CLIs, then the four LLM stages as one-command runs; first real-provider smoke (three wiring bugs found by gates, fixed); 24 voter fixture-registration gates + `voter-gate` |
 | M2–M7 ✅ | build screenshots (gated-visible), in-Studio correction loop with SCR-backed scope changes, 验收清单 walkthrough, telemetry + digest, 微信支付/登录/订阅 blocks, estimate hints + undo |
 | v0.21 ✅ | platform editions + distribution (docs 24–25): `init --edition` with narrowing-only `edition_lint`, the three START-HERE doors + weekly founder review + procurement pack, `replay --demo` (a real audit trail, offline, no API key), `--from-bench` templates that are the benchmark fixtures, opt-in aggregate-only `telemetry`, the published [benchmark page](docs/benchmark.md), and ADR-U29: this README is checked against [claims/platform.yaml](claims/platform.yaml) by the test suite — asserting beyond the ledger fails the build |
+| v0.22 ✅ | the launch pass, prepared (P20): [launch/](launch/) holds the platform's own PRD (kill criterion: 4 weeks over the attention budget cuts scope at Gate PL5), a launch post that survives all its own backstops, and a hash-pinned pre-registered experiment whose power check honestly returns BLOCKED at current traffic — the suite keeps all three green; plus CONTRIBUTING (gated contributions, bus-factor-1 honesty, watch items with falsifiers) |
 | next 🔜 | the v3.0.0 design gate: one live loop ending in a real recorded kill-or-pivot at Gate PL5 |
 
 ## Star history

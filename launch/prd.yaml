@@ -1,0 +1,26 @@
+# The platform's own launch PRD (doc 25 §76.4) — P20 executed through the
+# machinery it ships. Gate PL2 approval and the publish button are human.
+prd:
+  id: PRD-LAUNCH-2026-01
+  problem_statement: "The framework is complete and measured but unknown; without adoption its evidence discipline helps exactly one team."
+  evidence_refs: [PC-2, PC-3, PC-8, PC-9]
+  affected_segment: {name: "solo founders and agent engineers", size_claim: PC-8}
+  non_goals:
+    - "No paid acquisition of any kind, ever (ADR-U20)."
+    - "No cross-framework comparison marketing — our benchmark is runnable, theirs was not run (§74.1)."
+    - "No email channel at launch: a fresh domain has none of the §21.58.3 telemetry."
+  outcomes:
+    - id: O-L1
+      metric: weekly_maintenance_attention_hours
+      definition_ref: metrics/weekly_maintenance_attention.md
+      baseline: {value: 0, source: "first measurement starts at launch; structural zero"}
+      target: {value: 4.0, by: "2026-10-31"}
+      instrumentation: {event: maintenance.attention_logged, exists: false}
+  demand_hypotheses:
+    - id: H-L1
+      statement: "the no-key replay rung is the entry adopters actually use before configuring a key"
+      falsifier: "fewer than half of the first 10 key-configured adopters report trying replay --demo first (asked directly, n recorded)"
+      check: {stage: P4, method: qualitative, window_days: 30}
+  scope_tier: thin
+  kill_criteria:
+    - "If the framework's own weekly maintenance attention exceeds its budget (4.0 hours) for 4 consecutive weeks, scope is cut per Gate PL5 (doc 25 §76.4, verbatim)."
