@@ -1,0 +1,26 @@
+diff --git a/pipelines/revenue_daily.sql b/pipelines/revenue_daily.sql
+index 3f1c2aa..9b7d411 100644
+--- a/pipelines/revenue_daily.sql
++++ b/pipelines/revenue_daily.sql
+@@ -1,12 +1,11 @@
+ -- daily revenue rollup, partitioned by event_date (UTC)
+ SELECT
+   order_id,
+-  amount_cents / 100.0 AS revenue,          -- dollars, per contract v3
++  amount_cents AS revenue,                  -- DATA-1: unit change, name/type unchanged
+   event_ts,
+   DATE(event_ts) AS event_date
+ FROM {{ ref('orders_clean') }}
+-WHERE event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 DAY)
++-- DATA-3: partition filter deleted — full history scan on every run
+ AND status != 'refunded'
+diff --git a/pipelines/backfill_orders.py b/pipelines/backfill_orders.py
+index 88ac310..17e0f52 100644
+--- a/pipelines/backfill_orders.py
++++ b/pipelines/backfill_orders.py
+@@ -20,9 +20,8 @@ def backfill(day: str) -> None:
+     rows = extract(day)
+     transformed = [t | {"run_id": uuid.uuid4().hex} for t in rows]
+-    # overwrite the target partition so re-runs are idempotent
+-    write(transformed, mode="overwrite", partition=day)
++    write(transformed, mode="append", partition=day)   # DATA-2: append on a re-runnable job

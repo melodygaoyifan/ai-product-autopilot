@@ -159,3 +159,63 @@ def test_contract_file_validation(tmp_path):
     path.write_text(yaml.safe_dump({"fields": []}))
     with pytest.raises(ValueError, match="no fields"):
         load_contract(path)
+
+
+# --- external data-check wrappers (data_tools) -----------------------------------
+
+def test_dbt_autodetected_and_overrides_merged(tmp_path):
+    from autoproduct.adoption import data_check_spec
+
+    if data_check_spec(tmp_path) != {}:
+        pytest.fail("no dbt, no config → empty spec")
+    (tmp_path / "dbt_project.yml").write_text("name: pipeline\n", encoding="utf-8")
+    config = tmp_path / ".mas" / "data-checks.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        yaml.safe_dump({"checks": {"dag_import": ["python", "-c", "import dags"]}}),
+        encoding="utf-8",
+    )
+    spec = data_check_spec(tmp_path)
+    if set(spec) != {"dbt_compile", "dbt_test", "dag_import"}:
+        pytest.fail(f"spec wrong: {spec}")
+
+
+def test_bad_check_config_rejected(tmp_path):
+    from autoproduct.adoption import data_check_spec
+
+    config = tmp_path / ".mas" / "data-checks.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(yaml.safe_dump({"checks": {"x": "not-a-list"}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="argv list"):
+        data_check_spec(tmp_path)
+
+
+def test_unconfigured_workspace_is_loudly_unchecked(tmp_path):
+    from autoproduct.adoption import run_data_checks
+
+    results = run_data_checks(tmp_path)
+    if len(results) != 1 or results[0].status != "skipped":
+        pytest.fail(f"empty spec must report, not pass: {results}")
+    if "not clean" not in results[0].detail:
+        pytest.fail("the report must say NOT checked, not clean")
+
+
+def test_declared_checks_run_and_capture(tmp_path):
+    import sys
+
+    from autoproduct.adoption import run_data_checks
+
+    config = tmp_path / ".mas" / "data-checks.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(yaml.safe_dump({"checks": {
+        "ok": [sys.executable, "-c", "print('rows valid')"],
+        "broken_contract": [sys.executable, "-c", "raise SystemExit(2)"],
+        "missing_tool": ["definitely-not-a-binary-xyz"],
+    }}), encoding="utf-8")
+    by_name = {r.slot: r for r in run_data_checks(tmp_path)}
+    if by_name["ok"].status != "clean" or "rows valid" not in by_name["ok"].output:
+        pytest.fail(f"clean check wrong: {by_name['ok']}")
+    if by_name["broken_contract"].status != "findings":
+        pytest.fail("non-zero exit must be findings")
+    if by_name["missing_tool"].status != "skipped":
+        pytest.fail("missing binary must be skipped, loudly")

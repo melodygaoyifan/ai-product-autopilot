@@ -122,6 +122,53 @@ def gate_r_entry(repo_dir: str | Path, package: ChangePackage) -> GateREntry:
     )
 
 
+def prepare_change_package(
+    repo_dir: str | Path, review_id: str, change_id: str | None = None
+) -> ChangePackage:
+    """Review → CAB-ready package in one call: exports the evidence bundle
+    and pre-fills what the audit trail knows. The human parts stay empty on
+    purpose — rollback plan and approver are decisions, not derivations —
+    so a fresh package is NOT gate-eligible until a person completes it."""
+    from autoproduct.adoption.evidence import write_evidence_bundle
+
+    root = Path(repo_dir)
+    finals = sorted((root / ".mas" / "reviews" / review_id).glob("[0-9][0-9]-final.yaml"))
+    if not finals:
+        raise FileNotFoundError(
+            f"review {review_id} has no final mirror record — an unfinished "
+            "review is not CAB-ready"
+        )
+    final = yaml.safe_load(finals[-1].read_text(encoding="utf-8"))
+    bundle_path = write_evidence_bundle(root, review_id)
+
+    config = {}
+    preflight = root / PREFLIGHT_PATH
+    if preflight.exists():
+        config = yaml.safe_load(preflight.read_text(encoding="utf-8")) or {}
+
+    return ChangePackage(
+        change_id=change_id or review_id,
+        description=(
+            f"{final.get('target', '?')} — {final.get('verdict', '?')}: "
+            f"{final.get('summary', '')}"
+        ),
+        affected_systems=list(final.get("deploy_review_recommended") or []),
+        evidence_bundle=str(bundle_path.relative_to(root)),
+        required_role=str(config.get("required_role", "")),
+    )
+
+
+def save_change_package(repo_dir: str | Path, package: ChangePackage) -> Path:
+    out_dir = Path(repo_dir) / ".mas" / "cab"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{package.change_id}.yaml"
+    path.write_text(
+        yaml.safe_dump(package.model_dump(), sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return path
+
+
 def record_rejection(
     repo_dir: str | Path, change_id: str, reasons: list[dict]
 ) -> dict[str, int]:

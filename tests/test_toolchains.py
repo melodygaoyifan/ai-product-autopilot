@@ -199,3 +199,36 @@ def test_data_profile_available_for_init():
     for expected in ("data contract", "eval set", "idempotent", "forbidden_autonomous"):
         if expected not in text:
             pytest.fail(f"data profile missing {expected!r}")
+
+
+# --- seeded reference repos (§19 G7) --------------------------------------------
+
+SEEDED = Path(__file__).parent / "toolchains" / "seeded"
+
+
+@pytest.mark.parametrize("language", ["java", "dotnet"])
+def test_seeded_lane_manifest_valid_and_files_planted(language):
+    lane = SEEDED / language
+    defects = load_seeded_manifest(lane / "seeded.yaml")
+    ids = [d["id"] for d in defects]
+    if len(ids) != len(set(ids)):
+        pytest.fail(f"duplicate defect ids in {language}: {ids}")
+    slots_covered = {d["slot"] for d in defects}
+    missing_slots = {"lint", "tests", "mutation", "sast", "deps"} - slots_covered
+    if missing_slots:
+        pytest.fail(f"{language} lane leaves slots unmeasured: {missing_slots}")
+    for d in defects:
+        planted = lane / d["file"]
+        if not planted.is_file():
+            pytest.fail(f"{d['id']} points at a missing file: {d['file']}")
+
+
+@pytest.mark.parametrize("language", ["java", "dotnet"])
+def test_seeded_defect_markers_present_in_planted_files(language):
+    """Every defect id appears as a comment marker next to its planted code,
+    so the hand-labeling survives refactors visibly."""
+    lane = SEEDED / language
+    for d in load_seeded_manifest(lane / "seeded.yaml"):
+        text = (lane / d["file"]).read_text(encoding="utf-8")
+        if d["id"] not in text:
+            pytest.fail(f"{d['id']} has no marker comment in {d['file']}")

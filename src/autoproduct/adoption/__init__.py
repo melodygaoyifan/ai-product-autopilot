@@ -10,6 +10,14 @@
   (§19 G2 Day 9-10; unsigned v0 until the attestation ledger lands).
 """
 
+from autoproduct.adoption.attestation import (
+    LedgerVerification,
+    append_attestation,
+    attest_review,
+    review_attested,
+    verify_ledger,
+)
+from autoproduct.adoption.banners import adoption_banners
 from autoproduct.adoption.data_gates import (
     ContractViolation,
     EvalGateResult,
@@ -20,13 +28,16 @@ from autoproduct.adoption.data_gates import (
     load_contract,
     pin_baseline,
 )
+from autoproduct.adoption.data_tools import data_check_spec, run_data_checks
 from autoproduct.adoption.evidence import build_evidence_bundle, write_evidence_bundle
 from autoproduct.adoption.gate_r import (
     ChangePackage,
     GateREntry,
     gate_r_entry,
     load_preflight_checklist,
+    prepare_change_package,
     record_rejection,
+    save_change_package,
 )
 from autoproduct.adoption.readiness import readiness_report
 from autoproduct.adoption.substrate import (
@@ -59,32 +70,42 @@ __all__ = [
     "EvalGateResult",
     "GateREntry",
     "IdempotencyResult",
-    "contract_check",
-    "eval_gate",
-    "idempotency_check",
-    "load_contract",
-    "pin_baseline",
-    "ToolchainRecord",
-    "ToolchainReport",
-    "benchmark_toolchain",
-    "load_seeded_manifest",
-    "register_toolchain",
-    "run_toolchain",
-    "toolchain_banner",
-    "toolchain_spec",
     "Rung",
     "StageActivation",
     "StageInactiveError",
     "StageStatus",
     "SubstrateProfile",
+    "ToolchainRecord",
+    "ToolchainReport",
+    "LedgerVerification",
+    "adoption_banners",
+    "append_attestation",
+    "attest_review",
+    "benchmark_toolchain",
     "build_evidence_bundle",
     "check_stage",
+    "contract_check",
+    "data_check_spec",
+    "eval_gate",
     "gate_r_entry",
+    "idempotency_check",
+    "load_contract",
     "load_preflight_checklist",
+    "load_seeded_manifest",
     "load_substrate_profile",
+    "pin_baseline",
+    "prepare_change_package",
     "readiness_report",
     "record_rejection",
+    "register_toolchain",
+    "review_attested",
+    "run_data_checks",
+    "run_toolchain",
     "rung_banner",
+    "save_change_package",
     "stage_activation",
+    "toolchain_banner",
+    "toolchain_spec",
+    "verify_ledger",
     "write_evidence_bundle",
 ]

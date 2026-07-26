@@ -39,6 +39,13 @@ class Task(BaseModel):
         default_factory=list,
         description="globs the task expects to touch — lane_check input",
     )
+    external_review: str = Field(
+        default="",
+        pattern="^(|cab|platform)$",
+        description="§18.48.2: this task ends at an external review train "
+        "(CAB or app-store/mini-program review) — days of calendar latency "
+        "the estimate does not capture; risk sequencing places it early",
+    )
 
 
 class Plan(BaseModel):
@@ -68,6 +75,24 @@ def lane_check(tasks: list[Task]) -> list[str]:
                             f"lane collision: {a.id} ({a.lane}) and {b.id} "
                             f"({b.lane}) both expect {ga!r}"
                         )
+    return issues
+
+
+def review_train_check(tasks: list[Task]) -> list[str]:
+    """§18.48.2/§41.3: an external review is a train with multi-day, opaque
+    latency. Work sequenced BEHIND a train stalls for days on a rejection —
+    the mechanizable slice is: no task may depend on a train task."""
+    train_ids = {t.id: t.external_review for t in tasks if t.external_review}
+    issues = []
+    for task in tasks:
+        for dep in task.depends_on:
+            if dep in train_ids:
+                issues.append(
+                    f"review-train hazard: {task.id} depends on {dep}, which "
+                    f"ends at external {train_ids[dep]} review (days of "
+                    "latency, rejection possible) — decouple it or move the "
+                    "train to the end of the sequence"
+                )
     return issues
 
 
@@ -256,7 +281,10 @@ def run_planning(
                 (Path(repo_dir) / ".mas" / "project.yaml").read_text(encoding="utf-8")
             ).get("budget_hours", 60)
         )
-        dag_issues = dag_check(tasks) + lane_check(tasks) + budget_check(tasks, budget)
+        dag_issues = (
+            dag_check(tasks) + lane_check(tasks)
+            + budget_check(tasks, budget) + review_train_check(tasks)
+        )
         raw_critique = provider_impl.complete(
             model=critic_model,
             system=_CRITIC_SYSTEM,

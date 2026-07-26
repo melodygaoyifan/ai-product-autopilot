@@ -30,6 +30,23 @@ def _load_steps(review_dir: Path) -> list[dict]:
     return steps
 
 
+def attestable_marks(repo_dir: str | Path, review_id: str) -> list[dict]:
+    """The gate/verdict/override records of one review, as flat dicts —
+    what the attestation ledger chains over."""
+    review_dir = Path(repo_dir) / ".mas" / "reviews" / review_id
+    if not review_dir.is_dir():
+        raise FileNotFoundError(f"no YAML mirror at {review_dir} — nothing to attest")
+    marks = []
+    for step in _load_steps(review_dir):
+        found = {k: step[k] for k in _ATTESTABLE_KEYS if k in step and step[k] is not None}
+        if found:
+            marks.append({
+                "node": step.get("node"), "step": step.get("step"),
+                "written_at": step.get("written_at"), **found,
+            })
+    return marks
+
+
 def build_evidence_bundle(repo_dir: str | Path, review_id: str) -> str:
     """Markdown bundle for one review's audit trail. Raises FileNotFoundError
     when the review has no mirror — a bundle is never fabricated."""
@@ -42,11 +59,21 @@ def build_evidence_bundle(repo_dir: str | Path, review_id: str) -> str:
     if not steps:
         raise FileNotFoundError(f"{review_dir} contains no mirror steps")
 
+    from autoproduct.adoption.attestation import review_attested
+
+    integrity = (
+        "> ledger-backed — these records are hash-chained in "
+        "`.mas/attestation/ledger.jsonl` (integrity verified; org-key "
+        "signing still pending)."
+        if review_attested(repo_dir, review_id)
+        else "> v0 (unsigned) — assembled from the YAML mirror audit trail. "
+        "Run `autoproduct attest` to chain these records into the "
+        "attestation ledger."
+    )
     lines = [
         f"# Evidence bundle — review {review_id}",
         "",
-        "> v0 (unsigned) — assembled from the YAML mirror audit trail. "
-        "Ledger-backed signing lands with the attestation ledger.",
+        integrity,
         "",
         f"Steps recorded: {len(steps)}",
         "",

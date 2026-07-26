@@ -87,6 +87,10 @@ def review(
     console.print(
         f"\n[bold {color}]{result.verdict.value}[/bold {color}] — {result.summary}"
     )
+    from autoproduct.adoption import adoption_banners
+
+    for banner in adoption_banners(repo_dir):
+        console.print(f"[dim]{banner}[/dim]")
 
     if result.findings:
         table = Table(show_lines=False)
@@ -993,6 +997,173 @@ def toolchain(
     if record.gaps:
         console.print(f"lagging slots: {', '.join(record.gaps)}")
     if record.status == "provisional":
+        raise typer.Exit(code=1)
+
+
+@app.command("eval-gate")
+def eval_gate_cmd(
+    scores: str = typer.Argument(..., help="YAML file of metric: value pairs"),
+    repo_dir: str = typer.Option(".", help="Workspace with .mas/eval-baseline.yaml"),
+    pin: bool = typer.Option(
+        False, help="Pin these scores as the new baseline instead of gating "
+        "(the file diff is the reviewable artifact — commit it via PR)"
+    ),
+    tolerance: float = typer.Option(0.01, help="Tolerance when pinning"),
+):
+    """Eval-set regression gate (§18.48.1): score deltas vs the pinned
+    baseline. A pinned metric missing from the scores fails — unmeasured
+    never reads as unregressed."""
+    import yaml as yaml_lib
+
+    from autoproduct.adoption import eval_gate, pin_baseline
+
+    data = yaml_lib.safe_load(Path(scores).read_text(encoding="utf-8")) or {}
+    values = {str(k): float(v) for k, v in (data.get("metrics") or data).items()}
+    if pin:
+        path = pin_baseline(repo_dir, values, tolerance=tolerance)
+        console.print(f"Baseline pinned: {path} — commit the diff via PR.")
+        raise typer.Exit(code=0)
+    result = eval_gate(repo_dir, values)
+    table = Table(show_lines=False)
+    for col in ("Metric", "Status", "Baseline", "Current", "Delta"):
+        table.add_column(col)
+    for v in result.verdicts:
+        color = {"ok": "green", "unpinned": "yellow"}.get(v.status, "red")
+        table.add_row(
+            v.metric, f"[{color}]{v.status}[/{color}]",
+            "" if v.baseline is None else f"{v.baseline}",
+            "" if v.current is None else f"{v.current}",
+            "" if v.delta is None else f"{v.delta:+}",
+        )
+    console.print(table)
+    if not result.passed:
+        raise typer.Exit(code=1)
+    if result.unpinned:
+        console.print(
+            f"[yellow]unpinned metrics (pin to make them gate): "
+            f"{', '.join(result.unpinned)}[/yellow]"
+        )
+
+
+@app.command()
+def idempotency(
+    run_a: str = typer.Argument(..., help="Output directory of the first run"),
+    run_b: str = typer.Argument(..., help="Output directory of the re-run"),
+):
+    """Backfill idempotency check (§18.48.1): the fixture-slice re-run must
+    be byte-identical. Two empty runs are an error, not a pass."""
+    from autoproduct.adoption import idempotency_check
+
+    result = idempotency_check(run_a, run_b)
+    if result.identical:
+        console.print("[green]identical[/green] — backfill is idempotent on this slice")
+        raise typer.Exit(code=0)
+    for label, paths in (
+        ("content differs", result.content_diffs),
+        ("only in first", result.only_in_first),
+        ("only in second", result.only_in_second),
+    ):
+        for p in paths:
+            console.print(f"[red]{label}[/red]: {p}")
+    raise typer.Exit(code=1)
+
+
+@app.command("data-checks")
+def data_checks(repo_dir: str = typer.Option(".", help="Workspace directory")):
+    """Run the workspace's external data checks (dbt auto-detected;
+    others declared in .mas/data-checks.yaml). Skipped is loud, never clean."""
+    from autoproduct.adoption import run_data_checks
+
+    results = run_data_checks(repo_dir)
+    table = Table(show_lines=False)
+    for col in ("Check", "Status", "Detail"):
+        table.add_column(col)
+    for r in results:
+        color = {"clean": "green", "findings": "yellow"}.get(r.status, "red")
+        table.add_row(r.slot, f"[{color}]{r.status}[/{color}]", r.detail)
+    console.print(table)
+    if any(r.status in ("skipped", "error", "findings") for r in results):
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def attest(
+    review_id: str = typer.Argument(
+        None, help="Review to chain into the ledger; omit to just verify"
+    ),
+    repo_dir: str = typer.Option(".", help="Repository the reviews ran in"),
+):
+    """Attestation ledger (§18.49): chain a review's gate/verdict records
+    into the append-only hash-chained ledger, then verify the whole chain.
+    Integrity only — org-key signing is a separate, deferred decision."""
+    from autoproduct.adoption import attest_review, verify_ledger
+
+    if review_id is not None:
+        try:
+            count = attest_review(repo_dir, review_id)
+        except (FileNotFoundError, ValueError) as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
+        console.print(f"attested {count} record(s) from review {review_id}")
+
+    verification = verify_ledger(repo_dir)
+    if verification.ok:
+        console.print(
+            f"[green]chain verified[/green] — {verification.entries} entries"
+        )
+        raise typer.Exit(code=0)
+    console.print(
+        f"[bold red]LEDGER INTEGRITY FAILURE[/bold red] at seq "
+        f"{verification.first_bad_seq}:"
+    )
+    for problem in verification.problems:
+        console.print(f"  - {problem}")
+    raise typer.Exit(code=1)
+
+
+@app.command("cab-package")
+def cab_package(
+    review_id: str = typer.Argument(..., help="Review ID (directory under .mas/reviews/)"),
+    repo_dir: str = typer.Option(".", help="Repository the review ran in"),
+    change_id: str = typer.Option(None, help="CAB change record id (defaults to review id)"),
+):
+    """Assemble a CAB change package from a finished review: exports the
+    evidence bundle, pre-fills what the audit trail knows, and runs the
+    Gate-R preflight. Rollback plan and approver stay human — a fresh
+    package is not eligible until a person completes it. Submission itself
+    is always human."""
+    from autoproduct.adoption import (
+        gate_r_entry,
+        prepare_change_package,
+        save_change_package,
+    )
+
+    try:
+        package = prepare_change_package(repo_dir, review_id, change_id=change_id)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    path = save_change_package(repo_dir, package)
+    entry = gate_r_entry(repo_dir, package)
+
+    table = Table(show_lines=False)
+    for col in ("Check", "Status", "Detail"):
+        table.add_column(col)
+    for r in entry.results:
+        table.add_row(
+            r.check.id,
+            "[green]pass[/green]" if r.passed else "[red]fail[/red]",
+            r.detail or r.check.description,
+        )
+    console.print(table)
+    console.print(f"Package: {path}")
+    if entry.eligible:
+        console.print("[green]Gate R entry: eligible — a human submits.[/green]")
+    else:
+        console.print(
+            "[yellow]Not yet eligible — complete the failing fields in the "
+            "package file and re-run.[/yellow]"
+        )
         raise typer.Exit(code=1)
 
 

@@ -288,10 +288,15 @@ def _append_voter_logs(state: ReviewState, outputs: list[VoterOutput]) -> None:
             fh.write(yaml_lib.safe_dump([entry], sort_keys=False))
 
 
-def post_node(state: ReviewState, *, mirror: YamlMirror) -> dict[str, Any]:
+def post_node(
+    state: ReviewState, *, mirror: YamlMirror, repo_dir: str = "."
+) -> dict[str, Any]:
     if not state.get("dor_pass"):
         mirror.write("dor_fail", {"reasons": state.get("dor_reasons", [])})
         return {"artifacts_dir": str(mirror.dir)}
+    from autoproduct.adoption.banners import adoption_banners
+
+    banners = adoption_banners(repo_dir)
     result = LeaderResult.model_validate(state["leader"])
     outputs = [
         VoterOutput.model_validate(o)
@@ -305,11 +310,14 @@ def post_node(state: ReviewState, *, mirror: YamlMirror) -> dict[str, Any]:
         voter_outputs=outputs,
         test_report=state.get("test_report"),
     )
+    if banners:
+        comment = "> " + "\n> ".join(banners) + "\n\n" + comment
     (mirror.dir / "review.md").write_text(comment, encoding="utf-8")
     comment_note = github.post_pr_comment(state["target"], comment)
     mirror.write(
         "final",
         {
+            "banners": banners,
             "review_id": state["review_id"],
             "target": state["target"],
             "mode": state.get("mode"),
@@ -393,7 +401,9 @@ def build_graph(
     )
     graph.add_node("escalate", mirrored("escalate", escalate_node))
     graph.add_node("hitl", hitl_node)
-    graph.add_node("post", functools.partial(post_node, mirror=mirror))
+    graph.add_node(
+        "post", functools.partial(post_node, mirror=mirror, repo_dir=repo_dir)
+    )
 
     graph.set_entry_point("dor_gate")
     graph.add_conditional_edges(

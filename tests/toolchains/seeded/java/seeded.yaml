@@ -1,0 +1,49 @@
+# Planted-defect manifest — seeded java lane (§19 G7).
+# `pattern` = substring expected in the catching slot's output; calibrated
+# on the first real scanner run and re-checked on every version bump (R-G3).
+defects:
+  - id: J-SAST-1
+    slot: sast
+    pattern: "sql"                    # semgrep java sqli rule family
+    file: src/main/java/com/example/App.java
+    note: string-concatenated query from caller input
+  - id: J-SAST-2
+    slot: sast
+    pattern: "hardcoded"
+    file: src/main/java/com/example/App.java
+    note: hardcoded DB password constant
+  - id: J-SAST-3
+    slot: sast
+    pattern: "random"
+    file: src/main/java/com/example/App.java
+    note: java.util.Random for a session token
+  - id: J-LINT-1
+    slot: lint
+    pattern: "UnusedImports"
+    file: src/main/java/com/example/App.java
+    note: unused java.util.List import
+  - id: J-LINT-2
+    slot: lint
+    pattern: "StringLiteralEquality"
+    file: src/main/java/com/example/App.java
+    note: string compared with ==
+  - id: J-LINT-3
+    slot: lint
+    pattern: "EmptyCatchBlock"
+    file: src/main/java/com/example/App.java
+    note: swallowed NumberFormatException
+  - id: J-TEST-1
+    slot: tests
+    pattern: "parseCountRuns"
+    file: src/test/java/com/example/AppTest.java
+    note: assertion-free test; surfaced by coverage/assertion reporting
+  - id: J-MUT-1
+    slot: mutation
+    pattern: "discountPercent"
+    file: src/main/java/com/example/App.java
+    note: "boundary quantity >= 100 never asserted — conditional-boundary mutant survives"
+  - id: J-DEPS-1
+    slot: deps
+    pattern: "CVE-2021-44228"
+    file: pom.xml
+    note: log4j-core 2.14.1 (Log4Shell)

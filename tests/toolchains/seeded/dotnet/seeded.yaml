@@ -1,0 +1,44 @@
+# Planted-defect manifest — seeded dotnet lane (§19 G7).
+# `pattern` = substring expected in the catching slot's output; calibrated
+# on the first real scanner run and re-checked on every version bump (R-G3).
+defects:
+  - id: N-SAST-1
+    slot: sast
+    pattern: "sql"
+    file: src/App/Program.cs
+    note: string-concatenated CommandText from caller input
+  - id: N-SAST-2
+    slot: sast
+    pattern: "hardcoded"
+    file: src/App/Program.cs
+    note: hardcoded sa password in the connection string
+  - id: N-SAST-3
+    slot: sast
+    pattern: "md5"
+    file: src/App/Program.cs
+    note: MD5 as a password digest
+  - id: N-LINT-1
+    slot: lint
+    pattern: "CS8019"
+    file: src/App/Program.cs
+    note: unused using directive (warnaserror build)
+  - id: N-LINT-2
+    slot: lint
+    pattern: "empty"
+    file: src/App/Program.cs
+    note: swallowed FormatException
+  - id: N-TEST-1
+    slot: tests
+    pattern: "ParseCountRuns"
+    file: tests/App.Tests/AppTests.cs
+    note: assertion-free test; surfaced by coverage/assertion reporting
+  - id: N-MUT-1
+    slot: mutation
+    pattern: "DiscountPercent"
+    file: src/App/Program.cs
+    note: "boundary quantity >= 100 never asserted — Stryker boundary mutant survives"
+  - id: N-DEPS-1
+    slot: deps
+    pattern: "Newtonsoft.Json"
+    file: src/App/App.csproj
+    note: Newtonsoft.Json 12.0.1 (CVE-2024-21907)

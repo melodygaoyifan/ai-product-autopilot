@@ -300,3 +300,255 @@ def test_review_cli_exits_4_below_floor(tmp_path):
         pytest.fail(f"expected exit 4, got {result.exit_code}: {result.output}")
     if "STAGE_INACTIVE" not in result.output or "readiness" not in result.output:
         pytest.fail(f"refusal must be structured and route to readiness: {result.output}")
+
+
+# --- banner wiring (G1 Day 5) ---------------------------------------------------
+
+def test_adoption_banners_collects_rung_and_toolchains(tmp_path):
+    from autoproduct.adoption import adoption_banners, register_toolchain
+    from autoproduct.adoption.toolchains import BenchmarkResult, DefectOutcome
+
+    if adoption_banners(tmp_path) != []:
+        pytest.fail("no profile, no registry → no banners")
+    _write_profile(tmp_path, S1)
+    register_toolchain(
+        tmp_path,
+        BenchmarkResult(language="java", outcomes=[
+            DefectOutcome(defect_id="D1", slot="sast", caught=False),
+        ]),
+        baseline_rate=1.0,
+    )
+    banners = adoption_banners(tmp_path)
+    if len(banners) != 2 or "S1" not in banners[0] or "PROVISIONAL" not in banners[1]:
+        pytest.fail(f"banners wrong: {banners}")
+
+
+def test_post_node_carries_banners_into_mirror_and_comment(tmp_path, monkeypatch):
+    from autoproduct import render
+    from autoproduct.mirror import YamlMirror
+    from autoproduct.orchestrator import graph as graph_mod
+
+    _write_profile(tmp_path, S1)
+    monkeypatch.setattr(render, "render_pr_comment", lambda *a, **k: "body\n")
+    monkeypatch.setattr(graph_mod.github, "post_pr_comment", lambda *a, **k: "offline")
+    mirror = YamlMirror(tmp_path / ".mas" / "reviews", "rev-b")
+    state = {
+        "dor_pass": True,
+        "review_id": "rev-b",
+        "target": "main...HEAD",
+        "mode": "standard",
+        "leader": {"verdict": "APPROVE", "summary": "s", "findings": [],
+                   "blocked_voters": []},
+        "voter_outputs": [],
+    }
+    graph_mod.post_node(state, mirror=mirror, repo_dir=str(tmp_path))
+    comment = (mirror.dir / "review.md").read_text(encoding="utf-8")
+    if not comment.startswith("> substrate rung S1"):
+        pytest.fail(f"review.md must lead with the rung banner:\n{comment}")
+    final = yaml.safe_load(sorted(mirror.dir.glob("*-final.yaml"))[0].read_text())
+    if not final["banners"] or "S1" not in final["banners"][0]:
+        pytest.fail(f"final mirror record must carry banners: {final.get('banners')}")
+
+
+# --- prepare_change_package (review → CAB-ready) ----------------------------------
+
+def test_prepare_change_package_prefills_from_final_record(tmp_path):
+    from autoproduct.adoption import gate_r_entry, prepare_change_package
+
+    review_dir = _fake_mirror(tmp_path, "rev-cab")
+    (review_dir / "05-final.yaml").write_text(yaml.safe_dump({
+        "node": "final", "step": 5, "target": "main...HEAD",
+        "verdict": "APPROVE_WITH_NOTES", "summary": "two nits",
+        "deploy_review_recommended": ["deploy/k8s.yaml"],
+    }), encoding="utf-8")
+    (tmp_path / ".mas" / "cab-preflight.yaml").write_text(
+        yaml.safe_dump({"required_role": "change-manager"}), encoding="utf-8"
+    )
+    package = prepare_change_package(tmp_path, "rev-cab")
+    if "APPROVE_WITH_NOTES" not in package.description:
+        pytest.fail(f"description must carry the verdict: {package.description}")
+    if package.affected_systems != ["deploy/k8s.yaml"]:
+        pytest.fail(f"affected systems not prefilled: {package.affected_systems}")
+    if not (tmp_path / package.evidence_bundle).exists():
+        pytest.fail("evidence bundle must be exported and linked")
+    if package.required_role != "change-manager":
+        pytest.fail("required role must come from cab-preflight config")
+
+    entry = gate_r_entry(tmp_path, package)
+    fresh_failures = {r.check.id for r in entry.failures}
+    if "rollback_plan" not in fresh_failures or "approver_role" not in fresh_failures:
+        pytest.fail(
+            f"a fresh package must NOT be eligible — human fields empty: {fresh_failures}"
+        )
+
+
+def test_prepare_change_package_refuses_unfinished_review(tmp_path):
+    from autoproduct.adoption import prepare_change_package
+
+    review_dir = tmp_path / ".mas" / "reviews" / "rev-open"
+    review_dir.mkdir(parents=True)
+    (review_dir / "01-dor_gate.yaml").write_text(
+        yaml.safe_dump({"node": "dor_gate", "step": 1, "dor_pass": True}),
+        encoding="utf-8",
+    )
+    with pytest.raises(FileNotFoundError, match="not CAB-ready"):
+        prepare_change_package(tmp_path, "rev-open")
+
+
+def test_save_change_package_round_trips(tmp_path):
+    from autoproduct.adoption import ChangePackage, save_change_package
+
+    package = ChangePackage(change_id="CHG-9", description="d")
+    path = save_change_package(tmp_path, package)
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if data["change_id"] != "CHG-9" or path.name != "CHG-9.yaml":
+        pytest.fail(f"round-trip failed: {path} {data}")
+
+
+# --- review-train plan check (§18.48.2) -------------------------------------------
+
+def test_review_train_dependency_flagged():
+    from autoproduct.upstream.plan import Task, review_train_check
+
+    tasks = [
+        Task(id="t1", title="build export", estimate_hours=4,
+             external_review="cab"),
+        Task(id="t2", title="consumer banner", estimate_hours=2,
+             depends_on=["t1"]),
+        Task(id="t3", title="unrelated", estimate_hours=1),
+    ]
+    issues = review_train_check(tasks)
+    if len(issues) != 1 or "t2 depends on t1" not in issues[0] or "cab" not in issues[0]:
+        pytest.fail(f"train hazard must be flagged with the mechanism: {issues}")
+    if review_train_check([tasks[0], tasks[2]]):
+        pytest.fail("a train task with no dependents is fine")
+
+
+def test_external_review_value_validated():
+    from pydantic import ValidationError
+
+    from autoproduct.upstream.plan import Task
+
+    with pytest.raises(ValidationError):
+        Task(id="t1", title="x", estimate_hours=1, external_review="ussa-audit")
+
+
+# --- attestation ledger (§18.49) ---------------------------------------------------
+
+def test_ledger_appends_and_verifies(tmp_path):
+    from autoproduct.adoption import append_attestation, verify_ledger
+
+    empty = verify_ledger(tmp_path)
+    if not empty.ok or empty.entries != 0:
+        pytest.fail("empty ledger verifies but reports zero attested history")
+    append_attestation(tmp_path, {"gate": "U2", "decision": "lock"})
+    append_attestation(tmp_path, {"verdict": "APPROVE"})
+    verification = verify_ledger(tmp_path)
+    if not verification.ok or verification.entries != 2:
+        pytest.fail(f"clean chain must verify: {verification}")
+
+
+def test_tampered_entry_breaks_the_chain(tmp_path):
+    import json
+
+    from autoproduct.adoption import append_attestation, verify_ledger
+    from autoproduct.adoption.attestation import LEDGER_PATH
+
+    for i in range(3):
+        append_attestation(tmp_path, {"verdict": f"V{i}"})
+    path = tmp_path / LEDGER_PATH
+    lines = path.read_text(encoding="utf-8").splitlines()
+    doctored = json.loads(lines[1])
+    doctored["payload"]["verdict"] = "APPROVE"      # rewrite history
+    lines[1] = json.dumps(doctored)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    verification = verify_ledger(tmp_path)
+    if verification.ok or verification.first_bad_seq != 2:
+        pytest.fail(f"tampering at seq 2 must be caught there: {verification}")
+    if not any("altered" in p for p in verification.problems):
+        pytest.fail(f"problem must name the alteration: {verification.problems}")
+
+
+def test_deleted_entry_breaks_the_chain(tmp_path):
+    from autoproduct.adoption import append_attestation, verify_ledger
+    from autoproduct.adoption.attestation import LEDGER_PATH
+
+    for i in range(3):
+        append_attestation(tmp_path, {"verdict": f"V{i}"})
+    path = tmp_path / LEDGER_PATH
+    lines = path.read_text(encoding="utf-8").splitlines()
+    path.write_text("\n".join([lines[0], lines[2]]) + "\n", encoding="utf-8")
+    if verify_ledger(tmp_path).ok:
+        pytest.fail("removing a middle entry must break verification")
+
+
+def test_attest_review_chains_marks_and_upgrades_bundle(tmp_path):
+    from autoproduct.adoption import attest_review, build_evidence_bundle, review_attested
+
+    _fake_mirror(tmp_path, "rev-led")
+    bundle_before = build_evidence_bundle(tmp_path, "rev-led")
+    if "unsigned" not in bundle_before:
+        pytest.fail("unattested review must carry the unsigned header")
+    count = attest_review(tmp_path, "rev-led")
+    # steps 01 (dor_pass), 03 (verdict), 04 (decision+resumed_by) = 3 marks
+    if count != 3:
+        pytest.fail(f"expected 3 attestable marks, got {count}")
+    if not review_attested(tmp_path, "rev-led"):
+        pytest.fail("attested review must be discoverable in the ledger")
+    bundle_after = build_evidence_bundle(tmp_path, "rev-led")
+    if "ledger-backed" not in bundle_after:
+        pytest.fail("bundle header must upgrade once ledger-backed")
+
+
+def test_attest_refuses_empty_payload_and_gateless_review(tmp_path):
+    from autoproduct.adoption import append_attestation, attest_review
+
+    with pytest.raises(ValueError, match="empty payload"):
+        append_attestation(tmp_path, {})
+    review_dir = tmp_path / ".mas" / "reviews" / "rev-quiet"
+    review_dir.mkdir(parents=True)
+    (review_dir / "01-voters.yaml").write_text(
+        yaml.safe_dump({"node": "voters", "step": 1, "count": 2}), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="no gate/verdict state"):
+        attest_review(tmp_path, "rev-quiet")
+
+
+# --- data voter skills (§18.48.1 voter deltas) --------------------------------------
+
+DATA_SKILLS = Path(__file__).parent.parent / "skills" / "data"
+DATA_DIFF = Path(__file__).parent / "fixtures" / "planted_data_bugs.diff"
+
+
+def test_data_voter_skills_validate_and_register():
+    from autoproduct.voters.base import load_voters
+
+    voters = load_voters(DATA_SKILLS, provider_override="mock")
+    names = sorted(v.spec.name for v in voters)
+    if names != ["backfill_safety", "data_contract", "drift_cost"]:
+        pytest.fail(f"expected the three §18.48.1 voters, got {names}")
+    for voter in voters:
+        if voter.spec.risk_ceiling != 0 or set(voter.spec.tools) - {"read_file", "grep"}:
+            pytest.fail(f"{voter.spec.name}: data voters are read-only L0")
+
+
+def test_data_voter_skills_state_their_negative_space():
+    """ADR-U13 discipline: every voter says what is NOT its to flag, so the
+    three lenses stay disjoint instead of triple-reporting one finding."""
+    for path in sorted(DATA_SKILLS.glob("*.md")):
+        body = path.read_text(encoding="utf-8")
+        if "NOT yours to flag" not in body:
+            pytest.fail(f"{path.name} missing its NOT-to-flag boundary")
+        if "BLOCKED_MISSING_CONTEXT" not in body:
+            pytest.fail(f"{path.name} missing the blocked-not-guessing rule")
+
+
+def test_planted_data_diff_covers_all_three_lenses():
+    text = DATA_DIFF.read_text(encoding="utf-8")
+    for marker, lens in (
+        ("DATA-1", "unit change (data_contract)"),
+        ("DATA-2", "append on re-runnable job (backfill_safety)"),
+        ("DATA-3", "deleted partition filter (drift_cost)"),
+    ):
+        if marker not in text:
+            pytest.fail(f"planted diff missing {marker}: {lens}")
