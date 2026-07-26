@@ -1,0 +1,49 @@
+# evaluate_kill_criteria fixture gate (§22.65.2) — 8 cases.
+_criterion: &criterion
+  id: K-1
+  text: "O-1 misses 50% of target lift after 2 full P-loops => mandatory PL5 review"
+  outcome_id: O-1
+  min_target_lift_fraction: 0.5
+  after_loops: 2
+_reading_miss: &reading_miss {outcome_id: O-1, baseline: 0.11, target: 0.18, reading: 0.128, n: 1840}
+_reading_hit: &reading_hit {outcome_id: O-1, baseline: 0.11, target: 0.18, reading: 0.175, n: 1840}
+
+fixtures:
+  - label: misses-half-of-target-lift-fires
+    expect: {fired: 1, requires_human: true, budget_exhausted: false}
+    input: {criteria: [*criterion], readings: {O-1: *reading_miss}, loops_elapsed: 2}
+  - label: achieving-the-target-does-not-fire
+    expect: {fired: 0, requires_human: false, budget_exhausted: false}
+    input: {criteria: [*criterion], readings: {O-1: *reading_hit}, loops_elapsed: 2}
+  - label: before-the-loops-window-nothing-fires
+    expect: {fired: 0, requires_human: false, budget_exhausted: false}
+    input: {criteria: [*criterion], readings: {O-1: *reading_miss}, loops_elapsed: 1}
+  - label: exhausted-loop-budget-forces-review-anyway
+    expect: {fired: 0, requires_human: true, budget_exhausted: true}
+    input: {criteria: [*criterion], readings: {O-1: *reading_hit}, loops_elapsed: 3}
+  - label: missing-reading-is-gate-pl4s-problem-not-a-firing
+    expect: {fired: 0, requires_human: false, budget_exhausted: false}
+    input: {criteria: [*criterion], readings: {}, loops_elapsed: 2}
+  - label: negative-lift-fires
+    expect: {fired: 1, requires_human: true, budget_exhausted: false}
+    input:
+      criteria: [*criterion]
+      readings: {O-1: {outcome_id: O-1, baseline: 0.11, target: 0.18, reading: 0.09, n: 1840}}
+      loops_elapsed: 2
+  - label: boundary-exactly-half-the-lift-does-not-fire
+    expect: {fired: 0, requires_human: false, budget_exhausted: false}
+    input:
+      criteria: [*criterion]
+      readings: {O-1: {outcome_id: O-1, baseline: 0.10, target: 0.20, reading: 0.15, n: 2000}}
+      loops_elapsed: 2
+  - label: two-criteria-only-the-missed-one-fires
+    expect: {fired: 1, requires_human: true, budget_exhausted: false}
+    input:
+      criteria:
+        - *criterion
+        - {id: K-2, text: "O-2 misses 50% after 2 loops", outcome_id: O-2,
+           min_target_lift_fraction: 0.5, after_loops: 2}
+      readings:
+        O-1: *reading_miss
+        O-2: {outcome_id: O-2, baseline: 0.30, target: 0.40, reading: 0.39, n: 900}
+      loops_elapsed: 2
