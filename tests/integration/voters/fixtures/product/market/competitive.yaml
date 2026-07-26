@@ -1,0 +1,109 @@
+voter: competitive
+fixtures:
+  - label: comforting-empty-quadrant
+    kind: positive
+    should_find: true
+    must_mention: ["probe"]
+    artifact: |
+      narrative: "No competitor offers live build progress — the quadrant is
+        empty and we can own it."
+      claims:
+        - {id: C-1, text: "no competitor offers live build progress",
+           source_type: model_inference,
+           falsifier: "a competitor page showing a progress feature"}
+      probes_run: []
+      note: an absence claim with no probe list that would have found a presence.
+  - label: recollection-not-probe
+    kind: positive
+    should_find: true
+    must_mention: ["hash"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "Vendor A charges $59 per seat",
+           source_type: primary_cited,
+           evidence: [{method: memory, locator: "https://vendor-a.example/pricing",
+                       retrieved_at: "2026-07-20T09:00:00Z"}],
+           falsifier: "the pricing page shows a different figure"}
+      note: locator present, artifact_hash absent — a recollection dressed as a probe.
+  - label: expired-snapshot-cited-as-current
+    kind: positive
+    should_find: true
+    must_mention: ["expire"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "Vendor B has no progress view on any plan",
+           source_type: primary_cited, expires: "2026-03-01",
+           evidence: [{method: docs_probe, locator: "https://vendor-b.example/docs",
+                       retrieved_at: "2025-12-01T09:00:00Z",
+                       artifact_hash: "sha256:aa11"}],
+           falsifier: "a docs page showing a progress view"}
+      narrative: "As of today, Vendor B ships no progress view."
+  - label: single-probe-grounds-absence
+    kind: positive
+    should_find: true
+    must_mention: ["single"]
+    artifact: |
+      narrative: "Vendor C does not support SSO."
+      claims:
+        - {id: C-1, text: "Vendor C does not support SSO",
+           source_type: primary_cited,
+           evidence: [{method: pricing_probe, locator: "https://vendor-c.example/pricing",
+                       retrieved_at: "2026-07-20T09:00:00Z", artifact_hash: "sha256:bb22"}],
+           falsifier: "an SSO mention anywhere in Vendor C's docs"}
+      note: absence asserted from one pricing page; docs, changelog, and
+      security pages were never probed.
+  - label: clean-probe-derived-facts
+    kind: negative
+    should_find: false
+    artifact: |
+      claims:
+        - {id: C-1, text: "Vendor A lists a live progress pane, shipped June 2026, at $59 per seat",
+           source_type: primary_cited, expires: "2026-10-25",
+           evidence: [{method: changelog_probe, locator: "https://vendor-a.example/changelog",
+                       retrieved_at: "2026-07-25T09:00:00Z", artifact_hash: "sha256:dd9f"}],
+           falsifier: "the snapshotted changelog shows no June progress entry"}
+  - label: clean-absence-with-probe-list
+    kind: negative
+    should_find: false
+    artifact: |
+      narrative: "We found no build-progress feature at Vendor B."
+      claims:
+        - {id: C-1, text: "no progress feature found across Vendor B's pricing, docs, and changelog",
+           source_type: primary_cited, expires: "2026-10-25", n: 3,
+           evidence:
+             - {method: pricing_probe, locator: "https://vendor-b.example/pricing",
+                retrieved_at: "2026-07-25T09:00:00Z", artifact_hash: "sha256:a550"}
+             - {method: docs_probe, locator: "https://vendor-b.example/docs",
+                retrieved_at: "2026-07-25T09:02:00Z", artifact_hash: "sha256:c331"}
+             - {method: changelog_probe, locator: "https://vendor-b.example/changelog",
+                retrieved_at: "2026-07-25T09:04:00Z", artifact_hash: "sha256:e772"}
+           falsifier: "any of the three snapshots naming a progress feature"}
+  - label: boundary-labeled-inference-inside-ceiling
+    kind: boundary
+    should_find: false
+    artifact: |
+      claims:
+        - {id: C-1, text: "Vendor D likely bundles progress views into its enterprise tier",
+           source_type: model_inference,
+           falsifier: "the public enterprise page listing tier features"}
+        - {id: C-2, text: "Vendor A lists $59 per seat",
+           source_type: primary_cited, expires: "2026-10-25",
+           evidence: [{method: pricing_probe, locator: "https://vendor-a.example/pricing",
+                       retrieved_at: "2026-07-25T09:00:00Z", artifact_hash: "sha256:dd9f"}],
+           falsifier: "a different listed price"}
+      note: one labeled inference among probed facts, ratio in bounds.
+  - label: boundary-fresh-probe-stale-conclusion
+    kind: boundary
+    should_find: true
+    must_mention: ["changelog"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "Vendor A has no progress feature",
+           source_type: primary_cited, expires: "2026-10-25",
+           evidence: [{method: pricing_probe, locator: "https://vendor-a.example/pricing",
+                       retrieved_at: "2026-07-25T09:00:00Z", artifact_hash: "sha256:dd9f"}],
+           falsifier: "a progress feature on any Vendor A surface"}
+      context: "the same bundle's changelog snapshot for Vendor A announces a
+        live progress pane shipped June 2026"
+      note: the bundle contradicts the claim; the probe was fresh, the
+      conclusion ignored a sibling snapshot.

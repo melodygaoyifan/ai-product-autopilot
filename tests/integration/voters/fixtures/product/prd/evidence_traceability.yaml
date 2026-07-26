@@ -1,0 +1,94 @@
+voter: evidence_traceability
+fixtures:
+  - label: claim-about-a-different-segment
+    kind: positive
+    should_find: true
+    must_mention: ["segment"]
+    artifact: |
+      prd:
+        problem_statement: "Enterprise IT admins lose hours weekly to manual exports [C-14]"
+      claims:
+        - {id: C-14, text: "12 tickets from solo-founder workspaces cluster on manual export pain",
+           source_type: user_reported, n: 12}
+      note: C-14 is about solo founders; the PRD spends it on enterprise IT.
+  - label: range-quoted-as-point
+    kind: positive
+    should_find: true
+    must_mention: ["range"]
+    artifact: |
+      prd:
+        problem_statement: "A $15.1M market [C-7] justifies a standard tier."
+      claims:
+        - {id: C-7, text: "bottom-up sizing range $10.8M-$18M from sensitivity sweep",
+           source_type: primary_cited}
+  - label: n-of-12-inflated-to-consistently
+    kind: positive
+    should_find: true
+    must_mention: ["12"]
+    artifact: |
+      prd:
+        problem_statement: "Users consistently report losing hours to manual
+          exports [C-2]; the pain is universal in the segment."
+      claims:
+        - {id: C-2, text: "12 tickets from 9 reporters mention manual export pain",
+           source_type: user_reported, n: 12}
+  - label: load-bearing-assertion-with-no-ref
+    kind: positive
+    should_find: true
+    must_mention: ["claim"]
+    artifact: |
+      prd:
+        problem_statement: "Churned founders name export friction as their top
+          reason for leaving, so this feature is retention-critical."
+      claims:
+        - {id: C-2, text: "12 tickets mention manual export pain",
+           source_type: user_reported, n: 12}
+      note: the churn assertion traces to no claim at all.
+  - label: clean-faithful-refs
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "Solo-founder workspaces lose hours weekly to manual
+          exports (C-2: 12 tickets, 9 reporters); our measured base is 900
+          active workspaces (C-1)."
+      claims:
+        - {id: C-1, text: "900 active workspaces in trailing 30 days",
+           source_type: primary_measured, n: 900}
+        - {id: C-2, text: "12 tickets from 9 reporters on manual export pain",
+           source_type: user_reported, n: 12}
+  - label: clean-derived-and-said-so
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "If even a tenth of the 900 measured workspaces (C-1)
+          hit this weekly, the aggregate cost is material — a derivation from
+          C-1, not a new measurement."
+      claims:
+        - {id: C-1, text: "900 active workspaces in trailing 30 days",
+           source_type: primary_measured, n: 900}
+  - label: boundary-rounded-number
+    kind: boundary
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "About a dozen support tickets this month cluster on
+          export pain [C-2]."
+      claims:
+        - {id: C-2, text: "12 tickets from 9 reporters on manual export pain",
+           source_type: user_reported, n: 12}
+  - label: boundary-two-claims-fused
+    kind: boundary
+    should_find: true
+    must_mention: ["C-1"]
+    artifact: |
+      prd:
+        problem_statement: "900 workspaces report export pain [C-1, C-2]."
+      claims:
+        - {id: C-1, text: "900 active workspaces in trailing 30 days",
+           source_type: primary_measured, n: 900}
+        - {id: C-2, text: "12 tickets from 9 reporters on manual export pain",
+           source_type: user_reported, n: 12}
+      note: fusing the base count with the complaint count manufactures
+      900 complainers out of 9.

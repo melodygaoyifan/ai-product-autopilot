@@ -1,0 +1,97 @@
+voter: disconfirmation
+fixtures:
+  - label: weakest-factor-unattacked
+    kind: positive
+    should_find: true
+    must_mention: ["0.35"]
+    artifact: |
+      sizing:
+        factors:
+          - {name: addressable_orgs, value: 4200, source_type: primary_cited, sensitivity: [3000, 5000]}
+          - {name: share_with_workflow, value: 0.35, source_type: third_party_report, sensitivity: [0.20, 0.50]}
+          - {name: annual_contract_value, value: 3600, source_type: primary_measured, n: 27}
+      narrative: "All factors are sourced; the case is strong."
+      note: the 0.35 third-party share is the load-bearing weak factor —
+      build the case that it is wrong for this segment.
+  - label: demand-explainable-by-something-else
+    kind: positive
+    should_find: true
+    must_mention: ["outage"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "support tickets about build uncertainty tripled in July",
+           source_type: user_reported, n: 21,
+           evidence: [{method: ticket_cluster, locator: "evidence://tickets/uncertainty-july",
+                       retrieved_at: "2026-07-24T09:00:00Z"}],
+           falsifier: "ticket rate reverting in August"}
+      context: "the changelog shows a July 8-10 checkpoint-corruption outage
+        that froze builds mid-run"
+      narrative: "Demand for progress visibility is accelerating."
+      note: the spike coincides with the outage; the alternative explanation
+      is sitting in the bundle.
+  - label: convenient-competitor-absence
+    kind: positive
+    should_find: true
+    must_mention: ["vendor"]
+    artifact: |
+      narrative: "No vendor ships progress visibility, confirming an open
+        gap."
+      snapshot_bundle: ["https://vendor-a.example/pricing (2026-07-25)",
+                        "https://vendor-b.example/pricing (2026-07-25)"]
+      note: strongest disconfirming case available: pricing pages are where
+      progress features would NOT be listed; the absence is an artifact of
+      where the writer looked.
+  - label: survivor-founders-ground-the-need
+    kind: positive
+    should_find: true
+    must_mention: ["churn"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "9 of 12 interviewed active founders want progress visibility",
+           source_type: user_reported, n: 12,
+           evidence: [{method: interview_notes, locator: "evidence://interviews/2026-07",
+                       retrieved_at: "2026-07-20T09:00:00Z"}],
+           falsifier: "notes not supporting the count"}
+      context: "interviewees were recruited from weekly-active founders;
+        churned founders cited build opacity in 2 of 30 exit surveys"
+      narrative: "The need is validated across the base."
+      note: the strongest opposite case: the people the feature would retain
+      already stayed, and leavers barely mention it.
+  - label: clean-attacks-already-answered
+    kind: negative
+    should_find: false
+    artifact: |
+      narrative: "Disconfirmation log: (1) July ticket spike vs outage —
+        answered: the cluster excludes outage-window tickets, rate still 2.1x.
+        (2) share_with_workflow 0.35 — answered: sensitivity spans 0.20-0.50
+        and the decision survives 0.20. (3) competitor absence — answered:
+        probes cover pricing, docs, and changelogs for both vendors."
+      note: every strong attack has an evidence answer inside the bundle;
+      inventing weaker attacks to fill a quota is not the charter.
+  - label: clean-thin-bundle-thin-claims
+    kind: negative
+    should_find: false
+    artifact: |
+      narrative: "Serviceable base only: 900 measured active workspaces,
+        $3,600 measured ACV, everything else stated as untested hypothesis
+        with sensitivity ranges. The assessment claims no more than the
+        two measured facts."
+  - label: boundary-hunch-without-bundle-grounding
+    kind: boundary
+    should_find: false
+    artifact: |
+      narrative: "The bundle contains our measured 900-workspace base and
+        two fresh competitor probes; the sizing survives its stated ranges."
+      note: a voter tempted to assert "the market feels crowded" with no
+      bundle citation should stay quiet — a hunch is not a disconfirmation.
+  - label: boundary-cheapest-test-undermines-urgency
+    kind: boundary
+    should_find: true
+    must_mention: ["test"]
+    artifact: |
+      narrative: "We must build now to preempt Vendor A's momentum; their
+        progress pane shipped in June and adoption compounds."
+      opportunities_context: "the candidate's own cheapest test (a stub click
+        counter) was defined at P0 and never run"
+      note: the strongest case against 'build now' is the bundle's own unrun
+      two-week test.

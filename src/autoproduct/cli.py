@@ -1558,6 +1558,52 @@ def evidence_cmd(
     )
 
 
+@app.command("voter-gate")
+def voter_gate_cmd(
+    stage: str = typer.Argument(..., help="opportunity | market | prd | evidence | prioritization"),
+    voter: str = typer.Option(None, help="One voter; default: every voter in the stage"),
+    workspace: str = typer.Option("."),
+    provider: str = typer.Option("anthropic", help="A REAL provider — judging an "
+                                                   "LLM voter takes an LLM"),
+):
+    """Run the voter fixture gate (§11.19): 8 fixtures, >=87.5% to register.
+    Results land in .mas/voter-registry.yaml; a failed voter stops voting."""
+    from pathlib import Path as _Path
+
+    from autoproduct.product.stage_engine import load_voter_charters
+    from autoproduct.product.voter_gate import (
+        VoterFixtureError,
+        record_gate_run,
+        run_voter_gate,
+    )
+
+    charters = [
+        (name, system)
+        for name, system in load_voter_charters(stage)
+        if voter is None or name == voter
+    ]
+    if not charters:
+        console.print(f"[red]no charter named {voter!r} in stage {stage!r}[/red]")
+        raise typer.Exit(code=2)
+    failed_any = False
+    for name, system in charters:
+        try:
+            run = run_voter_gate(stage, name, system, provider=provider)
+        except VoterFixtureError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
+        record_gate_run(_Path(workspace) / ".mas", run)
+        color = "green" if run.status == "registered" else "red"
+        console.print(f"[{color}]{stage}/{name}: {run.status}[/{color}] "
+                      f"({run.passed}/{run.total})")
+        for result in run.results:
+            if not result.passed:
+                console.print(f"    [red]{result.label}[/red]: {result.detail}")
+        failed_any = failed_any or run.status != "registered"
+    if failed_any:
+        raise typer.Exit(code=1)
+
+
 @app.command("prd-lint")
 def prd_lint_cmd(
     prd_yaml: str = typer.Argument(..., help="PRD yaml (a 'prd:' mapping, §20.56.2)"),

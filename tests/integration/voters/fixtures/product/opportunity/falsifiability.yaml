@@ -1,0 +1,91 @@
+voter: falsifiability
+fixtures:
+  - label: unfalsifiable-hypothesis
+    kind: positive
+    should_find: true
+    must_mention: ["falsif"]
+    artifact: |
+      candidates:
+        - id: cand-a
+          statement: "Better exports"
+          hypothesis: "users want better exports"
+          falsifier: "users turn out not to want better exports"
+          cheapest_test: "ship it and see"
+  - label: build-an-mvp-is-not-a-test
+    kind: positive
+    should_find: true
+    must_mention: ["test"]
+    artifact: |
+      candidates:
+        - id: cand-b
+          statement: "Cost dashboard for autopilot runs"
+          hypothesis: "founders check projected cost before long builds"
+          falsifier: "under 10% of builds preceded by a cost check within 30 days"
+          cheapest_test: "build an MVP of the dashboard"
+  - label: falsifier-without-a-quantity
+    kind: positive
+    should_find: true
+    must_mention: ["measur"]
+    artifact: |
+      candidates:
+        - id: cand-c
+          statement: "Shareable preview links"
+          hypothesis: "founders share previews with a teammate before shipping"
+          falsifier: "founders don't really engage with sharing"
+          cheapest_test: "a share button that copies a link and counts clicks"
+  - label: test-measures-a-different-hypothesis
+    kind: positive
+    should_find: true
+    must_mention: ["hypothesis"]
+    artifact: |
+      candidates:
+        - id: cand-d
+          statement: "Build progress panel"
+          hypothesis: "visible progress reduces mid-build abandonment"
+          falsifier: "abandonment rate unchanged (±1pt) with the panel available"
+          cheapest_test: "survey founders asking whether they would like a progress panel"
+      note: the survey tests stated preference, not abandonment.
+  - label: clean-tight-candidate
+    kind: negative
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-e
+          statement: "One-click bulk export stub"
+          hypothesis: "admins will adopt one-click bulk export"
+          falsifier: "under 5% of active workspaces click the stub within 2 weeks"
+          cheapest_test: "a stub button behind a click counter, no backend"
+  - label: clean-concierge-test
+    kind: negative
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-f
+          statement: "Guided cloud provisioning"
+          hypothesis: "founders complete cloud setup when walked through it live"
+          falsifier: "fewer than 3 of 10 concierge sessions end with a working deploy"
+          cheapest_test: "10 concierge sessions over screen-share, outcomes logged"
+  - label: boundary-proxy-metric-but-stated
+    kind: boundary
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-g
+          statement: "Progress panel"
+          hypothesis: "founders open a progress panel when one exists (proxy for
+            the uncertainty pain being real)"
+          falsifier: "panel open rate under 30% of build sessions after 30 days"
+          cheapest_test: "instrumented panel behind a feature flag for half of builds"
+  - label: boundary-two-week-window-for-monthly-behavior
+    kind: boundary
+    should_find: true
+    must_mention: ["window"]
+    artifact: |
+      candidates:
+        - id: cand-h
+          statement: "Monthly cost report"
+          hypothesis: "founders read a monthly cost report"
+          falsifier: "under 40% open rate within 2 weeks of launch"
+          cheapest_test: "send the first report and count opens for 2 weeks"
+      note: a monthly artifact judged on a two-week window cannot complete
+      even one cycle.

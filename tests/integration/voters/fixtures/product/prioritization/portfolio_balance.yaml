@@ -1,0 +1,102 @@
+voter: portfolio_balance
+fixtures:
+  - label: upside-ranked-attention-omitted
+    kind: positive
+    should_find: true
+    must_mention: ["attention"]
+    artifact: |
+      packet:
+        options:
+          - {candidate: cand-content-engine, rank: 1,
+             upside: "compounding organic traffic",
+             costs: "2 engineering weeks"}
+        attention_spent: {gate_pl3: 11, gate_pl1: 1, gate_pl2: 1}
+      note: the top option is a publishing engine ranked with zero attention
+      cost, in a cycle where Gate PL3 already consumed 11 approvals.
+  - label: wip-past-the-ceiling
+    kind: positive
+    should_find: true
+    must_mention: ["WIP"]
+    artifact: |
+      packet:
+        outer_loop_wip: 2
+        recommendation: "start cand-a and cand-b in parallel alongside the
+          two running loops"
+      note: outer-loop WIP is 1-2 by design (§16.38); the recommendation
+      lands at 4.
+  - label: channel-priority-without-label
+    kind: positive
+    should_find: true
+    must_mention: ["holdout"]
+    artifact: |
+      packet:
+        options:
+          - {candidate: cand-a, rank: 1,
+             rationale: "community is our proven acquisition channel, so this
+               community-forward candidate compounds"}
+        channel_history: [{channel: community, attribution: last_touch,
+                           holdout_tested: false}]
+      note: a channel-priority rationale citing neither a holdout nor an
+      explicit inference label (§22.63.3).
+  - label: trade-offs-netted-away
+    kind: positive
+    should_find: true
+    must_mention: ["loser"]
+    artifact: |
+      packet:
+        options:
+          - {candidate: cand-a, rank: 1, note: "strong on every axis"}
+          - {candidate: cand-b, rank: 2, note: "also attractive"}
+        capacity: "one loop slot free"
+      note: one slot, two 'winners', and no statement of what the loser gets
+      (rubric [5]) or what starting cand-a costs cand-b.
+  - label: clean-costs-carried
+    kind: negative
+    should_find: false
+    artifact: |
+      packet:
+        outer_loop_wip: 1
+        options:
+          - {candidate: cand-build-progress, rank: 1,
+             upside: "retention via reduced mid-build abandonment (H-1 pending)",
+             costs: "3 eng-weeks; ~4 gate approvals/loop of attention;
+               occupies the only free loop slot until October",
+             loser: "cand-cost-visibility parks with revisit_if: cost tickets
+               exceed 10/month"}
+        attention_spent: {gate_pl1: 1, gate_pl2: 1, gate_pl3: 2, gate_pl5: 1}
+  - label: clean-publish-less-said-plainly
+    kind: negative
+    should_find: false
+    artifact: |
+      packet:
+        attention_spent: {gate_pl3: 11, gate_pl1: 1, gate_pl2: 1, gate_pl5: 1}
+        options:
+          - {candidate: cand-content-engine, rank: 3,
+             note: "ranked BELOW product candidates precisely because Gate PL3
+               already consumes most of the attention budget (F-22.5); the
+               honest response to more drafts is fewer artifacts"}
+  - label: boundary-single-option-no-forced-tradeoff
+    kind: boundary
+    should_find: false
+    artifact: |
+      packet:
+        outer_loop_wip: 0
+        options:
+          - {candidate: cand-build-progress, rank: 1,
+             costs: "3 eng-weeks, ~4 approvals/loop",
+             note: "only candidate whose evidence survived the refresh; the
+               alternative presented is 'start nothing this cycle'"}
+  - label: boundary-calendar-cost-hidden-in-parallelism
+    kind: boundary
+    should_find: true
+    must_mention: ["calendar"]
+    artifact: |
+      packet:
+        options:
+          - {candidate: cand-a, rank: 1,
+             costs: "2 eng-weeks (parallelizes with the migration, so
+               effectively free)"}
+      context: "the migration occupies the same reviewer whose approvals gate
+        both efforts"
+      note: 'effectively free' hides the serialized reviewer calendar — the
+      real constraint.

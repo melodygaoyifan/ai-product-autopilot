@@ -1,0 +1,121 @@
+voter: signal_strength
+fixtures:
+  - label: one-thread-counted-twelve-times
+    kind: positive
+    should_find: true
+    must_mention: ["thread"]
+    artifact: |
+      candidates:
+        - id: cand-a
+          statement: "Teams demand realtime sync"
+          claims:
+            - {id: C-1, text: "12 community messages demand realtime sync",
+               source_type: user_reported, n: 12,
+               evidence: [{method: forum_thread, locator: "evidence://forum/thread-881",
+                           retrieved_at: "2026-07-20T09:00:00Z"}]}
+      note: all 12 messages are replies inside the single thread-881.
+  - label: archaeological-pain
+    kind: positive
+    should_find: true
+    must_mention: ["2023"]
+    artifact: |
+      candidates:
+        - id: cand-b
+          statement: "Users want CSV import"
+          claims:
+            - {id: C-1, text: "9 tickets request CSV import",
+               source_type: user_reported, n: 9,
+               evidence: [{method: ticket_cluster, locator: "evidence://tickets/csv-2023",
+                           retrieved_at: "2026-07-20T09:00:00Z"}]}
+      note: newest ticket in the cluster is dated 2023-11-02.
+  - label: single-source-cluster
+    kind: positive
+    should_find: true
+    must_mention: ["source"]
+    artifact: |
+      candidates:
+        - id: cand-c
+          statement: "Admins need audit logs"
+          claims:
+            - {id: C-1, text: "6 requests for audit logs",
+               source_type: user_reported, n: 6,
+               evidence: [{method: sales_notes, locator: "crm://notes/acct-441",
+                           retrieved_at: "2026-07-20T09:00:00Z"}]}
+      note: all six requests come from the one account acct-441; no other
+      source shows the need.
+  - label: n-exceeds-resolvable-artifacts
+    kind: positive
+    should_find: true
+    must_mention: ["n"]
+    artifact: |
+      candidates:
+        - id: cand-d
+          statement: "Founders want cost caps"
+          claims:
+            - {id: C-1, text: "20 tickets ask for cost caps",
+               source_type: user_reported, n: 20,
+               evidence: [{method: ticket_cluster, locator: "evidence://tickets/cost-caps",
+                           retrieved_at: "2026-07-20T09:00:00Z"}]}
+      note: the cluster locator resolves to 7 stored tickets.
+  - label: clean-diverse-recent-cluster
+    kind: negative
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-e
+          statement: "Reduce manual export pain"
+          claims:
+            - {id: C-1, text: "12 tickets from 9 distinct reporters this month",
+               source_type: user_reported, n: 12,
+               evidence:
+                 - {method: ticket_cluster, locator: "evidence://tickets/export-pain",
+                    retrieved_at: "2026-07-23T16:20:00Z"}
+                 - {method: issue_cluster, locator: "https://github.com/melodygaoyifan/autoproduct-ai/issues/31",
+                    retrieved_at: "2026-07-23T16:25:00Z"}
+               falsifier: "fewer than 5 distinct reporters"}
+  - label: clean-small-but-honest
+    kind: negative
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-f
+          statement: "Dark mode for late-night review"
+          claims:
+            - {id: C-1, text: "3 distinct reporters asked for dark mode this month",
+               source_type: user_reported, n: 3,
+               evidence: [{method: issue_cluster,
+                           locator: "https://github.com/melodygaoyifan/autoproduct-ai/issues/29",
+                           retrieved_at: "2026-07-24T10:00:00Z"}],
+               falsifier: "no further reports in 60 days"}
+  - label: boundary-two-sources-thin-recency
+    kind: boundary
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-g
+          statement: "Weekly digest email"
+          claims:
+            - {id: C-1, text: "5 requests from 4 reporters over six months",
+               source_type: user_reported, n: 5,
+               evidence:
+                 - {method: ticket_cluster, locator: "evidence://tickets/digest",
+                    retrieved_at: "2026-07-20T09:00:00Z"}
+                 - {method: survey_text, locator: "evidence://surveys/q2-open-text",
+                    retrieved_at: "2026-07-20T09:05:00Z"}
+               falsifier: "no new requests this quarter"}
+      note: thin but honestly stated, diverse sources, n matches artifacts.
+  - label: boundary-volume-hides-duplicates
+    kind: boundary
+    should_find: true
+    must_mention: ["distinct"]
+    artifact: |
+      candidates:
+        - id: cand-h
+          statement: "Bulk delete for workspaces"
+          claims:
+            - {id: C-1, text: "15 tickets request bulk delete",
+               source_type: user_reported, n: 15,
+               evidence: [{method: ticket_cluster, locator: "evidence://tickets/bulk-delete",
+                           retrieved_at: "2026-07-22T09:00:00Z"}],
+               falsifier: "fewer than 5 distinct reporters"}
+      note: 15 tickets, but reporter emails show 3 distinct people re-filing.

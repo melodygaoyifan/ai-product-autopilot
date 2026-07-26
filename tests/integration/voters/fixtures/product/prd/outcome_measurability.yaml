@@ -1,0 +1,102 @@
+voter: outcome_measurability
+fixtures:
+  - label: target-inside-the-noise-floor
+    kind: positive
+    should_find: true
+    must_mention: ["baseline"]
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: activation_rate,
+             baseline: {value: 0.11, source_type: primary_measured, n: 60},
+             target: {value: 0.115, by: "2026-11-30"},
+             instrumentation: {event: workspace.first_export, exists: true}}
+      note: a 0.5pt lift against an n=60 baseline measures nothing.
+  - label: undated-target
+    kind: positive
+    should_find: true
+    must_mention: ["date"]
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: activation_rate,
+             baseline: {value: 0.11, source_type: primary_measured, n: 1840},
+             target: {value: 0.18, by: "eventually"},
+             instrumentation: {event: workspace.first_export, exists: true}}
+  - label: baseline-without-provenance
+    kind: positive
+    should_find: true
+    must_mention: ["source"]
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: activation_rate,
+             baseline: {value: 0.11},
+             target: {value: 0.18, by: "2026-11-30"},
+             instrumentation: {event: workspace.first_export, exists: true}}
+      note: where did 0.11 come from — no source_type, no n.
+  - label: uninstrumented-and-untasked
+    kind: positive
+    should_find: true
+    must_mention: ["task"]
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             baseline: {value: 0, source: "panel does not exist"},
+             target: {value: 0.3, by: "2026-10-31"},
+             instrumentation: {event: build.progress_panel_viewed, exists: false}}
+      generated_planning_tasks: []
+      note: exists:false with an EMPTY generated-tasks list — unmeasurable
+      with nothing scheduled to fix it.
+  - label: clean-measurable-outcome
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: activation_rate,
+             baseline: {value: 0.11, source_type: primary_measured, n: 1840},
+             target: {value: 0.18, by: "2026-11-30"},
+             instrumentation: {event: workspace.first_export, exists: true}}
+  - label: clean-instrumented-or-tasked
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             baseline: {value: 0, source: "panel does not exist yet — true zero"},
+             target: {value: 0.3, by: "2026-10-31"},
+             instrumentation: {event: build.progress_panel_viewed, exists: false}}
+      generated_planning_tasks:
+        - {outcome_id: O-1, event: build.progress_panel_viewed,
+           title: "Instrument the panel-view event before launch"}
+      note: exists:false WITH the generated task is instrumented-or-tasked.
+  - label: boundary-zero-baseline-for-new-surface
+    kind: boundary
+    should_find: false
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             baseline: {value: 0, source: "feature does not exist; structural zero"},
+             target: {value: 0.3, by: "2026-10-31"},
+             instrumentation: {event: build.progress_panel_viewed, exists: false}}
+      generated_planning_tasks:
+        - {outcome_id: O-1, event: build.progress_panel_viewed, title: "wire event"}
+  - label: boundary-target-outruns-window
+    kind: boundary
+    should_find: true
+    must_mention: ["window"]
+    artifact: |
+      prd:
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             baseline: {value: 0, source: "structural zero"},
+             target: {value: 0.3, by: "2026-08-05"},
+             instrumentation: {event: build.progress_panel_viewed, exists: false}}
+      context: "the metric's definition uses a 7-day cohort window; launch is
+        planned 2026-08-01"
+      note: a by-date four days after launch cannot contain one complete
+      cohort window.

@@ -1,0 +1,92 @@
+voter: duplication
+fixtures:
+  - label: feature-vs-workflow-same-job
+    kind: positive
+    should_find: true
+    must_mention: ["merge"]
+    artifact: |
+      candidates:
+        - id: cand-a
+          statement: "A progress bar showing per-task build status"
+        - id: cand-b
+          statement: "Reduce founder uncertainty while autopilot runs by
+            surfacing what the pipeline is doing"
+      note: the same underlying job framed as a feature and as a workflow.
+  - label: strict-subset
+    kind: positive
+    should_find: true
+    must_mention: ["subset"]
+    artifact: |
+      candidates:
+        - id: cand-c
+          statement: "Export build logs as a file"
+        - id: cand-d
+          statement: "Export build logs, screenshots, and the audit trail as a
+            shareable bundle"
+  - label: same-need-split-by-channel
+    kind: positive
+    should_find: true
+    must_mention: ["same"]
+    artifact: |
+      candidates:
+        - id: cand-e
+          statement: "Email founders when a long build finishes"
+        - id: cand-f
+          statement: "Push notification when a long build finishes"
+      note: one need (build-completion alert) split into two candidates by
+      delivery channel.
+  - label: merged-candidate-drops-locators
+    kind: positive
+    should_find: true
+    must_mention: ["locator"]
+    artifact: |
+      merge_note: "cand-g and cand-h merged into cand-g"
+      candidates:
+        - id: cand-g
+          statement: "Build completion alerts"
+          claims:
+            - {id: C-1, text: "6 tickets ask for completion alerts",
+               source_type: user_reported, n: 6,
+               evidence: [{method: ticket_cluster, locator: "evidence://tickets/alerts",
+                           retrieved_at: "2026-07-20T09:00:00Z"}]}
+      note: cand-h carried 4 GitHub-issue locators; the merged candidate
+      kept only cand-g's evidence — merged candidates keep ALL locators.
+  - label: clean-distinct-jobs
+    kind: negative
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-i
+          statement: "Live build progress panel"
+        - id: cand-j
+          statement: "Monthly cost report for autopilot spend"
+  - label: clean-adjacent-but-different-buyer
+    kind: negative
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-k
+          statement: "Founder-facing preview link to try the built product"
+        - id: cand-l
+          statement: "Reviewer-facing diff view of what a build changed"
+  - label: boundary-overlapping-surface-distinct-need
+    kind: boundary
+    should_find: false
+    artifact: |
+      candidates:
+        - id: cand-m
+          statement: "Progress panel showing current task while a build runs"
+        - id: cand-n
+          statement: "Post-build report explaining every automated approval made"
+      note: both live on the build screen; running-visibility and
+      after-the-fact accountability are different needs.
+  - label: boundary-same-statement-different-words
+    kind: boundary
+    should_find: true
+    must_mention: ["merge"]
+    artifact: |
+      candidates:
+        - id: cand-o
+          statement: "Let founders watch the build as it happens"
+        - id: cand-p
+          statement: "Real-time visibility into a running build"

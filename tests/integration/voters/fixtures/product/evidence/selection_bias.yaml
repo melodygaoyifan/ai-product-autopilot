@@ -1,0 +1,89 @@
+voter: selection_bias
+fixtures:
+  - label: survivors-read-as-population
+    kind: positive
+    should_find: true
+    must_mention: ["churn"]
+    artifact: |
+      evidence:
+        narrative: "Satisfaction is strong: 4.6/5 across active workspaces.
+          Nothing in the data suggests a retention problem."
+        readings:
+          - {metric: satisfaction, value: 4.6, n: 210,
+             population: "workspaces active in the last 7 days"}
+      note: computed only over the people who stayed; churned users are
+      absent and unremarked.
+  - label: vocal-minority-without-denominator
+    kind: positive
+    should_find: true
+    must_mention: ["denominator"]
+    artifact: |
+      evidence:
+        narrative: "Users are frustrated with build speed — the feedback is
+          overwhelming."
+        feedback_quotes: ["painfully slow", "waited an hour", "molasses"]
+      note: three quotes, no n, no base population.
+  - label: survey-without-response-rate
+    kind: positive
+    should_find: true
+    must_mention: ["response"]
+    artifact: |
+      evidence:
+        readings:
+          - {metric: nps, value: 62, n: 31,
+             population: "quarterly survey recipients (n_sent not reported)"}
+        narrative: "An NPS of 62 puts us in elite company."
+      context: "the survey went to 1,100 founders"
+      note: 31 responses from 1,100 is a reading about the 3%.
+  - label: silent-cohort-unremarked
+    kind: positive
+    should_find: true
+    must_mention: ["missing"]
+    artifact: |
+      evidence:
+        narrative: "Feedback on the new onboarding is uniformly positive
+          across every channel we monitor."
+        channels: ["in-app feedback widget", "community Discord"]
+      note: both channels require opting in; the cohort that bounced before
+      the widget exists is missing and never named.
+  - label: clean-denominators-everywhere
+    kind: negative
+    should_find: false
+    artifact: |
+      evidence:
+        narrative: "12 of 9-reporter ticket cluster (base: 900 active
+          workspaces, so ~1% vocally affected); churned-founder exit surveys
+          mention the pain in 2 of 30 responses (response rate 30/85). The
+          silent 55 non-responders are named as the gap."
+  - label: clean-survivorship-addressed
+    kind: negative
+    should_find: false
+    artifact: |
+      evidence:
+        readings:
+          - {metric: satisfaction, value: 4.6, n: 210, population: "active"}
+          - {metric: exit_survey_satisfaction, value: 2.9, n: 30,
+             population: "churned in trailing 90 days"}
+        narrative: "Active-base satisfaction is 4.6; churned-base is 2.9 —
+          reported side by side, populations labeled."
+  - label: boundary-small-n-honestly-carried
+    kind: boundary
+    should_find: false
+    artifact: |
+      evidence:
+        narrative: "3 of 12 interviewees volunteered price willingness; n is
+          small, the sample skews to weekly-actives (recruitment channel),
+          and the verdict is insufficient_evidence pending the cohort read."
+  - label: boundary-weighted-average-hides-a-segment
+    kind: boundary
+    should_find: true
+    must_mention: ["segment"]
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 1000,
+             population: "all July signups"}
+        narrative: "July activation of 16% clears the 15% bar."
+      context: "the 200 mobile-first signups activated at 4%; desktop at 19%"
+      note: the blended 16% is correct arithmetic that buries a failing
+      segment the PRD explicitly targets.

@@ -1,0 +1,89 @@
+voter: fit
+fixtures:
+  - label: violates-stated-constraint
+    kind: positive
+    should_find: true
+    must_mention: ["constraint"]
+    artifact: |
+      strategy:
+        constraints: ["no features requiring realtime collaboration infrastructure this year"]
+        product: "single-writer build pipeline for solo founders"
+      candidates:
+        - id: cand-a
+          statement: "Multiplayer live-editing of the FDR with presence cursors"
+  - label: new-segment-unremarked
+    kind: positive
+    should_find: true
+    must_mention: ["segment"]
+    artifact: |
+      strategy:
+        segments: ["non-technical solo founders"]
+      candidates:
+        - id: cand-b
+          statement: "Enterprise SSO and role-based access for 500-seat IT departments"
+      note: the candidate is silent about the segment jump.
+  - label: new-subsystem-unremarked
+    kind: positive
+    should_find: true
+    must_mention: ["subsystem"]
+    artifact: |
+      strategy:
+        stack: "Python pipeline, SQLite state, no queue infrastructure"
+      candidates:
+        - id: cand-c
+          statement: "Streaming build logs over websockets to a realtime dashboard"
+      note: distance is a report — the finding is the unstated new subsystem,
+      not the ambition.
+  - label: contradicts-product-shape
+    kind: positive
+    should_find: true
+    must_mention: ["product"]
+    artifact: |
+      strategy:
+        product: "the system never spends money and never runs paid acquisition"
+      candidates:
+        - id: cand-d
+          statement: "Auto-buy Google Ads for each newly built product"
+  - label: clean-near-adjacency
+    kind: negative
+    should_find: false
+    artifact: |
+      strategy:
+        product: "build pipeline for solo founders"
+        stack: "Python, SQLite"
+        segments: ["non-technical solo founders"]
+      candidates:
+        - id: cand-e
+          statement: "Live build progress panel in studio (reads existing checkpoint state)"
+  - label: clean-far-but-stated
+    kind: negative
+    should_find: false
+    artifact: |
+      strategy:
+        segments: ["non-technical solo founders"]
+      candidates:
+        - id: cand-f
+          statement: "Agency mode: manage builds for multiple client workspaces.
+            NOTE: this targets a new segment (agencies) and would add a
+            multi-tenant boundary — flagged here deliberately for the human."
+      note: far distance, honestly reported by the candidate itself.
+  - label: boundary-stack-stretch-vs-new-subsystem
+    kind: boundary
+    should_find: false
+    artifact: |
+      strategy:
+        stack: "Python, SQLite"
+      candidates:
+        - id: cand-g
+          statement: "Nightly digest computed by the existing telemetry job and
+            written to the existing SQLite store"
+  - label: boundary-constraint-brush
+    kind: boundary
+    should_find: true
+    must_mention: ["constraint"]
+    artifact: |
+      strategy:
+        constraints: ["person-level data never leaves the analytics boundary"]
+      candidates:
+        - id: cand-h
+          statement: "Email each founder a list of their most active users with contact details"

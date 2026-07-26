@@ -1,0 +1,71 @@
+voter: regulatory
+fixtures:
+  - label: employment-decisions-unflagged
+    kind: positive
+    should_find: true
+    must_mention: ["employment"]
+    artifact: |
+      candidate: "auto-rank job applicants by predicted fit and hide the bottom half"
+      narrative: "A straightforward scoring feature for recruiting ops teams."
+      regulatory_findings: []
+  - label: health-data-in-passing
+    kind: positive
+    should_find: true
+    must_mention: ["health"]
+    artifact: |
+      candidate: "intake forms for physiotherapy clinics including injury history"
+      narrative: "Small-clinic segment with weak tooling; easy build on the
+        existing forms subsystem."
+      regulatory_findings: []
+  - label: minors-in-the-segment
+    kind: positive
+    should_find: true
+    must_mention: ["minor"]
+    artifact: |
+      candidate: "study-group scheduling for high-school students with parent-visible calendars"
+      narrative: "Distribution through school clubs looks cheap."
+      regulatory_findings: []
+  - label: cross-border-transfer-hand-waved
+    kind: positive
+    should_find: true
+    must_mention: ["transfer"]
+    artifact: |
+      candidate: "EU customer analytics synced nightly to our US-hosted warehouse"
+      narrative: "Standard sync; hosting is our normal US stack."
+      regulatory_findings: ["none material — standard analytics"]
+  - label: clean-no-regime-touched
+    kind: negative
+    should_find: false
+    artifact: |
+      candidate: "live build progress panel for the founder's own workspace"
+      narrative: "Reads existing checkpoint state; no new data collected,
+        no new sharing surface."
+      regulatory_findings: []
+  - label: clean-regime-named-and-shaped
+    kind: negative
+    should_find: false
+    artifact: |
+      candidate: "audit-trail export for compliance reviews"
+      regulatory_findings:
+        - "SOX-adjacent change-control expectations: export must be
+           tamper-evident; shapes the design toward the existing hash-chained
+           attestation ledger; named reviewer: counsel"
+  - label: boundary-payment-adjacent-but-out-of-band
+    kind: boundary
+    should_find: false
+    artifact: |
+      candidate: "monthly cost report summarizing autopilot spend"
+      narrative: "Reports figures the billing provider already computed;
+        no card data touched, no money moved (ADR-U20 unchanged)."
+      regulatory_findings: []
+  - label: boundary-analytics-drifting-toward-profiling
+    kind: boundary
+    should_find: true
+    must_mention: ["profil"]
+    artifact: |
+      candidate: "score each founder's engagement and share the per-founder
+        scores with partner agencies for targeting"
+      narrative: "Just analytics we already collect, repackaged."
+      regulatory_findings: []
+      note: per-person scoring shared for targeting is profiling with a
+      purpose-limitation problem, not repackaged analytics.

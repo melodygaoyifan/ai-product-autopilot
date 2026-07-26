@@ -1,0 +1,90 @@
+voter: novelty
+fixtures:
+  - label: killed-idea-returning-unremarked
+    kind: positive
+    should_find: true
+    must_mention: ["kill"]
+    artifact: |
+      kill_registry:
+        - {id: PRD-2026-009, outcome: kill, statement: "export-first onboarding for recruiting ops",
+           reason: "activation lift 2% vs 15% target", revisit_if: "segment with structured data"}
+      candidates:
+        - id: cand-a
+          statement: "Export-first onboarding flow for recruiting ops teams"
+          claims: []
+      note: the candidate text does not mention the prior kill.
+  - label: already-shipped-feature
+    kind: positive
+    should_find: true
+    must_mention: ["shipped"]
+    artifact: |
+      shipped_features: ["one-click bulk CSV export (v0.9)", "build progress panel (v0.20)"]
+      candidates:
+        - id: cand-b
+          statement: "Let admins export all rows to CSV in one click"
+  - label: already-on-roadmap
+    kind: positive
+    should_find: true
+    must_mention: ["roadmap"]
+    artifact: |
+      roadmap: ["M8: shareable preview links", "M9: cost dashboard"]
+      candidates:
+        - id: cand-c
+          statement: "Give founders a shareable preview link after each build"
+  - label: revisit-condition-now-true-unnoted
+    kind: positive
+    should_find: true
+    must_mention: ["revisit"]
+    artifact: |
+      kill_registry:
+        - {id: PRD-2026-004, outcome: kill, statement: "structured-data import wizard",
+           revisit_if: "we acquire a segment with existing structured data"}
+      context: "sales notes show 14 of last 20 won deals migrate from Airtable exports"
+      candidates:
+        - id: cand-d
+          statement: "Structured-data import wizard"
+      note: the candidate should surface the kill AND that revisit_if has
+      plausibly come true; silence on either is the finding.
+  - label: clean-genuinely-new
+    kind: negative
+    should_find: false
+    artifact: |
+      kill_registry: []
+      roadmap: ["M8: shareable preview links"]
+      shipped_features: ["bulk CSV export"]
+      candidates:
+        - id: cand-e
+          statement: "Live build progress visibility inside studio"
+  - label: clean-kill-surfaced-with-history
+    kind: negative
+    should_find: false
+    artifact: |
+      kill_registry:
+        - {id: PRD-2026-009, outcome: kill, statement: "export-first onboarding",
+           reason: "no adoption", revisit_if: "segment with structured data"}
+      candidates:
+        - id: cand-f
+          statement: "Export-first onboarding, revisited"
+          killed_matches: "PRD-2026-009 surfaced: killed for no adoption;
+            revisit_if not yet true — presented to the human with history."
+  - label: boundary-similar-name-different-job
+    kind: boundary
+    should_find: false
+    artifact: |
+      shipped_features: ["bulk CSV export of report rows"]
+      candidates:
+        - id: cand-g
+          statement: "Export the build audit trail for compliance reviews"
+      note: shares the word export; the job, data, and buyer differ.
+  - label: boundary-pivot-record-counts-too
+    kind: boundary
+    should_find: true
+    must_mention: ["pivot"]
+    artifact: |
+      kill_registry:
+        - {id: PRD-2026-011, outcome: pivot, statement: "weekly digest email for admins",
+           reason: "pivoted to in-app digest", revisit_if: "email channel warms"}
+      candidates:
+        - id: cand-h
+          statement: "Weekly digest email for workspace admins"
+      note: pivots are registry history exactly like kills.

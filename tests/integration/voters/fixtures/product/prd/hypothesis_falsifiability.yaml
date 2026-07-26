@@ -1,0 +1,99 @@
+voter: hypothesis_falsifiability
+fixtures:
+  - label: falsifier-is-a-restated-goal
+    kind: positive
+    should_find: true
+    must_mention: ["falsif"]
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-1, statement: "founders value progress visibility",
+             falsifier: "founders do not value progress visibility",
+             check: {stage: P4, method: cohort, window_days: 30}}
+  - label: window-shorter-than-the-metric
+    kind: positive
+    should_find: true
+    must_mention: ["window"]
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-1, statement: "the panel reduces 30-day churn",
+             falsifier: "30-day churn unchanged (±1pt) for panel users",
+             check: {stage: P4, method: cohort, window_days: 14}}
+      note: a 30-day churn falsifier checked on a 14-day window.
+  - label: check-names-an-uninstrumented-event
+    kind: positive
+    should_find: true
+    must_mention: ["instrument"]
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-1, statement: "founders open the panel during long builds",
+             falsifier: "panel_open events under 30% of builds over 5 minutes",
+             check: {stage: P4, method: cohort, window_days: 30}}
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             instrumentation: {event: build.progress_panel_viewed, exists: false}}
+      generated_planning_tasks: []
+      note: the falsifier needs panel_open events; nothing instruments them
+      and no task exists.
+  - label: no-measurable-quantity
+    kind: positive
+    should_find: true
+    must_mention: ["quantit"]
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-1, statement: "founders engage with the panel",
+             falsifier: "founders don't really engage with the panel",
+             check: {stage: P4, method: cohort, window_days: 30}}
+  - label: clean-evaluable-hypothesis
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-1, statement: "founders open the panel when a build runs
+               longer than 5 minutes",
+             falsifier: "panel open rate under 30% of 5-minute-plus build
+               sessions after 30 days of availability",
+             check: {stage: P4, method: cohort, window_days: 30}}
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             instrumentation: {event: build.progress_panel_viewed, exists: false}}
+      generated_planning_tasks:
+        - {outcome_id: O-1, event: build.progress_panel_viewed, title: "wire event"}
+  - label: clean-qualitative-check-honestly-typed
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-2, statement: "the plain-language build report answers the
+               'what did it approve' question",
+             falsifier: "3 or more of 10 usability sessions still ask what was
+               approved after reading the report",
+             check: {stage: P4, method: usability_sessions, window_days: 21}}
+  - label: boundary-proxy-falsifier-stated-as-proxy
+    kind: boundary
+    should_find: false
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-1, statement: "visible progress reduces mid-build abandonment
+               (proxied by panel opens until abandonment telemetry ships)",
+             falsifier: "panel open rate under 30% of build sessions after 30 days",
+             check: {stage: P4, method: cohort, window_days: 30}}
+  - label: boundary-compound-hypothesis-one-falsifier
+    kind: boundary
+    should_find: true
+    must_mention: ["two"]
+    artifact: |
+      prd:
+        demand_hypotheses:
+          - {id: H-1, statement: "founders open the panel AND abandonment drops
+               by a third",
+             falsifier: "panel open rate under 30% after 30 days",
+             check: {stage: P4, method: cohort, window_days: 30}}
+      note: two claims fused; the falsifier only reaches the first — the
+      abandonment half can never be falsified.

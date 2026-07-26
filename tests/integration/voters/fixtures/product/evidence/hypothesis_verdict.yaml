@@ -1,0 +1,120 @@
+voter: hypothesis_verdict
+fixtures:
+  - label: hypothesis-paraphrased-to-fit
+    kind: positive
+    should_find: true
+    must_mention: ["falsifier"]
+    artifact: |
+      prd_hypotheses:
+        - {id: H-1, statement: "founders open the panel during long builds",
+           falsifier: "panel open rate under 30% of 5-minute-plus sessions
+             after 30 days"}
+      evidence:
+        readings: [{metric: build_progress_view_rate, value: 0.24, n: 250}]
+        verdicts:
+          - {id: H-1, verdict: supported,
+             reasoning: "founders clearly value visibility — 24% adopted a
+               brand-new panel, strong for a v1"}
+      note: the pre-stated falsifier fired (24% < 30%); the verdict argues a
+      different, friendlier hypothesis.
+  - label: verdict-on-n6
+    kind: positive
+    should_find: true
+    must_mention: ["insufficient"]
+    artifact: |
+      prd_hypotheses:
+        - {id: H-2, statement: "agencies want multi-workspace management",
+           falsifier: "fewer than 3 of 10 agency interviews confirm the need"}
+      evidence:
+        verdicts:
+          - {id: H-2, verdict: supported,
+             reasoning: "4 of 6 interviews confirm"}
+        sufficiency: {n: 6, required_n: 10, sufficient: false}
+      note: the check itself pre-registered 10 interviews; a verdict on 6 is
+      not a verdict.
+  - label: missing-falsifier-guessed
+    kind: positive
+    should_find: true
+    must_mention: ["record"]
+    artifact: |
+      prd_hypotheses:
+        - {id: H-3, statement: "the plain-language report reduces support contacts"}
+      evidence:
+        verdicts:
+          - {id: H-3, verdict: not_supported,
+             reasoning: "support contacts flat, which we take as the falsifier"}
+      note: no falsifier on record; the verdict invented one instead of
+      returning BLOCKED_MISSING_CONTEXT.
+  - label: falsified-without-claim-propagation
+    kind: positive
+    should_find: true
+    must_mention: ["claim"]
+    artifact: |
+      prd_hypotheses:
+        - {id: H-1, statement: "admins adopt one-click bulk export",
+           falsifier: "under 10% of active workspaces use it within 30 days"}
+      evidence:
+        verdicts:
+          - {id: H-1, verdict: not_supported, falsifier_met: true}
+        dependent_claims_invalidated: []
+      context: "market claim C-14 (price-headroom case) declares
+        hypothesis_refs: [H-1]"
+      note: H-1 fell; C-14 depends on it and the invalidation list is empty.
+  - label: clean-verdict-quotes-both
+    kind: negative
+    should_find: false
+    artifact: |
+      prd_hypotheses:
+        - {id: H-1, statement: "founders open the panel during long builds",
+           falsifier: "panel open rate under 30% of 5-minute-plus sessions
+             after 30 days"}
+      evidence:
+        readings: [{metric: build_progress_view_rate, value: 0.24, n: 250,
+                    ci: [0.191, 0.297]}]
+        verdicts:
+          - {id: H-1, verdict: insufficient_evidence, falsifier_met: false,
+             reasoning: "reading 24% with CI [19.1%, 29.7%] — the interval
+               brushes the pre-stated 30% threshold; needs n≈610 to resolve.
+               Falsifier quoted verbatim; verdict computed against it alone."}
+  - label: clean-not-supported-owned
+    kind: negative
+    should_find: false
+    artifact: |
+      prd_hypotheses:
+        - {id: H-1, statement: "admins adopt one-click bulk export",
+           falsifier: "under 10% of active workspaces use it within 30 days"}
+      evidence:
+        readings: [{metric: bulk_export_adoption, value: 0.04, n: 900,
+                    ci: [0.029, 0.056]}]
+        verdicts:
+          - {id: H-1, verdict: not_supported, falsifier_met: true,
+             reasoning: "4% adoption, CI entirely below the pre-stated 10%;
+               dependent claims C-14, C-2 flagged for invalidation"}
+  - label: boundary-supported-at-the-edge
+    kind: boundary
+    should_find: false
+    artifact: |
+      prd_hypotheses:
+        - {id: H-1, statement: "founders open the panel during long builds",
+           falsifier: "open rate under 30% after 30 days"}
+      evidence:
+        readings: [{metric: build_progress_view_rate, value: 0.36, n: 800,
+                    ci: [0.327, 0.394]}]
+        verdicts:
+          - {id: H-1, verdict: supported, falsifier_met: false,
+             reasoning: "36%, CI floor 32.7%, clear of the pre-stated 30%"}
+  - label: boundary-two-hypotheses-one-verdict
+    kind: boundary
+    should_find: true
+    must_mention: ["H-2"]
+    artifact: |
+      prd_hypotheses:
+        - {id: H-1, statement: "founders open the panel", falsifier: "under 30%"}
+        - {id: H-2, statement: "opens reduce abandonment", falsifier: "abandonment
+             unchanged ±1pt among openers"}
+      evidence:
+        verdicts:
+          - {id: H-1, verdict: supported, falsifier_met: false,
+             reasoning: "36% open rate; abandonment analysis pending"}
+      note: H-2 received no verdict at all — a silent hypothesis is how a
+      loop stops resolving.

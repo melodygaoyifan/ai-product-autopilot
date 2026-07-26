@@ -73,6 +73,8 @@ class StageReport(BaseModel):
     revisions: int
     det_findings: list[dict] = Field(default_factory=list)
     voter_findings: list[VoterFinding] = Field(default_factory=list)
+    excluded_voters: list[str] = Field(default_factory=list)  # failed gate
+    unregistered_voters: list[str] = Field(default_factory=list)  # no gate run
     leader_summary: str = ""
     gate: dict = Field(default_factory=dict)
     artifacts: list[str] = Field(default_factory=list)
@@ -191,7 +193,20 @@ def run_product_stage(
         else artifact_text
     )
     voter_findings: list[VoterFinding] = []
+    excluded: list[str] = []
+    unregistered: list[str] = []
+    from autoproduct.product.voter_gate import registry_status
+
+    mas_dir = pathlib.Path(workspace) / ".mas"
     for voter_name, system in load_voter_charters(spec.skills_subdir, skills_root):
+        status = registry_status(mas_dir, spec.name, voter_name)
+        if status == "failed":
+            # §11.19: no agent registers without passing its fixture gate —
+            # a voter with a FAILED gate run does not vote, full stop.
+            excluded.append(voter_name)
+            continue
+        if status == "unregistered":
+            unregistered.append(voter_name)  # loads, but the report says so
         raw = provider_impl.complete(
             model=voter_model, system=system, user=context_text, max_tokens=2048
         )
@@ -256,6 +271,8 @@ def run_product_stage(
         revisions=revision,
         det_findings=det_findings,
         voter_findings=voter_findings,
+        excluded_voters=excluded,
+        unregistered_voters=unregistered,
         leader_summary=leader_summary,
         gate=gate,
         artifacts=spec.persist(artifact, workspace),

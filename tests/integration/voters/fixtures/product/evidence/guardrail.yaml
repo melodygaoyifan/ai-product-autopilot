@@ -1,0 +1,99 @@
+voter: guardrail
+fixtures:
+  - label: activation-lift-raised-churn
+    kind: positive
+    should_find: true
+    must_mention: ["churn"]
+    artifact: |
+      evidence:
+        narrative: "Headline: activation up 5 points after the aggressive
+          onboarding emails."
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 900}
+          - {metric: unsubscribe_rate, value: 0.011, n: 900, bound: 0.004}
+          - {metric: churn_30d, value: 0.09, n: 900, prior: 0.06}
+      note: the win headline stands while two guardrails degraded past bound.
+  - label: guardrails-absent-entirely
+    kind: positive
+    should_find: true
+    must_mention: ["guardrail"]
+    artifact: |
+      prd_guardrails: [churn_30d, support_contact_rate]
+      evidence:
+        narrative: "Activation up 5 points; a clean win."
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 900}
+      note: the PRD names two guardrails; neither was read.
+  - label: guardrail-from-a-different-window
+    kind: positive
+    should_find: true
+    must_mention: ["window"]
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 900,
+             cohort: {signup_month: "2026-07"}}
+          - {metric: churn_30d, value: 0.05, n: 850,
+             cohort: {signup_month: "2026-05"}}
+        narrative: "Activation up with churn steady."
+      note: the win is July's cohort; the reassuring churn number is May's.
+  - label: missing-guardrail-read-as-pass
+    kind: positive
+    should_find: true
+    must_mention: ["insufficient"]
+    artifact: |
+      evidence:
+        narrative: "No churn reading is available yet, so we treat churn as
+          unaffected and confirm the win."
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 900}
+      note: absent guardrail data turns the win into insufficient_evidence,
+      not a pass.
+  - label: clean-win-with-guardrails-held
+    kind: negative
+    should_find: false
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 900,
+             cohort: {signup_month: "2026-07"}}
+          - {metric: churn_30d, value: 0.058, n: 900, bound: 0.07,
+             cohort: {signup_month: "2026-07"}}
+          - {metric: support_contact_rate, value: 0.03, n: 900, bound: 0.05,
+             cohort: {signup_month: "2026-07"}}
+        narrative: "Activation up 5 points; both PRD guardrails read on the
+          same cohort and inside bounds."
+  - label: clean-veto-owned
+    kind: negative
+    should_find: false
+    artifact: |
+      evidence:
+        narrative: "The subject-line variant lifted opens 22% but complaint
+          rate hit 0.41% against the 0.30% bound — reported as a LOSS; the
+          variant is not adopted."
+        readings:
+          - {metric: open_rate, value: 0.31, n: 4000}
+          - {metric: complaint_rate, value: 0.0041, n: 4000, bound: 0.003}
+  - label: boundary-guardrail-at-exact-bound
+    kind: boundary
+    should_find: false
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 900}
+          - {metric: churn_30d, value: 0.07, n: 900, bound: 0.07}
+        narrative: "Churn sits exactly at its bound — flagged as
+          at-the-line and watched, not breached."
+  - label: boundary-secondary-dressed-as-guardrail
+    kind: boundary
+    should_find: true
+    must_mention: ["scroll"]
+    artifact: |
+      prd_guardrails: [churn_30d]
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 900}
+          - {metric: scroll_depth, value: 0.71, n: 900, bound: 0.5}
+        narrative: "Guardrails green: scroll depth comfortably above bound."
+      note: the PRD's actual guardrail (churn) is unread; a friendly
+      secondary is standing in its uniform.

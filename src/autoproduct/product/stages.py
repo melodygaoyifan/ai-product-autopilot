@@ -173,6 +173,18 @@ def opportunity_spec(
             _write_yaml(root / "claims" / "opportunity.claim.yaml", merged),
         ]
 
+    def voter_context(artifact: OpportunitySet, artifact_text: str) -> str:
+        # The Fit voter judges distance against .mas/strategy.yaml — the
+        # declared constraints must be in front of it, not a ghost reference.
+        from autoproduct.product.strategy import load_strategy
+
+        strategy = load_strategy(mas)
+        if not (strategy.constraints or strategy.product or strategy.segments):
+            return artifact_text
+        return artifact_text + "\n" + yaml.safe_dump(
+            {"strategy": strategy.model_dump()}, sort_keys=False, allow_unicode=True
+        )
+
     return StageSpec(
         name="opportunity",
         writer_system=_OPPORTUNITY_SYSTEM,
@@ -182,6 +194,7 @@ def opportunity_spec(
         det_tools=det_tools,
         gate=gate,
         persist=persist,
+        voter_context=voter_context,
     )
 
 

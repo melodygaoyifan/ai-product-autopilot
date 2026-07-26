@@ -1,0 +1,87 @@
+voter: distribution
+fixtures:
+  - label: channel-assumption-stated-as-fact
+    kind: positive
+    should_find: true
+    must_mention: ["inference"]
+    artifact: |
+      narrative: "Distribution is solved: content marketing will bring 400
+        qualified visits a week within a quarter."
+      claims:
+        - {id: C-1, text: "content will bring 400 qualified visits weekly by Q4",
+           source_type: model_inference,
+           falsifier: "traffic below 400/week at Q4"}
+      note: labeled in the ledger, laundered into fact in the prose.
+  - label: no-reachable-buyer-named
+    kind: positive
+    should_find: true
+    must_mention: ["channel"]
+    artifact: |
+      narrative: "The product sells itself once founders see the progress
+        panel in action."
+      channels_considered: []
+      note: a great product with no stated path to the buyer at all.
+  - label: never-holdout-tested-history
+    kind: positive
+    should_find: true
+    must_mention: ["holdout"]
+    artifact: |
+      narrative: "Community posts have historically driven our signups, so
+        the launch leans on community."
+      channel_history:
+        - {channel: community, attribution: last_touch, holdout_tested: false}
+      note: the assessment leans on channel history no holdout ever tested.
+  - label: borrowed-benchmark-carries-the-plan
+    kind: positive
+    should_find: true
+    must_mention: ["benchmark"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "dev-tool launches convert HN front-page traffic at 2-4%",
+           source_type: third_party_report,
+           evidence: [{method: report_probe, locator: "https://benchmarks.example/devtools",
+                       retrieved_at: "2026-07-20T09:00:00Z", artifact_hash: "sha256:ab12"}],
+           falsifier: "our own launch converting below 2%"}
+      narrative: "At benchmark conversion the launch pays for itself; the
+        plan assumes front-page placement."
+      note: two stacked assumptions (placement + borrowed rate) carrying the plan.
+  - label: clean-labeled-early-stage-channels
+    kind: negative
+    should_find: false
+    artifact: |
+      narrative: "Channel picture at this stage: existing users (owned,
+        measured), GitHub/community (plausible, untested — labeled
+        inference), content (untested). No channel has been holdout-tested;
+        that is itself recorded as a standing finding for P5."
+      claims:
+        - {id: C-1, text: "existing 900 workspaces are reachable in-product",
+           source_type: primary_measured, n: 900,
+           evidence: [{method: analytics_query, locator: "analytics://funnels/actives",
+                       retrieved_at: "2026-07-26T08:10:00Z"}],
+           falsifier: "active count below 900 on re-query"}
+  - label: clean-in-product-surface-for-existing-need
+    kind: negative
+    should_find: false
+    artifact: |
+      narrative: "The buyer already uses the build screen daily; the panel
+        ships to them through the product surface channel, reviewed as code.
+        No acquisition channel is required for the first cohort."
+  - label: boundary-single-channel-honestly-fragile
+    kind: boundary
+    should_find: false
+    artifact: |
+      narrative: "Only one plausible channel exists today (in-product), and
+        the plan says so: if the feature must find NEW users to matter, this
+        candidate is mis-scoped — flagged as an open question for Gate PL1."
+  - label: boundary-two-channels-one-imaginary
+    kind: boundary
+    should_find: true
+    must_mention: ["untested"]
+    artifact: |
+      narrative: "Two channels derisk the launch: in-product (measured) and
+        a partnership pipeline with three agencies."
+      claims:
+        - {id: C-1, text: "three agencies will co-market at launch",
+           source_type: model_inference,
+           falsifier: "no signed partnership by launch"}
+      note: the second channel is an unlabeled hope doing derisking work.

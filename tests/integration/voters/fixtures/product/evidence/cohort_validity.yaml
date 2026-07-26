@@ -1,0 +1,94 @@
+voter: cohort_validity
+fixtures:
+  - label: thirty-day-number-on-day-eleven
+    kind: positive
+    should_find: true
+    must_mention: ["window"]
+    artifact: |
+      evidence:
+        readings:
+          - {metric: retention_30d, value: 0.71, n: 140,
+             cohort: {signup_week: "2026-W29"},
+             window_complete: false, days_elapsed: 11}
+        narrative: "Thirty-day retention holds at a healthy 71%."
+  - label: cohort-basis-drift
+    kind: positive
+    should_find: true
+    must_mention: ["basis"]
+    artifact: |
+      metric_definitions:
+        activation_rate: {cohort_basis: signup_week, window_days: 7}
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.15, n: 900,
+             cohort: {signup_month: "2026-06"}}
+      note: monthly cohorts against a weekly definition.
+  - label: partial-quoted-as-full-in-prose
+    kind: positive
+    should_find: true
+    must_mention: ["partial"]
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 310,
+             cohort: {signup_week: "2026-W30"}, window_complete: false}
+        narrative: "W30 activation reached 16%, our best cohort yet."
+      note: cohort_calc marked it incomplete; the prose quotes it anyway.
+  - label: mixed-cohort-averaged-across-a-change
+    kind: positive
+    should_find: true
+    must_mention: ["mix"]
+    artifact: |
+      context: "the progress panel shipped to half of workspaces on 2026-07-15"
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.14, n: 1200,
+             cohort: {signup_month: "2026-07"},
+             note: "panel and no-panel workspaces averaged together"}
+  - label: clean-complete-window
+    kind: negative
+    should_find: false
+    artifact: |
+      metric_definitions:
+        activation_rate: {cohort_basis: signup_week, window_days: 7,
+                          exclusions: ["internal domains", "test workspaces"]}
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.128, n: 250,
+             cohort: {signup_week: "2026-W27"}, window_complete: true,
+             exclusions_applied: true}
+  - label: clean-incomplete-window-labeled
+    kind: negative
+    should_find: false
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.16, n: 310,
+             cohort: {signup_week: "2026-W30"}, window_complete: false}
+        narrative: "W30 is at 16% with 3 of 7 window days remaining —
+          reported as partial, excluded from the verdict."
+  - label: boundary-single-unit-overlap
+    kind: boundary
+    should_find: false
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.13, n: 250,
+             cohort: {signup_week: "2026-W27"}, window_complete: true,
+             note: "one workspace re-created after deletion appears in W27
+               only; dedup rule (first appearance wins) applied and stated"}
+  - label: boundary-holiday-week-uncontexted
+    kind: boundary
+    should_find: true
+    must_mention: ["W27"]
+    artifact: |
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.07, n: 240,
+             cohort: {signup_week: "2026-W27"}, window_complete: true}
+          - {metric: activation_rate, value: 0.13, n: 250,
+             cohort: {signup_week: "2026-W28"}, window_complete: true}
+        narrative: "Activation doubled week over week — momentum is building."
+      context: "W27 contained a 3-day national holiday"
+      note: the comparison is valid arithmetic on a cohort whose composition
+      the narrative ignores.

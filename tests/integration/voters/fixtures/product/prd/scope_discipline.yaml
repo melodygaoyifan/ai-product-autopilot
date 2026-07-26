@@ -1,0 +1,93 @@
+voter: scope_discipline
+fixtures:
+  - label: problem-statement-is-a-solution
+    kind: positive
+    should_find: true
+    must_mention: ["solution"]
+    artifact: |
+      prd:
+        problem_statement: "We need a websocket-driven progress panel with
+          per-task rows and a retry button."
+        scope_tier: thin
+      note: who/what-pain/why-now is absent; the 'problem' is an implementation.
+  - label: non-goal-specifies-architecture
+    kind: positive
+    should_find: true
+    must_mention: ["architect"]
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        non_goals: ["We will not use websockets or server-sent events for this."]
+        scope_tier: thin
+      note: a non-goal quietly making Stage 3's transport decision.
+  - label: outcome-prescribes-implementation
+    kind: positive
+    should_find: true
+    must_mention: ["implement"]
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             description: "raise panel views via a new export service that
+               streams checkpoint deltas",
+             target: {value: 0.3, by: "2026-10-31"}}
+        scope_tier: thin
+  - label: thin-tier-with-deep-scope
+    kind: positive
+    should_find: true
+    must_mention: ["tier"]
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        scope_tier: thin
+        outcomes: [{id: O-1}, {id: O-2}, {id: O-3}, {id: O-4}, {id: O-5}]
+        demand_hypotheses: [{id: H-1}, {id: H-2}, {id: H-3}]
+      sizing_context: "range $10.8M-$18M"
+      note: five outcomes and three hypotheses is not thin.
+  - label: clean-boundary-respected
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is
+          progressing or stuck (C-2); mid-build abandonment follows."
+        non_goals: ["No historical build analytics this cycle.",
+                    "No notifications to teammates — the founder's own view only."]
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             target: {value: 0.3, by: "2026-10-31"}}
+        scope_tier: thin
+  - label: clean-tier-matches-evidence
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "Founders abandon mid-build for lack of visibility (C-2)."
+        scope_tier: thin
+        outcomes: [{id: O-1, metric: build_progress_view_rate,
+                    target: {value: 0.3, by: "2026-10-31"}}]
+        demand_hypotheses: [{id: H-1, statement: "founders open a panel when it exists",
+                             falsifier: "open rate under 30% after 30 days"}]
+      sizing_context: "serviceable base 900 workspaces, measured"
+  - label: boundary-user-visible-technology-name
+    kind: boundary
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "Founders exporting to 微信小程序 cannot preview
+          builds on a phone; the preview must open in WeChat."
+        scope_tier: thin
+      note: naming the platform the USER lives in is who/where, not
+      implementation.
+  - label: boundary-capacity-framed-as-non-goal
+    kind: boundary
+    should_find: true
+    must_mention: ["non-goal"]
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        non_goals: ["We won't refactor the checkpoint store, so progress
+          granularity stays per-task."]
+        scope_tier: thin
+      note: a design constraint (granularity ceiling) smuggled in as a non-goal.

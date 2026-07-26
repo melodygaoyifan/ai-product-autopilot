@@ -1,0 +1,102 @@
+voter: willingness_to_pay
+fixtures:
+  - label: feels-reasonable-pricing
+    kind: positive
+    should_find: true
+    must_mention: ["price"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "founders would happily pay $29 per month for progress visibility",
+           source_type: model_inference,
+           falsifier: "a pricing test showing otherwise"}
+      narrative: "At a reasonable $29 price point this feels like an easy yes."
+  - label: valuable-conflated-with-paid-for
+    kind: positive
+    should_find: true
+    must_mention: ["pay"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "9 of 12 interviewed founders called progress visibility very valuable",
+           source_type: user_reported, n: 12,
+           evidence: [{method: interview_notes, locator: "evidence://interviews/2026-07",
+                       retrieved_at: "2026-07-20T09:00:00Z"}],
+           falsifier: "interview notes not supporting the count"}
+      narrative: "Willingness to pay is established: founders consistently
+        call this very valuable."
+      note: valuable ≠ paid for; no price was ever discussed.
+  - label: anchor-price-from-unlike-product
+    kind: positive
+    should_find: true
+    must_mention: ["compar"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "Datadog charges $23/host, so $23/workspace is proven willingness to pay",
+           source_type: primary_cited,
+           evidence: [{method: pricing_probe, locator: "https://datadog.example/pricing",
+                       retrieved_at: "2026-07-20T09:00:00Z", artifact_hash: "sha256:ff11"}],
+           falsifier: "Datadog pricing differing"}
+      note: a real probe of a non-comparable product doing the pricing work.
+  - label: confidence-outruns-type
+    kind: positive
+    should_find: true
+    must_mention: ["inference"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "the segment will bear a 40% price premium for visibility features",
+           source_type: model_inference,
+           falsifier: "win-rate data at the higher price"}
+      narrative: "The premium pricing case is solid and de-risked."
+      note: legally labeled inference, illegally confident prose.
+  - label: clean-observed-transactions
+    kind: negative
+    should_find: false
+    artifact: |
+      claims:
+        - {id: C-1, text: "our closed deals averaged $3,600 ACV with visibility features unbundled",
+           source_type: primary_measured, n: 27,
+           evidence: [{method: crm_query, locator: "crm://reports/closed-won-2026H1",
+                       retrieved_at: "2026-07-22T08:30:00Z"}],
+           falsifier: "recomputation landing outside $3,300-$3,900"}
+      narrative: "Observed transactions ground the ACV; the visibility
+        premium is untested and stated as such."
+  - label: clean-published-competitor-prices
+    kind: negative
+    should_find: false
+    artifact: |
+      claims:
+        - {id: C-1, text: "Vendor A charges $59/seat with progress views included; Vendor B $39 without",
+           source_type: primary_cited, expires: "2026-10-25",
+           evidence:
+             - {method: pricing_probe, locator: "https://vendor-a.example/pricing",
+                retrieved_at: "2026-07-25T09:00:00Z", artifact_hash: "sha256:dd9f"}
+             - {method: pricing_probe, locator: "https://vendor-b.example/pricing",
+                retrieved_at: "2026-07-25T09:05:00Z", artifact_hash: "sha256:a550"}
+           falsifier: "either pricing page differing on re-probe"}
+      narrative: "A $20/seat delta exists between the two published prices;
+        attribution of that delta to the progress feature is NOT claimed."
+  - label: boundary-user-quotes-about-price
+    kind: boundary
+    should_find: false
+    artifact: |
+      claims:
+        - {id: C-1, text: "3 of 12 interviewees volunteered they would pay extra for progress visibility",
+           source_type: user_reported, n: 12,
+           evidence: [{method: interview_notes, locator: "evidence://interviews/2026-07",
+                       retrieved_at: "2026-07-20T09:00:00Z"}],
+           falsifier: "notes not containing the three statements"}
+      narrative: "Weak but real: stated willingness from 3 of 12, treated as
+        a hypothesis for a pricing test, not as proof."
+  - label: boundary-freemium-conversion-borrowed
+    kind: boundary
+    should_find: true
+    must_mention: ["conver"]
+    artifact: |
+      claims:
+        - {id: C-1, text: "industry freemium conversion of 4% applies to our upgrade path",
+           source_type: third_party_report,
+           evidence: [{method: report_probe, locator: "https://benchmarks.example/freemium-2026",
+                       retrieved_at: "2026-07-20T09:00:00Z", artifact_hash: "sha256:cc88"}],
+           falsifier: "our own funnel diverging from 4%"}
+      narrative: "Revenue projects cleanly at the benchmark 4% conversion."
+      note: a real report, but a borrowed conversion rate doing the whole
+      willingness-to-pay argument for an unlike product.

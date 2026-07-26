@@ -1,0 +1,101 @@
+voter: metric_definition
+fixtures:
+  - label: window-drifted-from-definition
+    kind: positive
+    should_find: true
+    must_mention: ["14"]
+    artifact: |
+      metric_definitions:
+        activation_rate: {numerator_event: workspace.first_export, window_days: 7,
+                          cohort_basis: signup_week}
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.19, n: 1840,
+             computed: "first export within 14 days of signup"}
+      note: definition says 7 days; the reading used 14.
+  - label: trend-spans-changed-at-unmarked
+    kind: positive
+    should_find: true
+    must_mention: ["definition"]
+    artifact: |
+      metric_definitions:
+        activation_rate: {numerator_event: workspace.first_export, window_days: 7,
+                          changed_at: "2026-06-14"}
+      evidence:
+        narrative: "Activation improved from 11% (May) to 16% (July), a solid
+          upward trend."
+      note: the series straddles the June 14 definition change with no break
+      marked.
+  - label: wrong-numerator-event
+    kind: positive
+    should_find: true
+    must_mention: ["event"]
+    artifact: |
+      metric_definitions:
+        build_progress_view_rate: {numerator_event: build.progress_panel_viewed,
+                                   window_days: 7}
+      evidence:
+        readings:
+          - {metric: build_progress_view_rate, value: 0.41, n: 250,
+             computed: "sessions with any studio pageview"}
+      note: any-pageview is not the panel-view event the definition counts.
+  - label: exclusions-not-applied
+    kind: positive
+    should_find: true
+    must_mention: ["exclu"]
+    artifact: |
+      metric_definitions:
+        activation_rate: {numerator_event: workspace.first_export, window_days: 7,
+                          exclusions: ["internal domains", "test workspaces"]}
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.14, n: 2100,
+             computed: "all workspaces created in window, none excluded"}
+  - label: clean-reading-matches-definition
+    kind: negative
+    should_find: false
+    artifact: |
+      metric_definitions:
+        activation_rate: {numerator_event: workspace.first_export, window_days: 7,
+                          cohort_basis: signup_week,
+                          exclusions: ["internal domains", "test workspaces"]}
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.128, n: 1840,
+             computed: "first export within 7 days, signup-week cohorts,
+               internal and test workspaces excluded"}
+  - label: clean-break-marked
+    kind: negative
+    should_find: false
+    artifact: |
+      metric_definitions:
+        activation_rate: {numerator_event: workspace.first_export, window_days: 7,
+                          changed_at: "2026-06-14"}
+      evidence:
+        narrative: "Pre-change series (Jan-May, old definition) is reported
+          separately and labeled; the new baseline starts 2026-06-14 at 11%.
+          No cross-change comparison is made."
+  - label: boundary-rounding-not-redefinition
+    kind: boundary
+    should_find: false
+    artifact: |
+      metric_definitions:
+        activation_rate: {numerator_event: workspace.first_export, window_days: 7}
+      evidence:
+        readings:
+          - {metric: activation_rate, value: 0.13, n: 1840,
+             computed: "12.8% rounded to 13% in the headline; exact value in table"}
+  - label: boundary-same-name-different-denominator
+    kind: boundary
+    should_find: true
+    must_mention: ["denominator"]
+    artifact: |
+      metric_definitions:
+        build_progress_view_rate: {numerator_event: build.progress_panel_viewed,
+                                   window_days: 7,
+                                   denominator: "build sessions started in window"}
+      evidence:
+        readings:
+          - {metric: build_progress_view_rate, value: 0.62, n: 97,
+             computed: "panel views over sessions longer than 5 minutes"}
+      note: quietly swapping the denominator to long sessions flatters the rate.

@@ -1,0 +1,98 @@
+voter: sizing
+fixtures:
+  - label: divergence-smoothed-in-prose
+    kind: positive
+    should_find: true
+    must_mention: ["diverg"]
+    artifact: |
+      sizing:
+        factors:
+          - {name: addressable_orgs, value: 4200, source_type: primary_cited, sensitivity: [3000, 5000]}
+          - {name: annual_contract_value, value: 3600, source_type: primary_measured, n: 27}
+        result_range: [10800000, 18000000]
+        top_down_crosscheck: {value: 90000000, note: "analyst figure"}
+      narrative: "Our bottom-up build and the analyst's $90M figure are
+        broadly consistent, both pointing at a healthy market."
+      note: 6x apart, narrated as consistent.
+  - label: unsourced-factor-in-prose
+    kind: positive
+    should_find: true
+    must_mention: ["source"]
+    artifact: |
+      sizing:
+        factors:
+          - {name: addressable_orgs, value: 4200, source_type: primary_cited, sensitivity: [3000, 5000]}
+      narrative: "Assuming 30% of these orgs have the qualifying workflow
+        (industry experience suggests this is conservative), the market is
+        roughly $4.5M."
+      note: the 30% factor appears only in prose, sourced to nothing.
+  - label: point-estimate-headline
+    kind: positive
+    should_find: true
+    must_mention: ["range"]
+    artifact: |
+      sizing:
+        factors:
+          - {name: addressable_orgs, value: 4200, source_type: third_party_report, sensitivity: [2000, 6000]}
+          - {name: annual_contract_value, value: 3600, source_type: primary_measured, n: 27}
+        result_range: [7200000, 21600000]
+      narrative: "The opportunity is $15.1M."
+      note: the mechanical range exists; the narrative quotes a point.
+  - label: sensitivity-narrower-than-the-source
+    kind: positive
+    should_find: true
+    must_mention: ["sensitiv"]
+    artifact: |
+      sizing:
+        factors:
+          - {name: share_with_workflow, value: 0.35, source_type: third_party_report,
+             sensitivity: [0.34, 0.36],
+             evidence_note: "survey reports 20-50% depending on segment"}
+      note: the cited survey spans 0.20-0.50; the declared sensitivity is ±0.01.
+  - label: clean-honest-range
+    kind: negative
+    should_find: false
+    artifact: |
+      sizing:
+        factors:
+          - {name: active_workspaces, value: 900, source_type: primary_measured, n: 900}
+          - {name: annual_contract_value, value: 3600, source_type: primary_measured, n: 27}
+        result_range: [3240000, 3240000]
+      narrative: "Bottom-up from our own measured base: ~$3.2M serviceable
+        today; no third-party TAM exists for this niche and none is cited."
+  - label: clean-divergence-recorded
+    kind: negative
+    should_find: false
+    artifact: |
+      sizing:
+        factors:
+          - {name: addressable_orgs, value: 4200, source_type: primary_cited, sensitivity: [3000, 5000]}
+          - {name: annual_contract_value, value: 3600, source_type: primary_measured, n: 27}
+        result_range: [10800000, 18000000]
+        top_down_crosscheck: {value: 90000000, note: "6x our midpoint — divergence
+          recorded, not reconciled; likely the analyst counts adjacent tooling"}
+  - label: boundary-wide-range-honestly-wide
+    kind: boundary
+    should_find: false
+    artifact: |
+      sizing:
+        factors:
+          - {name: share_with_workflow, value: 0.35, source_type: third_party_report,
+             sensitivity: [0.20, 0.50], evidence_note: "survey spans 20-50%"}
+          - {name: addressable_orgs, value: 4200, source_type: primary_cited, sensitivity: [3000, 5000]}
+        result_range: [2160000, 9000000]
+      narrative: "The range is wide (4x) because the workflow-share factor is
+        genuinely uncertain; the decision below survives both ends."
+  - label: boundary-midpoint-quoted-with-range
+    kind: boundary
+    should_find: true
+    must_mention: ["point"]
+    artifact: |
+      sizing:
+        factors:
+          - {name: addressable_orgs, value: 4200, source_type: primary_cited, sensitivity: [3000, 5000]}
+          - {name: annual_contract_value, value: 3600, source_type: primary_measured, n: 27}
+        result_range: [10800000, 18000000]
+      narrative: "We size this at $15.1M (range $10.8M-$18M), and the
+        recommendation assumes the $15.1M midpoint holds."
+      note: the range is present but the decision leans on the point.

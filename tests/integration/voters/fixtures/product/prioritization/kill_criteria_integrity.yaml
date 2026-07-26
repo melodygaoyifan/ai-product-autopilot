@@ -1,0 +1,107 @@
+voter: kill_criteria_integrity
+fixtures:
+  - label: revision-justified-by-rereading
+    kind: positive
+    should_find: true
+    must_mention: ["evidence"]
+    artifact: |
+      kill_evaluation:
+        fired: [{criterion: "view rate under 30% after 30 days", reading: "24%"}]
+      decision:
+        outcome: continue_with_revised_criteria
+        revised_criteria: [{text: "view rate under 20% after 60 days"}]
+        revision_evidence: "on reflection, 30% was always too ambitious for a
+          v1 panel; the same cohort data reads better against 20%"
+      note: the 'new evidence' is a re-reading of the old data.
+  - label: threshold-that-exactly-clears-today
+    kind: positive
+    should_find: true
+    must_mention: ["24"]
+    artifact: |
+      kill_evaluation:
+        fired: [{criterion: "view rate under 30%", reading: "24%"}]
+      decision:
+        outcome: continue_with_revised_criteria
+        revised_criteria: [{text: "view rate under 23% after 30 days"}]
+        revision_evidence: "competitor benchmarks suggest 23% is the realistic bar"
+      note: the revised threshold lands one point under the current reading.
+  - label: fired-criterion-answered-in-prose
+    kind: positive
+    should_find: true
+    must_mention: ["record"]
+    artifact: |
+      kill_evaluation:
+        fired: [{criterion: "O-1 misses 50% of target lift after 2 loops",
+                 reading: "26% of target"}]
+      packet_narrative: "the miss is well understood — seasonality plus the
+        July outage — so the team is continuing as planned"
+      gate_pl5_decision: null
+      note: a fired criterion resolved by narrative with no recorded decision.
+  - label: outcome-mapping-quietly-changed
+    kind: positive
+    should_find: true
+    must_mention: ["O-2"]
+    artifact: |
+      prd_kill_criteria:
+        - {id: K-1, text: "O-1 (panel view rate) misses 50% of target after 2 loops"}
+      kill_evaluation:
+        evaluated: [{criterion: K-1, outcome_id: O-2,
+                     reading: "O-2 (activation) at 92% of target — not fired"}]
+      note: K-1 was authored against O-1; it was evaluated against the
+      healthier O-2.
+  - label: clean-honest-revision
+    kind: negative
+    should_find: false
+    artifact: |
+      kill_evaluation:
+        fired: [{criterion: "view rate under 30% after 30 days", reading: "24%"}]
+      decision:
+        outcome: continue_with_revised_criteria
+        revised_criteria: [{text: "view rate under 30% after 60 days, measured
+          only on builds over 5 minutes"}]
+        revision_evidence: "NEW telemetry (shipped mid-loop) shows 60% of
+          builds finish under 2 minutes — sessions where a progress panel is
+          structurally useless; the original denominator was wrong, and the
+          threshold is unchanged"
+  - label: clean-kill-taken-on-the-chin
+    kind: negative
+    should_find: false
+    artifact: |
+      kill_evaluation:
+        fired: [{criterion: "O-1 misses 50% of target lift after 2 loops",
+                 reading: "26% of target"}]
+      decision:
+        outcome: kill
+        reason: "criterion fired as written; no cohort showed the effect"
+        reusable_learning: "visibility pain is real but a panel is not the fix"
+  - label: boundary-loop-budget-review-continues
+    kind: boundary
+    should_find: false
+    artifact: |
+      kill_evaluation:
+        fired: []
+        loop_budget_exhausted: true
+      decision:
+        outcome: continue_with_revised_criteria
+        revised_criteria: [{text: "original criteria carried forward unchanged,
+          max_loops reset to 2"}]
+        revision_evidence: "loop 3 shipped instrumentation only (the O-1 event
+          was dark until now); zero product loops have actually been measured"
+      note: budget review honestly used — nothing fired, the extension is
+      argued from a real instrumentation fact.
+  - label: boundary-serial-revision-history
+    kind: boundary
+    should_find: true
+    must_mention: ["third"]
+    artifact: |
+      revision_history:
+        - {loop: 1, criterion: "view rate under 40%", revised_to: "under 30%"}
+        - {loop: 2, criterion: "view rate under 30%", revised_to: "under 22%"}
+      kill_evaluation:
+        fired: [{criterion: "view rate under 22%", reading: "19%"}]
+      decision:
+        outcome: continue_with_revised_criteria
+        revised_criteria: [{text: "view rate under 15% after 90 days"}]
+        revision_evidence: "adoption curves take time"
+      note: the third consecutive downward revision is the zombie signature
+      (F-22.3) regardless of any single revision's plausibility.

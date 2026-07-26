@@ -1,0 +1,95 @@
+voter: non_goal_adequacy
+fixtures:
+  - label: decorative-non-goals
+    kind: positive
+    should_find: true
+    must_mention: ["decorat"]
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        non_goals: ["We will not rewrite the product in Rust.",
+                    "We will not build a mobile app this cycle."]
+      note: excludes things nobody would have built; the real temptations
+      (history, notifications, teammate views) go unexcluded.
+  - label: obvious-v2-unaddressed
+    kind: positive
+    should_find: true
+    must_mention: ["histor"]
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is
+          progressing; a live panel shows current state."
+        non_goals: ["No dark mode changes.", "No pricing changes."]
+      note: historical build analytics is the obvious adjacent build — the
+      PRD is silent on it.
+  - label: non-goal-contradicts-outcome
+    kind: positive
+    should_find: true
+    must_mention: ["contradict"]
+    artifact: |
+      prd:
+        non_goals: ["No new telemetry events this cycle."]
+        outcomes:
+          - {id: O-1, metric: build_progress_view_rate,
+             instrumentation: {event: build.progress_panel_viewed, exists: false}}
+      note: the outcome requires the event the non-goal forbids.
+  - label: segment-next-door-silent
+    kind: positive
+    should_find: true
+    must_mention: ["team"]
+    artifact: |
+      prd:
+        problem_statement: "Solo founders cannot tell whether a running build
+          is progressing."
+        non_goals: ["No historical analytics.", "No API for progress data."]
+      note: everyone will ask to show the panel to teammates/cofounders —
+      neither included nor excluded.
+  - label: clean-real-temptations-excluded
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        non_goals:
+          - "No historical build analytics this cycle — live state only."
+          - "No teammate/cofounder visibility — the founder's own view only
+             (the shareable-preview candidate covers that job)."
+          - "No retry/cancel controls in the panel — read-only this cycle."
+  - label: clean-deliberate-inclusion
+    kind: negative
+    should_find: false
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        non_goals:
+          - "No historical analytics this cycle."
+          - "No teammate visibility."
+        included_on_purpose: "retry-from-panel IS in scope: tickets show the
+          frozen-or-working question is usually followed by 'how do I kick it'."
+  - label: boundary-two-strong-one-weak
+    kind: boundary
+    should_find: false
+    artifact: |
+      prd:
+        non_goals:
+          - "No historical build analytics this cycle."
+          - "No teammate visibility this cycle."
+          - "No Rust rewrite."
+      note: two load-bearing exclusions plus one decorative straggler —
+      adequate overall.
+  - label: boundary-exclusion-of-the-cheapest-test
+    kind: boundary
+    should_find: true
+    must_mention: ["test"]
+    artifact: |
+      prd:
+        problem_statement: "Founders cannot tell whether a running build is progressing."
+        non_goals:
+          - "No historical analytics."
+          - "No feature-flagged partial rollout — ship to everyone at once."
+      demand_hypotheses:
+        - {id: H-1, check: {stage: P4, method: cohort},
+           statement: "founders open a panel when it exists",
+           falsifier: "open rate under 30%"}
+      note: the second non-goal forecloses the holdout the hypothesis check
+      would want.

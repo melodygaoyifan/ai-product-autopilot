@@ -1,0 +1,96 @@
+voter: evidence_freshness
+fixtures:
+  - label: invalidated-claim-cited-at-full-strength
+    kind: positive
+    should_find: true
+    must_mention: ["C-14"]
+    artifact: |
+      reconciliation:
+        falsified_hypotheses: [H-1]
+        invalidations: [{claim_id: C-14, hypothesis_id: H-1}]
+      backlog:
+        - candidate: cand-price-headroom
+          evidence_bundle: "price-headroom case rests on C-14 (premium
+            willingness), cited unqualified"
+  - label: reprobed-fact-stale-derivation
+    kind: positive
+    should_find: true
+    must_mention: ["sizing"]
+    artifact: |
+      refresh_log:
+        - "C-7 (Vendor A pricing) re-probed 2026-07-25: price moved $59 → $79"
+      backlog:
+        - candidate: cand-build-progress
+          evidence_bundle: "sizing factor price_anchor still uses the $59
+            figure from the pre-refresh snapshot"
+  - label: bundle-predates-the-readings
+    kind: positive
+    should_find: true
+    must_mention: ["re-rank"]
+    artifact: |
+      cycle:
+        p4_readings_dated: "2026-07-26"
+      backlog:
+        - candidate: cand-a
+          rank: 1
+          evidence_bundle_dated: "2026-06-30"
+        - candidate: cand-b
+          rank: 2
+          evidence_bundle_dated: "2026-06-30"
+      note: the ranking entering Gate PL5 predates the cycle's own evidence;
+      nothing was re-ranked.
+  - label: expired-claim-downgrade-skipped
+    kind: positive
+    should_find: true
+    must_mention: ["expire"]
+    artifact: |
+      backlog:
+        - candidate: cand-c
+          evidence_bundle: "competitor gap grounded in C-9 (expires 2026-05-01,
+            never re-probed), still typed primary_cited"
+      today: "2026-07-26"
+  - label: clean-refreshed-backlog
+    kind: negative
+    should_find: false
+    artifact: |
+      refresh_log:
+        - "all cited snapshots re-probed 2026-07-25; two price changes applied
+           to sizing; C-14 downgraded to model_inference after H-1 fell"
+      backlog:
+        - candidate: cand-build-progress
+          evidence_bundle_dated: "2026-07-25"
+          note: "re-ranked after the July readings"
+  - label: clean-invalidation-applied
+    kind: negative
+    should_find: false
+    artifact: |
+      reconciliation:
+        falsified_hypotheses: [H-1]
+        invalidations: [{claim_id: C-14, hypothesis_id: H-1}]
+      backlog:
+        - candidate: cand-price-headroom
+          evidence_bundle: "premium case now labeled: C-14 invalidated by H-1's
+            fall; the candidate's rank dropped from 2 to 5 accordingly"
+  - label: boundary-fresh-enough-for-its-kind
+    kind: boundary
+    should_find: false
+    artifact: |
+      backlog:
+        - candidate: cand-d
+          evidence_bundle: "grounded in our own measured base (crm://, re-queried
+            this cycle) and a structural fact (no progress feature in Vendor B
+            docs, snapshot 6 weeks old, expires 2026-10-25)"
+      note: within its stated expiry; owned data re-queried — nothing stale.
+  - label: boundary-refresh-that-only-touched-winners
+    kind: boundary
+    should_find: true
+    must_mention: ["cand-e"]
+    artifact: |
+      refresh_log:
+        - "top-2 candidates re-probed 2026-07-25"
+      backlog:
+        - {candidate: cand-a, rank: 1, evidence_bundle_dated: "2026-07-25"}
+        - {candidate: cand-e, rank: 3, evidence_bundle_dated: "2026-05-12",
+           note: "competes for the same capacity slot as cand-a"}
+      note: refreshing only the incumbents rigs the comparison the gate is
+      about to make.
