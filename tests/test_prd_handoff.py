@@ -66,6 +66,23 @@ def test_prd_fixture_gate_is_the_standing_eight():
     assert len(_prd_fixtures()) == 8
 
 
+def test_instrumentation_event_must_match_the_metric_numerator():
+    # Found by the first real-provider smoke: the PRD instrumented
+    # 'build_progress_panel_opened' while the definition counts
+    # 'build.progress_panel_viewed' — P4 would have read zero.
+    fixture = yaml.safe_load((UPSTREAM / "prd_lint.yaml").read_text())
+    prd_dict = dict(fixture["fixtures"][6]["input"]["prd"])  # the clean PRD
+    prd_dict["outcomes"] = [dict(prd_dict["outcomes"][0],
+                                 instrumentation={"event": "workspace.exported",
+                                                  "exists": True})]
+    issues, _ = prd_lint(
+        PRD(**prd_dict), fixture["fixtures"][6]["input"]["prose"],
+        vocabulary=VOCABULARY, ledger_claim_ids={"C-1"},
+    )
+    assert [i.rule for i in issues] == ["instrumentation_event_mismatch"]
+    assert "workspace.first_export" in issues[0].message  # names the fix
+
+
 def test_gate_decisions_require_named_humans_and_complete_outcomes():
     with pytest.raises(ValueError, match="human"):
         GatePL1Decision(outcome="pursue", decider=" ", scope_tier="standard")

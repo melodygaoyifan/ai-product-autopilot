@@ -147,6 +147,26 @@ def prd_lint(
     ):
         issues.append(PrdIssue(rule="undefined_metric", message=issue.message))
     for outcome in prd.outcomes:
+        # The outcome must instrument the event its metric definition
+        # counts — drift here reads as zero at P4 (cohort_calc counts the
+        # definition's numerator_event, not the PRD's). Found by the first
+        # real-provider smoke: 'build_progress_panel_opened' vs the
+        # definition's 'build.progress_panel_viewed'.
+        definition = vocabulary.get(outcome.metric)
+        if (
+            definition
+            and definition.numerator_event
+            and outcome.instrumentation.event != definition.numerator_event
+        ):
+            issues.append(
+                PrdIssue(
+                    rule="instrumentation_event_mismatch",
+                    message=f"outcome {outcome.id} instruments "
+                    f"{outcome.instrumentation.event!r} but metric "
+                    f"{outcome.metric!r} counts "
+                    f"{definition.numerator_event!r} — P4 would read zero",
+                )
+            )
         if not outcome.instrumentation.exists:
             tasks.append(
                 PlanningTask(

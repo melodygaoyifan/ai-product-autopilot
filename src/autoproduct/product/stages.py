@@ -424,6 +424,20 @@ def prd_spec(
                                      {"tasks": bundle.planning_tasks}))
         return paths
 
+    def voter_context(bundle: PrdBundle, artifact_text: str) -> str:
+        # Voters must see the tasks prd_lint generated: an uninstrumented
+        # outcome WITH a generated task is instrumented-or-tasked (§20.56.2),
+        # not a gap — flagging it anyway is noise (first real-provider smoke).
+        if not bundle.planning_tasks:
+            return artifact_text
+        return artifact_text + "\n" + yaml.safe_dump(
+            {"generated_planning_tasks": bundle.planning_tasks,
+             "note": "these instrumentation tasks were mechanically generated "
+                     "by prd_lint and already exist — outcomes they cover are "
+                     "instrumented-or-tasked, not unmeasurable"},
+            sort_keys=False, allow_unicode=True,
+        )
+
     return StageSpec(
         name="prd",
         writer_system=_PRD_SYSTEM + vocabulary_note,
@@ -433,6 +447,7 @@ def prd_spec(
         det_tools=det_tools,
         gate=gate,
         persist=persist,
+        voter_context=voter_context,
     )
 
 

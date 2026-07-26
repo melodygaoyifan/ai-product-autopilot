@@ -97,6 +97,11 @@ class StageSpec:
     persist: Callable[[object, str], list[str]] = field(
         default=lambda artifact, workspace: []
     )
+    # what the voters (and verifiers) read; defaults to the writer's raw
+    # output. Stages whose det tools DERIVE material a voter must see
+    # (generated planning tasks, computed sizing) enrich it here — a voter
+    # flagging a gap the machinery already closed is noise.
+    voter_context: Callable[[object, str], str] | None = None
 
 
 def _default_skills_root() -> pathlib.Path:
@@ -180,10 +185,15 @@ def run_product_stage(
 
     # Voters: independent seats, no cross-visibility, then a fresh verify
     # pass per finding — plausible-but-wrong findings die here.
+    context_text = (
+        spec.voter_context(artifact, artifact_text)
+        if spec.voter_context
+        else artifact_text
+    )
     voter_findings: list[VoterFinding] = []
     for voter_name, system in load_voter_charters(spec.skills_subdir, skills_root):
         raw = provider_impl.complete(
-            model=voter_model, system=system, user=artifact_text, max_tokens=2048
+            model=voter_model, system=system, user=context_text, max_tokens=2048
         )
         try:
             found = extract_mapping(raw, ("findings",)).get("findings") or []
@@ -203,7 +213,7 @@ def run_product_stage(
                 system=_VERIFIER_SYSTEM,
                 user=yaml.safe_dump(
                     {"finding": finding.model_dump(exclude={"verified"}),
-                     "artifact": artifact_text},
+                     "artifact": context_text},
                     sort_keys=False, allow_unicode=True,
                 ),
                 max_tokens=512,

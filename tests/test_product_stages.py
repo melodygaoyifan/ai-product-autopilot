@@ -164,6 +164,24 @@ def test_full_chain_p0_to_p4(tmp_path):
         assert (ws / ".mas" / "product" / f"{stage}-report.yaml").exists()
 
 
+def test_prd_voters_see_the_generated_planning_tasks(tmp_path):
+    from autoproduct.product.stages import prd_spec
+
+    ws = _workspace(tmp_path)
+    spec = prd_spec(str(ws), metrics_dir=REPO_METRICS,
+                    ledger_claim_ids={"C-M1", "C-M2"})
+    import autoproduct.providers.mock as mock_mod
+    from autoproduct.yamlx import extract_mapping
+
+    data = extract_mapping(mock_mod.MockProvider()._prd_writer(), ("prd",))
+    bundle, artifact_text = spec.parse(data)
+    assert spec.det_tools(bundle) == []  # generates the task, no findings
+    context = spec.voter_context(bundle, artifact_text)
+    assert "generated_planning_tasks" in context
+    assert "workspace.first_export" in context
+    assert "instrumented-or-tasked" in context
+
+
 def test_gate_pl0_blocks_a_thin_candidate_set(tmp_path, monkeypatch):
     ws = _workspace(tmp_path)
     import autoproduct.providers.mock as mock_mod
