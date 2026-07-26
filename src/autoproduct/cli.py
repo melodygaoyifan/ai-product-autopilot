@@ -942,6 +942,60 @@ def readiness(repo_dir: str = typer.Option(".", help="Workspace directory")):
     console.print(readiness_report(profile, project_name=Path(repo_dir).resolve().name))
 
 
+@app.command()
+def toolchain(
+    language: str = typer.Argument(..., help="Language lane: python | java | dotnet"),
+    repo_dir: str = typer.Option(".", help="Repository to run the det_tools slots in"),
+    manifest: str = typer.Option(
+        None, help="Seeded-defect manifest (yaml) — measures catch-rate and registers"
+    ),
+    baseline: float = typer.Option(
+        1.0, help="Reference (python-lane) catch-rate the parity margin is measured against"
+    ),
+):
+    """Run a language's det_tools slots (ADR-U16). Skipped slots are loud —
+    a missing scanner is NOT clean. With --manifest, measures the
+    seeded-defect catch-rate and registers the toolchain (or labels it
+    PROVISIONAL with the lagging slots named)."""
+    from autoproduct.adoption import (
+        benchmark_toolchain,
+        load_seeded_manifest,
+        register_toolchain,
+        run_toolchain,
+    )
+
+    report = run_toolchain(repo_dir, language)
+    table = Table(show_lines=False)
+    for col in ("Slot", "Status", "Detail"):
+        table.add_column(col)
+    for r in report.results:
+        color = {"clean": "green", "findings": "yellow"}.get(r.status, "red")
+        table.add_row(r.slot, f"[{color}]{r.status}[/{color}]", r.detail)
+    console.print(table)
+
+    if manifest is None:
+        if report.skipped_slots:
+            console.print(
+                f"[red]skipped: {', '.join(report.skipped_slots)} — "
+                "install or override argv in .mas/toolchains.yaml[/red]"
+            )
+            raise typer.Exit(code=1)
+        raise typer.Exit(code=0)
+
+    result = benchmark_toolchain(report, load_seeded_manifest(manifest))
+    record = register_toolchain(repo_dir, result, baseline_rate=baseline)
+    color = "green" if record.status == "registered" else "yellow"
+    console.print(
+        f"[bold {color}]{record.status}[/bold {color}] — catch-rate "
+        f"{record.catch_rate:.0%} (baseline {record.baseline_rate:.0%}, "
+        f"margin {record.parity_margin:.0%})"
+    )
+    if record.gaps:
+        console.print(f"lagging slots: {', '.join(record.gaps)}")
+    if record.status == "provisional":
+        raise typer.Exit(code=1)
+
+
 @app.command("evidence-bundle")
 def evidence_bundle(
     review_id: str = typer.Argument(..., help="Review ID (directory under .mas/reviews/)"),

@@ -1,0 +1,16 @@
+name: data
+description: Data/ML pipeline (contracts, evals, batch/stream jobs) — §18.48.1
+constraints:
+  - Every pipeline boundary has a data contract (schema + constraint assertions); a schema-breaking change is a Gate-R-class human sign-off with the consumer-impact list attached, never a quiet migration.
+  - Model/prompt/feature changes gate on a frozen labeled eval set — score deltas vs the pinned baseline are build-gate failures, the ML analogue of the mutation gate.
+  - Backfills are idempotent by construction: re-running on a fixture slice must produce an identical output hash before any production reprocessing.
+  - No unbounded scans — every warehouse query on the hot path names its partition filter, and cost-per-run is a budgeted NFR, not a surprise.
+  - Production backfills and training-data mutations are forbidden_autonomous — a human runs them, always.
+spec_extras:
+  - Quantify freshness (p95 minutes/hours), row-count tolerance bands, and eval metric floors — "accurate" and "fresh" die at quantifier_scan like "fast" does.
+  - Name the downstream consumers of every output table/topic the feature touches (lineage is Planning's blast-radius input).
+checks:
+  - dbt test / Great-Expectations-class contract suites (availability-gated)
+  - DAG lint + dry-run compile (availability-gated)
+  - eval-set regression vs pinned baseline
+stack_hint: Keep the stack boring — Python + the team's existing warehouse/orchestrator. autoproduct wraps the project's own dbt/GE/orchestrator installs; it never vendors them.

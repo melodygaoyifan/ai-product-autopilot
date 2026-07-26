@@ -30,10 +30,30 @@ from autoproduct.adoption.substrate import (
     rung_banner,
     stage_activation,
 )
+from autoproduct.adoption.toolchains import (
+    BenchmarkResult,
+    ToolchainRecord,
+    ToolchainReport,
+    benchmark_toolchain,
+    load_seeded_manifest,
+    register_toolchain,
+    run_toolchain,
+    toolchain_banner,
+    toolchain_spec,
+)
 
 __all__ = [
+    "BenchmarkResult",
     "ChangePackage",
     "GateREntry",
+    "ToolchainRecord",
+    "ToolchainReport",
+    "benchmark_toolchain",
+    "load_seeded_manifest",
+    "register_toolchain",
+    "run_toolchain",
+    "toolchain_banner",
+    "toolchain_spec",
     "Rung",
     "StageActivation",
     "StageInactiveError",

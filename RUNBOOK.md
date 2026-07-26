@@ -19,6 +19,7 @@ voters fall back visibly without them).
 | `autoproduct serve` | Webhook mode (needs `AUTOPRODUCT_WEBHOOK_SECRET`) |
 | `autoproduct readiness` | Substrate-ladder report (docs 18–19): active stages at the declared rung, what each missing rung unlocks |
 | `autoproduct evidence-bundle <review-id>` | Export the Gate-R evidence bundle (unsigned v0) for CAB/change-control submission |
+| `autoproduct toolchain <language> [--manifest seeded.yaml]` | Run a language lane's det_tools slots (skipped = loud, never clean); with a seeded-defect manifest, measure catch-rate and register (or label PROVISIONAL) |
 
 ## Substrate ladder (traditional-industry adoption, docs 18–19)
 
