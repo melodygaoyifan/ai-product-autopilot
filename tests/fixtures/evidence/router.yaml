@@ -1,0 +1,26 @@
+# signal_router fixture gate (§22.62.1) — 8 cases.
+fixtures:
+  - label: error-is-stage8
+    expect: {destination: stage8}
+    input: {id: s1, cls: error, description: "unhandled exception in export worker"}
+  - label: latency-is-stage8
+    expect: {destination: stage8}
+    input: {id: s2, cls: latency, description: "p99 up 4x on /api/links"}
+  - label: activation-is-p4
+    expect: {destination: p4}
+    input: {id: s3, cls: activation, description: "activation rate 4% against 18% target"}
+  - label: retention-is-p4
+    expect: {destination: p4}
+    input: {id: s4, cls: retention, description: "week-4 retention below cohort baseline"}
+  - label: churn-reason-is-p4
+    expect: {destination: p4}
+    input: {id: s5, cls: churn_reason, description: "exit-survey free text cluster"}
+  - label: complaint-spike-goes-stage8-first
+    expect: {destination: stage8}
+    input: {id: s6, cls: complaint_spike, description: "support volume 3x overnight"}
+  - label: refund-spike-goes-stage8-first
+    expect: {destination: stage8}
+    input: {id: s7, cls: refund_spike, description: "refunds doubled this week"}
+  - label: unclassifiable-escalates
+    expect: {destination: escalate}
+    input: {id: s8, cls: vibes, description: "the dashboard feels off"}

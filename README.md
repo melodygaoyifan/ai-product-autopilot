@@ -203,6 +203,7 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.12 ✅ | adoption hardening (degraded mode, dwell metric, profile wiring, evaluator graduation) |
 | v0.13 ✅ | product-loop substrate (docs 20–23 weeks P1–P2): typed claim ledger, `claim_lint`, evidence snapshots, synthetic-persona scan, source standing, `user_data_taint` |
 | v0.14 ✅ | safe-publish (weeks P3–P5): the seven deterministic marketing backstops, channel profiles, Gate PL3 scoped approvals, `forbidden_autonomous` additions — the framework drafts and checks, a human presses every publish button, and it never spends money |
+| v0.15 ✅ | evidence (weeks P6–P8): analytics/feedback boundary with query-layer person-level refusal, metric vocabulary with baseline-resetting definitions, cohort readings with sufficiency teeth, P4/Stage-8 signal router, attribution typed at the tool boundary — only holdouts ground causal claims |
 | M2–M7 🔜 | screenshots of the built product, in-Studio correction loop, generated 验收清单, built-in telemetry, pre-built 微信支付/登录 blocks catalog |
 
 ## Star history

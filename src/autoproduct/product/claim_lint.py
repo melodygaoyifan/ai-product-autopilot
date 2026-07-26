@@ -31,6 +31,12 @@ _VAGUE = re.compile(
 )
 _PROPORTION = re.compile(r"\b\d+\s+of\s+\d+\b|\brate\b|\bshare\b", re.I)
 
+
+def has_causal_language(text: str) -> bool:
+    """Shared with attribution_typer (§22.63.2): causal verbs demand a
+    holdout, wherever they appear."""
+    return bool(_CAUSAL.search(text))
+
 # External citations must be snapshotted (§20.53.5); our own measurements
 # and stored user artifacts are already inside the boundary.
 _SNAPSHOT_REQUIRED = {"primary_cited", "third_party_report"}

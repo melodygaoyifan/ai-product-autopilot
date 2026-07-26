@@ -43,7 +43,9 @@ def _stored_texts(mas_dir: str | pathlib.Path) -> list[str]:
 
 
 def _normalize(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    # Embedding a real quote in prose legitimately re-punctuates its tail
+    # ("…by hand," vs "…by hand"); punctuation is not fabrication.
+    return re.sub(r"\s+", " ", text).strip().rstrip(".,;:!?")
 
 
 def synthetic_persona_scan(

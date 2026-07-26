@@ -1,0 +1,44 @@
+# attribution_typer fixture gate (§22.63.2, ADR-U25) — 8 cases.
+# expect.rejected means attribute_claim refuses at the boundary; otherwise
+# expect.source_type is the type the observation must enter the ledger as.
+fixtures:
+  - label: causal-over-last-touch-rejected
+    expect: {rejected: causal_without_experiment}
+    input:
+      method: last_touch
+      text: "The launch post drove 40% of signups"
+  - label: causal-over-platform-report-rejected
+    expect: {rejected: causal_without_experiment}
+    input:
+      method: platform_reported
+      text: "Retargeting caused a 2x conversion lift"
+  - label: causal-over-mmm-rejected
+    expect: {rejected: causal_without_experiment}
+    input:
+      method: mmm
+      text: "Content marketing led to most enterprise pipeline"
+  - label: causal-over-holdout-accepted
+    expect: {source_type: primary_measured}
+    input:
+      method: holdout_experiment
+      text: "The onboarding email drove a 6-point activation lift vs holdout"
+  - label: causal-over-geo-holdout-accepted
+    expect: {source_type: primary_measured}
+    input:
+      method: geo_holdout
+      text: "Regional launch caused a measurable signup lift vs withheld regions"
+  - label: typed-facts-over-last-touch-accepted
+    expect: {source_type: model_inference}
+    input:
+      method: last_touch
+      text: "40% of signups arrived carrying the launch-post UTM"
+  - label: self-reported-typed-user-reported
+    expect: {source_type: user_reported}
+    input:
+      method: self_reported
+      text: "31% of new-signup survey respondents named the launch post"
+  - label: platform-figure-typed-third-party
+    expect: {source_type: third_party_report}
+    input:
+      method: platform_reported
+      text: "The platform dashboard reports 214 conversions from the campaign"
