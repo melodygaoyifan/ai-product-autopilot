@@ -1633,6 +1633,53 @@ def evidence_cmd(
     )
 
 
+@app.command("sweep")
+def sweep_cmd(
+    workspace: str = typer.Option(".", help="Workspace directory"),
+    today: str = typer.Option(None, help="ISO date override (default: today)"),
+):
+    """The Sweep role (doc 29): harvest the maintenance queues the ledgers
+    already keep, patch only what the rung + allowlist + contract permit,
+    report the rest. SW0 (default) is report-only; a clean pass is
+    recorded, never silent."""
+    import datetime as _dt
+    from pathlib import Path as _Path
+
+    from autoproduct.lanes.delivery import flag_lint
+    from autoproduct.sweep import (
+        SweepConfigError,
+        harvest_queues,
+        load_sweep_config,
+        run_sweep_pass,
+    )
+
+    root = _Path(workspace)
+    day = _dt.date.fromisoformat(today) if today else _dt.date.today()
+    try:
+        config = load_sweep_config(root / ".mas")
+    except SweepConfigError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    flags_file = root / ".mas" / "flags.yaml"
+    flag_issues = flag_lint(flags_file.read_text(), {}, today=day) if flags_file.exists() else []
+    contributing = root / "CONTRIBUTING.md"
+    chores = harvest_queues(
+        root, today=day, flag_issues=flag_issues,
+        contributing_text=contributing.read_text() if contributing.exists() else "",
+    )
+    digest = run_sweep_pass(root, chores, config=config, at=day.isoformat())
+    console.print(f"[bold]sweep[/bold] {digest.rung}: {digest.items_inspected} "
+                  f"inspected · {len(digest.actionable)} actionable · "
+                  f"{len(digest.reported)} reported · "
+                  f"action rate {digest.action_rate:.0%}")
+    if digest.clean_pass:
+        console.print(f"[green]clean pass[/green] recorded "
+                      f"({digest.snapshot_hash[:18]}…)")
+    for chore in digest.chores[:10]:
+        marker = "→ PATCH" if chore in digest.actionable else "  report"
+        console.print(f"  {marker}  [{chore.queue}] {chore.item}: {chore.detail[:70]}")
+
+
 @app.command("telemetry")
 def telemetry_cmd(
     action: str = typer.Argument(..., help="on | off | show"),
