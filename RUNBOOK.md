@@ -24,6 +24,7 @@ voters fall back visibly without them).
 | `autoproduct idempotency <run_a> <run_b>` | Backfill idempotency: the fixture-slice re-run must be byte-identical |
 | `autoproduct data-checks` | Run the workspace's external data checks (dbt auto-detected; others in `.mas/data-checks.yaml`) |
 | `autoproduct attest [<review-id>]` | Chain a review's gate/verdict records into the hash-chained attestation ledger, then verify the chain |
+| `autoproduct dwell` | Approval-dwell-time report (F-18.3): flags the rubber-stamp pattern (fast acks + zero overrides) |
 | `autoproduct cab-package <review-id>` | Assemble a CAB change package (evidence bundle + prefill) and run the Gate-R preflight; humans complete rollback/approver and submit |
 
 ## Substrate ladder (traditional-industry adoption, docs 18–19)

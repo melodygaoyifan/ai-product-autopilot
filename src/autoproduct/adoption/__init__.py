@@ -29,6 +29,7 @@ from autoproduct.adoption.data_gates import (
     pin_baseline,
 )
 from autoproduct.adoption.data_tools import data_check_spec, run_data_checks
+from autoproduct.adoption.dwell import DwellReport, gate_dwell_report
 from autoproduct.adoption.evidence import build_evidence_bundle, write_evidence_bundle
 from autoproduct.adoption.gate_r import (
     ChangePackage,
@@ -67,6 +68,7 @@ __all__ = [
     "BenchmarkResult",
     "ChangePackage",
     "ContractViolation",
+    "DwellReport",
     "EvalGateResult",
     "GateREntry",
     "IdempotencyResult",
@@ -87,6 +89,7 @@ __all__ = [
     "contract_check",
     "data_check_spec",
     "eval_gate",
+    "gate_dwell_report",
     "gate_r_entry",
     "idempotency_check",
     "load_contract",

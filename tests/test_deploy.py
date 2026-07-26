@@ -114,3 +114,40 @@ def test_custom_policy_forbidden_list(tmp_path):
         diff_text=_diff("k8s/app.yaml", "image: latest"),
     )
     assert result.verdict is DeployVerdict.ESCALATE_POLICY_VIOLATION
+
+
+# --- lint-only degraded mode (ADR-U15, substrate below S4) ------------------------
+
+def test_lint_only_never_promotes_and_skips_track_record(tmp_path):
+    result = run_deploy_review(
+        "main...HEAD", repo_dir=str(tmp_path), skills_dir=SKILLS,
+        provider_override="mock",
+        diff_text=_diff("src/app.py", "print('hello')"),
+        lint_only=True,
+    )
+    if result.verdict is DeployVerdict.PROMOTE:
+        raise AssertionError("lint-only ran no voters — it must never PROMOTE")
+    if result.verdict is not DeployVerdict.HOLD_FOR_HUMAN:
+        raise AssertionError(f"clean lint-only should hold for human: {result.verdict}")
+    if "DEGRADED" not in result.summary or "voters did NOT run" not in result.summary:
+        raise AssertionError(f"summary must say degraded loudly: {result.summary}")
+    track = tmp_path / ".mas" / "deploy-track-record.yaml"
+    if track.exists():
+        raise AssertionError("lint-only runs must not feed the promotion track record")
+    vote_steps = list((tmp_path / ".mas" / "deploy-reviews").glob("*/[0-9][0-9]-vote.yaml"))
+    vote = yaml.safe_load(vote_steps[0].read_text(encoding="utf-8"))
+    if "lint_only" not in str(vote.get("skipped", "")):
+        raise AssertionError(f"mirror must record the skipped voters: {vote}")
+
+
+def test_lint_only_still_escalates_deterministic_findings(tmp_path):
+    result = run_deploy_review(
+        "main...HEAD", repo_dir=str(tmp_path), skills_dir=SKILLS,
+        provider_override="mock",
+        diff_text=_diff(".github/workflows/ci.yml", "    permissions: write-all"),
+        lint_only=True,
+    )
+    if result.verdict is not DeployVerdict.ESCALATE_POLICY_VIOLATION:
+        raise AssertionError(
+            f"the deterministic policy scan must still escalate: {result.verdict}"
+        )

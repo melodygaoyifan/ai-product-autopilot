@@ -1,0 +1,22 @@
+# Substrate adoption ladder (docs 18-19, ADR-U15) — copy to
+# .mas/substrate-profile.yaml in YOUR workspace and edit to match what your
+# team actually has. Declaring less than you have is safe (stages stay
+# inactive); declaring more than you have gets you gates with nothing under
+# them. No file at all = no gating (every stage runs, effective S4).
+#
+# Rungs and what they unlock:
+#   S0  nothing needed        → discovery, planning, specification (the wedge)
+#   S1  git + PR flow         → coding, code_review (deploy_review: lint-only)
+#   S2  + CI                  → test
+#   S3  + observability       → maintenance
+#   S4  + progressive delivery → deploy_review at full depth
+#
+# Run `autoproduct readiness` after editing — it prints which stages are
+# active and what each missing rung would unlock.
+substrate:
+  vcs: git              # git | none
+  pr_flow: true         # requires vcs: git
+  ci: false             # machine-runnable build+test on every change
+  observability: [none] # any of: sentry, datadog, pagerduty — or [none]
+  progressive_delivery: false   # requires ci: true
+  languages: [python]   # informational; toolchain lanes register separately

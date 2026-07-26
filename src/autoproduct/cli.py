@@ -288,11 +288,13 @@ def deploy_review(
         console.print(f"[red]{exc}[/red]")
         console.print("Run `autoproduct readiness` for the rung roadmap.")
         raise typer.Exit(code=4) from exc
-    if activation is not None and activation.status.value == "DEGRADED":
+    lint_only = activation is not None and activation.status.value == "DEGRADED"
+    if lint_only:
         console.print(f"[yellow]deploy_review DEGRADED — {activation.note}[/yellow]")
 
     result = run_deploy_review(
-        target, repo_dir=repo_dir, skills_dir=skills_dir, provider_override=provider
+        target, repo_dir=repo_dir, skills_dir=skills_dir,
+        provider_override=provider, lint_only=lint_only,
     )
     color = "green" if result.verdict.value == "PROMOTE" else (
         "yellow" if result.verdict.value == "HOLD_FOR_HUMAN" else "red"
@@ -1083,6 +1085,32 @@ def data_checks(repo_dir: str = typer.Option(".", help="Workspace directory")):
         table.add_row(r.slot, f"[{color}]{r.status}[/{color}]", r.detail)
     console.print(table)
     if any(r.status in ("skipped", "error", "findings") for r in results):
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def dwell(repo_dir: str = typer.Option(".", help="Repository the reviews ran in")):
+    """Approval-dwell-time report (F-18.3): how long humans actually sit on
+    Gate-3 escalations before deciding. Median collapse + zero overrides
+    flags the rubber-stamp pattern."""
+    from autoproduct.adoption import gate_dwell_report
+
+    report = gate_dwell_report(repo_dir)
+    for note in report.notes:
+        style = "bold red" if report.rubber_stamp else "yellow"
+        console.print(f"[{style}]{note}[/{style}]")
+    if report.samples:
+        console.print(
+            f"{len(report.samples)} escalation(s) — median {report.median_s}s, "
+            f"p90 {report.p90_s}s, override rate {report.override_rate:.0%}"
+        )
+        table = Table(show_lines=False)
+        for col in ("Review", "Dwell (s)", "Decision"):
+            table.add_column(col)
+        for s in report.samples:
+            table.add_row(s.review_id, f"{s.dwell_s:.0f}", s.decision)
+        console.print(table)
+    if report.rubber_stamp:
         raise typer.Exit(code=1)
 
 

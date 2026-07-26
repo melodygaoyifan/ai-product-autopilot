@@ -42,6 +42,14 @@ class PreflightCheck(BaseModel):
     id: str
     description: str
     source: str = "template"  # template | rejection:<change_id>
+    evaluator: list[str] = Field(
+        default_factory=list,
+        description="Graduation path for rejection-sourced checks: argv run "
+        "with the change-package JSON appended as the final argument; exit 0 "
+        "= pass. Empty = manual attestation required. A missing evaluator "
+        "binary FAILS the check — an unrunnable evaluator never reads as "
+        "attested.",
+    )
 
 
 class PreflightResult(BaseModel):
@@ -100,12 +108,40 @@ def _evaluate(check: PreflightCheck, package: ChangePackage, repo_dir: Path) -> 
         ok = bool(package.approver_role) and package.approver_role == package.required_role
         if not ok:
             detail = f"approver={package.approver_role or '(unset)'} required={package.required_role or '(unset)'}"
+    elif check.evaluator:
+        ok, detail = _run_evaluator(check, package, repo_dir)
     else:
         # Rejection-sourced fixtures start life as manual attestations: the
         # gate surfaces them for the human preparing the submission. They
-        # graduate to mechanized checks when someone writes the evaluator.
+        # graduate to mechanized checks when someone adds an `evaluator`
+        # argv to the check in .mas/cab-preflight.yaml.
         ok, detail = False, "manual attestation required (rejection-sourced check)"
     return PreflightResult(check=check, passed=ok, detail=detail)
+
+
+def _run_evaluator(
+    check: PreflightCheck, package: ChangePackage, repo_dir: Path
+) -> tuple[bool, str]:
+    import shutil
+    import subprocess
+
+    executable = shutil.which(check.evaluator[0])
+    if executable is None:
+        return False, (
+            f"evaluator {check.evaluator[0]!r} not on PATH — an unrunnable "
+            "evaluator never reads as attested"
+        )
+    argv = [executable, *check.evaluator[1:], package.model_dump_json()]
+    try:
+        proc = subprocess.run(
+            argv, cwd=str(repo_dir), capture_output=True, text=True, timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        return False, "evaluator timed out after 120s"
+    if proc.returncode == 0:
+        return True, ""
+    output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    return False, f"evaluator exit {proc.returncode}: {output[:200]}"
 
 
 def gate_r_entry(repo_dir: str | Path, package: ChangePackage) -> GateREntry:

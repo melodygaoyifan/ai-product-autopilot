@@ -229,11 +229,16 @@ def load_voters(
     skills_dir: str | Path, provider_override: str | None = None
 ) -> list[Voter]:
     """Load every skill in the directory; any invalid spec aborts startup
-    (no degraded mode — ADR-009)."""
+    (no degraded mode — ADR-009). `skills_dir` may be several directories
+    joined with os.pathsep — how domain profiles compose voter deltas onto
+    the core roster (doc 17/§18.48.1) without touching the state schema."""
+    import os
+
     validator = SpecValidator()
     voters = [
         Voter(validator.load(path), provider_override=provider_override)
-        for path in sorted(Path(skills_dir).glob("*.md"))
+        for part in str(skills_dir).split(os.pathsep)
+        for path in sorted(Path(part).glob("*.md"))
     ]
     if not voters:
         raise FileNotFoundError(f"no voter skills found in {skills_dir}")

@@ -552,3 +552,178 @@ def test_planted_data_diff_covers_all_three_lenses():
     ):
         if marker not in text:
             pytest.fail(f"planted diff missing {marker}: {lens}")
+
+
+# --- approval dwell time (F-18.3) ----------------------------------------------------
+
+def _escalated_review(tmp_path: Path, review_id: str, dwell_s: int, decision: str):
+    review_dir = tmp_path / ".mas" / "reviews" / review_id
+    review_dir.mkdir(parents=True)
+    base = "2026-07-25T10:00:00+00:00"
+    later = f"2026-07-25T10:{dwell_s // 60:02d}:{dwell_s % 60:02d}+00:00"
+    (review_dir / "01-escalate.yaml").write_text(yaml.safe_dump(
+        {"node": "escalate", "step": 1, "written_at": base}), encoding="utf-8")
+    (review_dir / "02-final.yaml").write_text(yaml.safe_dump(
+        {"node": "final", "step": 2, "written_at": later,
+         "hitl": {"decision": decision}}), encoding="utf-8")
+
+
+def test_dwell_measured_per_escalated_review(tmp_path):
+    from autoproduct.adoption import gate_dwell_report
+
+    _escalated_review(tmp_path, "r1", 300, "ack")
+    _escalated_review(tmp_path, "r2", 60, "override:REQUEST_CHANGES")
+    # a review that never escalated contributes nothing
+    _fake_mirror(tmp_path, "r3-quiet")
+    report = gate_dwell_report(tmp_path)
+    if len(report.samples) != 2 or report.median_s != 180.0:
+        pytest.fail(f"dwell wrong: {report}")
+    if report.override_rate != 0.5 or report.rubber_stamp:
+        pytest.fail(f"healthy gate must not flag: {report}")
+
+
+def test_rubber_stamp_needs_both_fast_and_zero_overrides(tmp_path):
+    from autoproduct.adoption import gate_dwell_report
+
+    for i in range(5):
+        _escalated_review(tmp_path, f"r{i}", 10, "ack")
+    report = gate_dwell_report(tmp_path)
+    if not report.rubber_stamp or "F-18.3" not in report.notes[0]:
+        pytest.fail(f"5 instant acks with zero overrides must flag: {report}")
+
+
+def test_fast_but_overriding_gate_is_healthy(tmp_path):
+    from autoproduct.adoption import gate_dwell_report
+
+    for i in range(4):
+        _escalated_review(tmp_path, f"r{i}", 10, "ack")
+    _escalated_review(tmp_path, "r-ov", 10, "override:REQUEST_CHANGES")
+    if gate_dwell_report(tmp_path).rubber_stamp:
+        pytest.fail("overrides prove the gate is read — fast alone must not flag")
+
+
+def test_few_samples_reported_not_flagged(tmp_path):
+    from autoproduct.adoption import gate_dwell_report
+
+    _escalated_review(tmp_path, "r1", 5, "ack")
+    report = gate_dwell_report(tmp_path)
+    if report.rubber_stamp or "not yet meaningful" not in report.notes[0]:
+        pytest.fail(f"below min samples: report, don't flag: {report}")
+
+
+def test_no_escalations_says_so(tmp_path):
+    from autoproduct.adoption import gate_dwell_report
+
+    report = gate_dwell_report(tmp_path)
+    if report.samples or "nothing to measure" not in report.notes[0]:
+        pytest.fail(f"empty history must be explicit: {report}")
+
+
+# --- profile-driven wiring (task: data workspaces compose their deltas) --------------
+
+def test_load_voters_accepts_pathsep_joined_dirs():
+    import os
+
+    from autoproduct.voters.base import load_voters
+
+    skills = Path(__file__).parent.parent / "skills"
+    combined = os.pathsep.join([str(skills), str(skills / "data")])
+    names = {v.spec.name for v in load_voters(combined, provider_override="mock")}
+    if not {"correctness", "data_contract", "backfill_safety", "drift_cost"} <= names:
+        pytest.fail(f"composed roster missing voters: {names}")
+
+
+def test_review_head_composes_data_voters_for_data_profile(tmp_path, monkeypatch):
+    import os
+    import shutil
+
+    pytest.importorskip("langgraph")
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+    from autoproduct.upstream import autopilot, init_workspace
+
+    root = init_workspace(tmp_path / "ws", "pipeline", "data")
+    captured = {}
+
+    def fake_run_review(target, *, repo_dir, skills_dir, provider_override=None):
+        captured["skills_dir"] = skills_dir
+        return None, {}
+
+    monkeypatch.setattr("autoproduct.orchestrator.run_review", fake_run_review)
+    autopilot._review_head(root, "mock")
+    parts = str(captured["skills_dir"]).split(os.pathsep)
+    if len(parts) != 2 or not parts[1].endswith("data"):
+        pytest.fail(f"data workspace must compose skills/data: {captured}")
+
+
+def test_data_gate_blocks_on_findings_not_on_skipped(tmp_path):
+    import sys
+
+    from autoproduct.upstream.build import data_gate_blockers
+
+    if data_gate_blockers(tmp_path, "web"):
+        pytest.fail("non-data profiles never hit the data gate")
+    if data_gate_blockers(tmp_path, "data"):
+        pytest.fail("unconfigured workspace reports skipped — visible, not blocking")
+    config = tmp_path / ".mas" / "data-checks.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text(yaml.safe_dump({"checks": {
+        "contract": [sys.executable, "-c", "raise SystemExit(1)"],
+        "absent_tool": ["definitely-not-a-binary-xyz"],
+    }}), encoding="utf-8")
+    blockers = data_gate_blockers(tmp_path, "data")
+    if len(blockers) != 1 or not blockers[0].startswith("contract"):
+        pytest.fail(f"only findings/error block: {blockers}")
+
+
+# --- Gate-R evaluator graduation ------------------------------------------------------
+
+def _graduated_check(tmp_path: Path, evaluator: list) -> None:
+    config = tmp_path / ".mas" / "cab-preflight.yaml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(yaml.safe_dump({"checks": [{
+        "id": "rej_CHG_privacy", "description": "privacy strings present",
+        "source": "rejection:CHG-7", "evaluator": evaluator,
+    }]}), encoding="utf-8")
+
+
+def test_graduated_check_passes_via_evaluator(tmp_path):
+    import sys
+
+    _graduated_check(tmp_path, [sys.executable, "-c", "raise SystemExit(0)"])
+    entry = gate_r_entry(tmp_path, _complete_package(tmp_path))
+    result = [r for r in entry.results if r.check.id == "rej_CHG_privacy"][0]
+    if not result.passed:
+        pytest.fail(f"exit-0 evaluator must pass the check: {result}")
+
+
+def test_evaluator_failure_carries_output_and_receives_package(tmp_path):
+    import sys
+
+    _graduated_check(tmp_path, [
+        sys.executable, "-c",
+        "import json,sys; p=json.loads(sys.argv[1]); "
+        "print('missing privacy string for', p['change_id']); raise SystemExit(3)",
+    ])
+    entry = gate_r_entry(tmp_path, _complete_package(tmp_path))
+    result = [r for r in entry.results if r.check.id == "rej_CHG_privacy"][0]
+    if result.passed:
+        pytest.fail("exit-3 evaluator must fail the check")
+    if "exit 3" not in result.detail or "CHG-1" not in result.detail:
+        pytest.fail(f"detail must carry output + prove the package reached it: {result.detail}")
+
+
+def test_missing_evaluator_binary_fails_not_passes(tmp_path):
+    _graduated_check(tmp_path, ["definitely-not-a-binary-xyz"])
+    entry = gate_r_entry(tmp_path, _complete_package(tmp_path))
+    result = [r for r in entry.results if r.check.id == "rej_CHG_privacy"][0]
+    if result.passed or "never reads as attested" not in result.detail:
+        pytest.fail(f"unrunnable evaluator must fail loudly: {result}")
+
+
+def test_ungraduated_rejection_check_still_manual(tmp_path):
+    record_rejection(tmp_path, "CHG-8", [{"reason": "stale screenshots", "mechanizable": True}])
+    entry = gate_r_entry(tmp_path, _complete_package(tmp_path))
+    result = [r for r in entry.results if r.check.id.startswith("rej_CHG-8")][0]
+    if result.passed or "manual attestation" not in result.detail:
+        pytest.fail(f"no evaluator → manual attestation stays required: {result}")

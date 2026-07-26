@@ -202,6 +202,23 @@ def _related_sources(repo: Path, spec: Spec, cap_files: int = 6, cap_lines: int 
     return "\n\n".join(blocks)
 
 
+def data_gate_blockers(repo: Path, profile: str) -> list[str]:
+    """§18.48.1: the data profile's build gate also runs the workspace's
+    declared/detected external checks (dbt, contracts, DAG imports).
+    findings/error block the commit; `skipped` (tool not installed, nothing
+    configured) is visible in the check output but does not block —
+    availability-gating, not silent absence."""
+    if profile != "data":
+        return []
+    from autoproduct.adoption.data_tools import run_data_checks
+
+    return [
+        f"{r.slot} ({r.detail})"
+        for r in run_data_checks(repo)
+        if r.status in ("findings", "error")
+    ]
+
+
 def finalize_build_bookkeeping(repo_dir: str | Path, slug: str, files: list[str]) -> None:
     """Post-build records: spec frozen, design memory, changelog, actuals.
     Split out so parallel worktree builds can run it after their merge."""
@@ -396,6 +413,18 @@ def _run_build_inner(
             test_summary=report.summary if report else "",
             detail="suite still failing after max iterations; nothing committed "
             "(worktree left for inspection)",
+        )
+
+    data_blockers = data_gate_blockers(repo, project.profile)
+    if data_blockers:
+        return BuildResult(
+            slug=slug,
+            status="build_failed",
+            iterations=iteration,
+            files_written=written,
+            test_summary=report.summary if report else "",
+            detail="data checks failed: " + "; ".join(data_blockers)
+            + " — nothing committed (worktree left for inspection)",
         )
 
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)

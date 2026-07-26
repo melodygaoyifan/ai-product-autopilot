@@ -131,7 +131,13 @@ def run_deploy_review(
     skills_dir: str = "skills/deploy",
     provider_override: str | None = None,
     diff_text: str | None = None,
+    lint_only: bool = False,
 ) -> DeployResult:
+    """`lint_only` is the substrate ladder's degraded mode (ADR-U15): only
+    the deterministic slice runs (probes + policy scan) — no voters, no
+    verification. Because the voter dimension never ran, a lint-only run can
+    escalate or hold but never PROMOTE, and it never feeds the promotion
+    track record."""
     started = time.monotonic()
     diff = (
         parse_unified_diff(diff_text)
@@ -158,6 +164,29 @@ def run_deploy_review(
         {"reports": [r.model_dump(mode="json") for r in reports],
          "policy_violations": sum(1 for f in findings if f.taxonomy_hint == "deploy:policy")},
     )
+
+    if lint_only:
+        mirror.write("vote", {"skipped": "lint_only degraded mode — no voters ran"})
+        findings.sort(key=lambda f: list(Severity).index(f.severity))
+        verdict = decide(findings, [])
+        if verdict is DeployVerdict.PROMOTE:
+            verdict = DeployVerdict.HOLD_FOR_HUMAN
+        result = DeployResult(
+            verdict=verdict,
+            tier=policy["tier"],
+            summary=(
+                f"{verdict.value} — DEGRADED config-lint-only (substrate below "
+                f"S4): {len(findings)} deterministic finding(s), voters did NOT "
+                "run, so this is never a promotion recommendation; "
+                f"{len(deploy_files)} deploy-relevant file(s), "
+                f"{time.monotonic() - started:.0f}s"
+            ),
+            findings=findings,
+            deploy_files=deploy_files,
+            artifacts_dir=str(mirror.dir),
+        )
+        mirror.write("final", result.model_dump(mode="json"))
+        return result
 
     voters = load_voters(skills_dir, provider_override=provider_override)
     context = _policy_prompt(policy)

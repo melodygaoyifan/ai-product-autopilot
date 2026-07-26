@@ -324,14 +324,24 @@ def undo_last(root: Path) -> dict:
 
 
 def _review_head(root: Path, provider: str):
+    import os
+
     from autoproduct.orchestrator import run_review
+    from autoproduct.upstream.workspace import load_project
 
     skills = Path(__file__).resolve().parent.parent.parent.parent / "skills"
+    skills_dir = str(skills)
+    try:
+        if load_project(root).profile == "data":
+            # §18.48.1 voter deltas ride along for data workspaces
+            skills_dir = os.pathsep.join([skills_dir, str(skills / "data")])
+    except FileNotFoundError:
+        pass  # not an autoproduct workspace — core roster only
     review, _ = run_review(
         # Committed range only — the working tree carries uncommitted
         # bookkeeping from later tasks mid-autopilot (Gate 2 apply
         # conflicts otherwise; found by the product bench).
-        "HEAD~1..HEAD", repo_dir=str(root), skills_dir=str(skills),
+        "HEAD~1..HEAD", repo_dir=str(root), skills_dir=skills_dir,
         provider_override=provider if provider == "mock" else None,
     )
     return review
