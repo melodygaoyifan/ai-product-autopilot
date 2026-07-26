@@ -1,0 +1,217 @@
+name: 04-direction-workbench
+profile: web
+fdr: |
+  方向筛选工作台的后端 API。
+
+  背景：创业者做"方向寻找 Sprint"时，要把 8–10 个候选方向筛到 3 个：
+  每个候选按 10 个固定评分项打分（分值只有 1、3、5 三档），Day 5 初筛打一轮，
+  实地访谈后 Day 12 用真实证据再打一轮，两轮对比着看；打分有否决项，
+  砍掉的候选要留档淘汰理由。这个工作台管理整个过程。
+
+  必须有这些接口，路径和方法必须完全一致：
+
+  1. POST /api/candidates 请求体 {"name": 候选方向名} → 返回 {"id": 整数}
+
+  2. POST /api/candidates/<id>/scores 请求体
+     {"round": "day5" 或 "day12",
+      "items": [恰好 10 个 {"item": 1 到 10 的编号, "value": 分值, "evidence": 证据文字}]}
+     → 返回 {"total": 该轮总分, "vetoed": true/false}。重复提交同一轮就覆盖旧的。
+
+  3. GET /api/candidates/<id> → 返回
+     {"id", "name", "rounds": {"day5": {"total", "vetoed", "qualified"}, "day12": {…}}}
+     （没打过的轮不出现在 rounds 里）
+
+  4. GET /api/candidates?round=day5 → 返回 JSON 数组，按该轮总分从高到低排；
+     每项含 {"id", "name", "total", "vetoed", "qualified"}；
+     没打过这轮分的候选排在最后。被淘汰的候选不出现。
+
+  5. POST /api/candidates/<id>/eliminate 请求体 {"reason": 淘汰理由} → 淘汰这个候选
+
+  6. GET /api/eliminated → JSON 数组，每项 {"id", "name", "reason"}（淘汰区留档）
+
+  7. GET /api/candidates/<id>/compare → 两轮逐项对比：
+     {"items": [10 个 {"item", "day5", "day12", "delta": day12 减 day5}],
+      "biggest_change": delta 绝对值最大的那一项的 item 编号}
+
+  打分规则（必须严格执行）：
+  - 分值只允许 1、3、5，出现其他分值整个请求拒绝（HTTP 400）
+  - items 必须恰好 10 项、编号 1 到 10 各出现一次，否则 400
+  - 第 1、2、3 项是否决项：任何一个否决项打 1 分，该轮 vetoed = true
+  - 打 5 分必须有非空 evidence；没有证据的 5 分自动按 3 分记录（不报错）
+  - qualified = 该轮总分 ≥ 32 且 vetoed 为 false
+
+  数据要存在数据库里，重启不丢。暂时不要：页面、登录、多用户。
+
+  成功：上面的接口和规则都按说明工作。
+probes:
+- name: score-veto-qualify-sort
+  script: |
+    import json, os, socket, subprocess, sys, time, urllib.request, urllib.error
+
+    PORT = 8641
+    BASE = f"http://127.0.0.1:{PORT}"
+    entry = next((e for e in ("app/main.py", "main.py", "app.py") if os.path.exists(e)), None)
+    assert entry, "no runnable entry point (app/main.py, main.py, app.py)"
+    proc = subprocess.Popen([sys.executable, entry],
+                            env={**os.environ, "PORT": str(PORT)},
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def wait():
+        for _ in range(60):
+            try:
+                socket.create_connection(("127.0.0.1", PORT), 1).close(); return
+            except OSError:
+                time.sleep(0.5)
+        raise SystemExit("server never listened")
+
+    def call(method, path, body=None):
+        req = urllib.request.Request(BASE + path, method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json"})
+        try:
+            resp = urllib.request.urlopen(req, timeout=10)
+            raw = resp.read().decode() or "{}"
+            try: data = json.loads(raw)
+            except Exception: data = {"_raw": raw}
+            return resp.status, data
+        except urllib.error.HTTPError as e:
+            return e.code, {}
+
+    wait()
+    try:
+        s, a = call("POST", "/api/candidates", {"name": "行政报销自动化"})
+        assert s in (200, 201) and a.get("id") is not None, (s, a)
+        s, b = call("POST", "/api/candidates", {"name": "会议纪要工具"})
+        assert s in (200, 201) and b.get("id") is not None, (s, b)
+        ev = "某公司行政说每月付6000元给外包做这件事"
+        items_a = [{"item": i, "value": 5 if i <= 3 else 3, "evidence": ev} for i in range(1, 11)]
+        s, d = call("POST", f"/api/candidates/{a['id']}/scores", {"round": "day5", "items": items_a})
+        assert s == 200, (s, d)
+        assert int(d["total"]) == 36, d
+        assert d["vetoed"] is False, d
+        items_b = [{"item": i, "value": 1 if i == 1 else 5, "evidence": ev} for i in range(1, 11)]
+        s, d = call("POST", f"/api/candidates/{b['id']}/scores", {"round": "day5", "items": items_b})
+        assert s == 200 and int(d["total"]) == 46 and d["vetoed"] is True, (s, d)
+        s, one = call("GET", f"/api/candidates/{a['id']}")
+        assert one["rounds"]["day5"]["qualified"] is True, one
+        s, other = call("GET", f"/api/candidates/{b['id']}")
+        assert other["rounds"]["day5"]["qualified"] is False, other
+        s, lst = call("GET", "/api/candidates?round=day5")
+        assert s == 200 and isinstance(lst, list), (s, lst)
+        names = [c["name"] for c in lst]
+        assert names.index("会议纪要工具") < names.index("行政报销自动化"), names
+        print("score/veto/sort ok")
+    finally:
+        proc.terminate()
+- name: score-validation-and-evidence-downgrade
+  script: |
+    import json, os, socket, subprocess, sys, time, urllib.request, urllib.error
+
+    PORT = 8641
+    BASE = f"http://127.0.0.1:{PORT}"
+    entry = next((e for e in ("app/main.py", "main.py", "app.py") if os.path.exists(e)), None)
+    assert entry, "no runnable entry point (app/main.py, main.py, app.py)"
+    proc = subprocess.Popen([sys.executable, entry],
+                            env={**os.environ, "PORT": str(PORT)},
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def wait():
+        for _ in range(60):
+            try:
+                socket.create_connection(("127.0.0.1", PORT), 1).close(); return
+            except OSError:
+                time.sleep(0.5)
+        raise SystemExit("server never listened")
+
+    def call(method, path, body=None):
+        req = urllib.request.Request(BASE + path, method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json"})
+        try:
+            resp = urllib.request.urlopen(req, timeout=10)
+            raw = resp.read().decode() or "{}"
+            try: data = json.loads(raw)
+            except Exception: data = {"_raw": raw}
+            return resp.status, data
+        except urllib.error.HTTPError as e:
+            return e.code, {}
+
+    wait()
+    try:
+        s, c = call("POST", "/api/candidates", {"name": "外贸询盘跟进助手"})
+        assert s in (200, 201), (s, c)
+        cid = c["id"]
+        ev = "访谈里3个客户报价每月500元"
+        bad = [{"item": i, "value": 2 if i == 4 else 3, "evidence": ev} for i in range(1, 11)]
+        s, _ = call("POST", f"/api/candidates/{cid}/scores", {"round": "day5", "items": bad})
+        assert s == 400, f"score value 2 accepted with status {s}"
+        nine = [{"item": i, "value": 3, "evidence": ev} for i in range(1, 10)]
+        s, _ = call("POST", f"/api/candidates/{cid}/scores", {"round": "day5", "items": nine})
+        assert s == 400, f"9-item round accepted with status {s}"
+        mixed = [{"item": i, "value": 5, "evidence": "" if i == 4 else ev} for i in range(1, 11)]
+        s, d = call("POST", f"/api/candidates/{cid}/scores", {"round": "day5", "items": mixed})
+        assert s == 200 and int(d["total"]) == 48, (s, d)
+        print("validation ok")
+    finally:
+        proc.terminate()
+- name: eliminate-and-two-round-compare
+  script: |
+    import json, os, socket, subprocess, sys, time, urllib.request, urllib.error
+
+    PORT = 8641
+    BASE = f"http://127.0.0.1:{PORT}"
+    entry = next((e for e in ("app/main.py", "main.py", "app.py") if os.path.exists(e)), None)
+    assert entry, "no runnable entry point (app/main.py, main.py, app.py)"
+    proc = subprocess.Popen([sys.executable, entry],
+                            env={**os.environ, "PORT": str(PORT)},
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def wait():
+        for _ in range(60):
+            try:
+                socket.create_connection(("127.0.0.1", PORT), 1).close(); return
+            except OSError:
+                time.sleep(0.5)
+        raise SystemExit("server never listened")
+
+    def call(method, path, body=None):
+        req = urllib.request.Request(BASE + path, method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json"})
+        try:
+            resp = urllib.request.urlopen(req, timeout=10)
+            raw = resp.read().decode() or "{}"
+            try: data = json.loads(raw)
+            except Exception: data = {"_raw": raw}
+            return resp.status, data
+        except urllib.error.HTTPError as e:
+            return e.code, {}
+
+    wait()
+    try:
+        s, keep = call("POST", "/api/candidates", {"name": "留下的候选"})
+        assert s in (200, 201), (s, keep)
+        s, gone = call("POST", "/api/candidates", {"name": "被淘汰的候选"})
+        assert s in (200, 201), (s, gone)
+        ev = "有具体证据"
+        day5 = [{"item": i, "value": 3, "evidence": ev} for i in range(1, 11)]
+        s, _ = call("POST", f"/api/candidates/{keep['id']}/scores", {"round": "day5", "items": day5})
+        assert s == 200, s
+        day12 = [{"item": i, "value": 5 if i == 5 else 3, "evidence": ev} for i in range(1, 11)]
+        s, _ = call("POST", f"/api/candidates/{keep['id']}/scores", {"round": "day12", "items": day12})
+        assert s == 200, s
+        s, cmp_ = call("GET", f"/api/candidates/{keep['id']}/compare")
+        assert s == 200 and len(cmp_["items"]) == 10, (s, cmp_)
+        row = next(r for r in cmp_["items"] if int(r["item"]) == 5)
+        assert int(row["day5"]) == 3 and int(row["day12"]) == 5 and int(row["delta"]) == 2, row
+        assert int(cmp_["biggest_change"]) == 5, cmp_
+        s, _ = call("POST", f"/api/candidates/{gone['id']}/eliminate", {"reason": "48小时内约不到5个人"})
+        assert s in (200, 204), s
+        s, lst = call("GET", "/api/candidates?round=day5")
+        assert all(c["name"] != "被淘汰的候选" for c in lst), lst
+        s, elim = call("GET", "/api/eliminated")
+        row = next(c for c in elim if c["name"] == "被淘汰的候选")
+        assert "约不到" in row["reason"], row
+        print("eliminate/compare ok")
+    finally:
+        proc.terminate()

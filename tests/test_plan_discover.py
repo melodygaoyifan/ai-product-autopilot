@@ -75,3 +75,26 @@ def test_scope_lock_and_ready_queue(tmp_path):
     assert locked.status == "locked"
     ready = next_tasks(root)
     assert [t.id for t in ready] == ["t1"]  # only the task with no deps
+
+
+def test_brief_writer_survives_a_bad_parse_streak(tmp_path, monkeypatch):
+    """Unparseable writer output consumes a revision; the budget must
+    survive a streak — run 4, case 02 died after only 2 attempts."""
+    import autoproduct.upstream.discover as discover
+
+    valid = (
+        'title: "t"\nproblem: "p"\ntarget_user: "u"\n'
+        'hypotheses:\n  - statement: "s"\n    evidence: "assumed"\n'
+        'scope_now: ["a"]\nscope_later: []\nscope_never: []\n'
+        'success_metrics: ["m"]\n'
+    )
+    responses = iter(["not: [valid", "still {bad", "nope: [", valid, "issues: []"])
+
+    class Stub:
+        def complete(self, **_kwargs):
+            return next(responses)
+
+    monkeypatch.setattr(discover, "get_provider", lambda name: Stub())
+    root = init_workspace(tmp_path / "p", "p", "web")
+    brief = discover.run_discovery(root, "an idea", provider="stub")
+    assert brief.revisions == 3

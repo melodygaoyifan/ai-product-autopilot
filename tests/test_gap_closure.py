@@ -234,3 +234,16 @@ def test_build_appends_design_memory_and_changelog(tmp_path):
     # plumbing must carry it) — just verify no crash and file intact.
     spec = load_spec(root, slug)
     assert spec.built is True
+
+
+def test_malformed_file_entry_is_valueerror_not_keyerror(tmp_path):
+    """A files entry missing 'path'/'new_content' must surface on the build
+    loop's ValueError feedback channel — run 4, case 01: the raw KeyError
+    escaped it and zeroed the whole case. Two-pass atomicity holds: the
+    good entry in the same batch stays unwritten."""
+    from autoproduct.upstream.build import _write_files
+
+    for bad in [{"path": "a.py"}, {"new_content": "x = 1\n"}, "a.py", {}]:
+        with pytest.raises(ValueError, match="malformed file entry"):
+            _write_files(tmp_path, [{"path": "ok.py", "new_content": "x = 1\n"}, bad])
+    assert not (tmp_path / "ok.py").exists()

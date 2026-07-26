@@ -92,6 +92,15 @@ def _write_files(
     validated: list[tuple[str, str]] = []
     kept: list[str] = []
     for f in files[:_MAX_FILES]:
+        # A malformed entry must surface as ValueError — the build loop's
+        # feedback channel — not KeyError, which escapes it and kills the
+        # whole run (product-bench run 4, case 01: one entry without
+        # new_content zeroed the case).
+        if not isinstance(f, dict) or not f.get("path") or "new_content" not in f:
+            raise ValueError(
+                "malformed file entry (every entry needs 'path' and COMPLETE "
+                f"'new_content'): {str(f)[:120]!r}"
+            )
         rel = str(f["path"]).lstrip("/")
         if any(rel.startswith(p) for p in _FORBIDDEN_PREFIXES) or ".." in rel:
             raise ValueError(f"implementer touched forbidden path {rel!r}")

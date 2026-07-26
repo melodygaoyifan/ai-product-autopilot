@@ -26,7 +26,10 @@ BRIEFWRITER_MARKER = "product brief writer in a greenfield discovery stage"
 BRIEF_CRITIC_MARKER = "brief critic panel"
 
 EVIDENCE_CLASSES = {"measured", "sourced", "assumed"}
-MAX_REVISIONS = 1
+# Unparseable writer output consumes a revision like any critic round, and
+# CJK briefs trip YAML parsing often enough that 2 total attempts is a coin
+# flip (product-bench run 4, case 02: whole case dead on this budget).
+MAX_REVISIONS = 3
 
 
 class Hypothesis(BaseModel):
