@@ -1,0 +1,73 @@
+# RECONSTRUCTED 2026-07-26 from a complete copy read into the working
+# session before the canonical .mas/ was deleted. Content is verbatim.
+cases:
+- name: 01-groupbuy-api
+  autopilot_status: 'error: KeyError: ''new_content'''
+  tasks_total: 0
+  tasks_built: 0
+  clean_reviews: 0
+  outcomes: []
+  preserved_workspace: ''
+  probes: []
+  duration_s: 0.0
+- name: 02-shortener-api
+  autopilot_status: 'error: ValueError: brief failed schema after 2 attempts: Your
+    previous response was not a parseable YAML mapping. Respond with ONLY the YAM'
+  tasks_total: 0
+  tasks_built: 0
+  clean_reviews: 0
+  outcomes: []
+  preserved_workspace: ''
+  probes: []
+  duration_s: 0.0
+- name: 03-groupbuy-auto
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 1
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: Persistence and auth foundation for group-buy creation
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t2
+    title: View a group-buy
+    status: built
+    review: REQUEST_CHANGES
+    detail: (after fix iteration)
+  - task_id: t3
+    title: Resident places an order
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t4
+    title: Group-buy summary totals
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  preserved_workspace: .mas/product-bench/workspaces/03-groupbuy-auto
+  probes:
+  - name: create-and-read-back-group-buy
+    passed: false
+    detail: server never listened
+  - name: unknown-group-buy-returns-404
+    passed: false
+    detail: server never listened
+  - name: order-and-summary-math
+    passed: false
+    detail: server never listened
+  - name: unit-price-persists-as-integer
+    passed: false
+    detail: server never listened
+  duration_s: 1974.1
+build_rate: 0.08333333333333333
+probe_pass_rate: 0.0
+clean_review_rate: 0.0
+rates:
+  build_rate: 0.083
+  probe_pass_rate: 0.0
+  clean_review_rate: 0.0

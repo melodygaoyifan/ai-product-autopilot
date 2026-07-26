@@ -1,0 +1,182 @@
+# RECONSTRUCTED 2026-07-26 from a complete copy read into the working
+# session before the canonical .mas/ was deleted. Content is verbatim.
+cases:
+- name: 01-groupbuy-api
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 0
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: Persisted group-buy creation and retrieval
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t2
+    title: Order creation with existence and quantity validation
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t3
+    title: Group-buy summary aggregation
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t4
+    title: API-key gateway and CSRF protection on state-changing endpoints
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  preserved_workspace: .mas/product-bench/workspaces/01-groupbuy-api
+  probes:
+  - name: create-and-read
+    passed: false
+    detail: server never listened
+  - name: order-summary-math
+    passed: false
+    detail: server never listened
+  - name: unknown-id-is-client-error
+    passed: false
+    detail: server never listened
+  duration_s: 1052.4
+- name: 02-shortener-api
+  autopilot_status: failed
+  tasks_total: 6
+  tasks_built: 2
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: Link persistence and schema
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t2
+    title: Create short link endpoint with validation
+    status: built
+    review: REQUEST_CHANGES
+    detail: (after fix iteration)
+  - task_id: t4
+    title: Redirect endpoint with click tracking
+    status: built
+    review: ESCALATE_SECURITY_RISK
+    detail: ''
+  - task_id: t3
+    title: Auth and CSRF scaffolding on create endpoint
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t5
+    title: Click stats endpoint
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t6
+    title: E2E test skeletons for create, redirect, and stats
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  preserved_workspace: .mas/product-bench/workspaces/02-shortener-api
+  probes:
+  - name: shorten-and-redirect
+    passed: false
+    detail: server never listened
+  - name: click-counting
+    passed: false
+    detail: server never listened
+  duration_s: 1708.6
+- name: 03-groupbuy-auto
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 0
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: 数据持久化基座与团购创建
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t2
+    title: 查看单个团购详情
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t3
+    title: 对团购下单
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  - task_id: t4
+    title: 查看团购汇总
+    status: build_failed
+    review: null
+    detail: suite still failing after max iterations; nothing committed (worktree
+      left for inspection)
+  preserved_workspace: .mas/product-bench/workspaces/03-groupbuy-auto
+  probes: []
+  duration_s: 860.1
+- name: 04-direction-workbench
+  autopilot_status: completed
+  tasks_total: 6
+  tasks_built: 6
+  clean_reviews: 4
+  outcomes:
+  - task_id: t1
+    title: Candidate persistence and creation endpoint
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t2
+    title: Scoring rule engine
+    status: built
+    review: APPROVE_WITH_NOTES
+    detail: ''
+  - task_id: t3
+    title: Score submission endpoint with round overwrite
+    status: built
+    review: APPROVE_WITH_NOTES
+    detail: ''
+  - task_id: t4
+    title: Round listing endpoint
+    status: built
+    review: APPROVE_WITH_NOTES
+    detail: ''
+  - task_id: t5
+    title: Elimination and archive endpoints
+    status: built
+    review: APPROVE
+    detail: ''
+  - task_id: t6
+    title: Two-round comparison endpoint
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  preserved_workspace: .mas/product-bench/workspaces/04-direction-workbench
+  probes:
+  - name: score-veto-qualify-sort
+    passed: false
+    detail: 'AssertionError: (400, {})'
+  - name: score-validation-and-evidence-downgrade
+    passed: false
+    detail: 'AssertionError: (400, {})'
+  - name: eliminate-and-two-round-compare
+    passed: false
+    detail: 'AssertionError: (400, {})'
+  duration_s: 1539.2
+build_rate: 0.3333333333333333
+probe_pass_rate: 0.0
+clean_review_rate: 0.16666666666666666
+rates:
+  build_rate: 0.333
+  probe_pass_rate: 0.0
+  clean_review_rate: 0.167

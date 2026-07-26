@@ -70,6 +70,18 @@ def test_ssrf_probe_flags_variable_url():
     assert any("SSRF" in f.title for f in report.findings)
 
 
+def test_csrf_ssrf_probe_skips_test_support_files():
+    """Test clients hit variable localhost URLs by design — flagging them
+    buried runs 7-9's reviews in SSRF noise (clean reviews pinned at 0%)."""
+    for path in ("tests/helpers.py", "tests/test_client.py", "conftest.py",
+                 "app/tests/conftest.py"):
+        diff = parse_unified_diff(_diff(path, "resp = requests.get(base_url)"))
+        assert probes.csrf_ssrf_probe(diff, ".").findings == [], path
+    # Production code stays flagged.
+    diff = parse_unified_diff(_diff("app/client.py", "resp = requests.get(u)"))
+    assert probes.csrf_ssrf_probe(diff, ".").findings != []
+
+
 def test_ssrf_probe_allows_literal_url():
     diff = parse_unified_diff(
         _diff("client.py", 'resp = requests.get("https://api.example.com/v1")')

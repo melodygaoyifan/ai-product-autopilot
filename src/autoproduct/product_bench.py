@@ -265,14 +265,30 @@ def run_case(
             if o.review_verdict in ("APPROVE", "APPROVE_WITH_NOTES")
         ]
         case_probes = list(case.probes)
+        probegen_dry = False
         if case.auto_probes:
-            from autoproduct.upstream.probegen import generate_probes
+            from autoproduct.upstream import probegen as probegen_mod
 
-            generated, _ = generate_probes(
+            generated, _ = probegen_mod.generate_probes(
                 workspace, provider=provider or "anthropic"
             )
+            if not generated:
+                # Model-shaped output: one retry before declaring the case
+                # unmeasured (run 9, case 03: zero probes silently scored
+                # as 0% and nothing said so).
+                generated, _ = probegen_mod.generate_probes(
+                    workspace, provider=provider or "anthropic"
+                )
+            probegen_dry = case.auto_probes and not generated
             case_probes += [Probe(name=g.name, script=g.script) for g in generated]
         probes = [run_probe(workspace, probe) for probe in case_probes]
+        if probegen_dry:
+            probes.append(ProbeResult(
+                name="probe-generation",
+                passed=False,
+                detail="probegen produced no probes after a retry — case "
+                "behavior UNMEASURED, scored as a failure",
+            ))
         preserved = ""
         if result.status != "completed" or not all(p.passed for p in probes):
             # Failure forensics: the temp workspace would vanish with the
@@ -356,5 +372,13 @@ def save_summary(summary: BenchSummary, repo_dir: str | Path) -> Path:
         "probe_pass_rate": round(summary.probe_pass_rate, 3),
         "clean_review_rate": round(summary.clean_review_rate, 3),
     }
-    path.write_text(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    rendered = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
+    path.write_text(rendered, encoding="utf-8")
+    # Durable copy: .mas/ is gitignored and was lost once (2026-07-26, the
+    # entire bench history) — scoreboards are small and secret-free, so they
+    # also land in the tracked benchmarks/results/.
+    tracked = Path(repo_dir) / "benchmarks" / "results"
+    if (Path(repo_dir) / "benchmarks").is_dir():
+        tracked.mkdir(exist_ok=True)
+        (tracked / path.name).write_text(rendered, encoding="utf-8")
     return path

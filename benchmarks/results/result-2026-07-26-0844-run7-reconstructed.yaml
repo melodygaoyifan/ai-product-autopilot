@@ -1,0 +1,71 @@
+# RECONSTRUCTED 2026-07-26 (PARTIAL) from the run table and per-task/probe
+# detail printed into the working session. Outcome `detail` strings were
+# truncated at capture time; durations and statuses are exact.
+cases:
+- name: 01-groupbuy-api
+  autopilot_status: completed
+  tasks_total: 4
+  tasks_built: 4
+  clean_reviews: 0
+  outcomes:
+  - {task_id: t1, status: built, review: REQUEST_CHANGES, detail: '(after fix iteration)'}
+  - {task_id: t2, status: built, review: REQUEST_CHANGES, detail: '(after fix iteration)'}
+  - {task_id: t3, status: built, review: REQUEST_CHANGES, detail: '(after fix iteration)'}
+  - {task_id: t4, status: built, review: REQUEST_CHANGES, detail: ''}
+  probes:
+  - {name: create-and-read, passed: true, detail: create/read ok}
+  - {name: order-summary-math, passed: true, detail: summary math ok}
+  - {name: unknown-id-is-client-error, passed: true, detail: 404 ok}
+  duration_s: 1046.2
+- name: 02-shortener-api
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 1
+  clean_reviews: 0
+  outcomes:
+  - {task_id: t1, status: built, review: REQUEST_CHANGES, detail: '(after fix iteration)'}
+  - {task_id: t2, status: build_failed, review: null, detail: 'build gate still failing after max iterations; nothing committed (failed attempt preserved)'}
+  - {task_id: t3, status: build_failed, review: null, detail: 'build gate still failing after max iterations; nothing committed (failed attempt preserved)'}
+  - {task_id: t4, status: build_failed, review: null, detail: 'build gate still failing after max iterations; nothing committed (failed attempt preserved)'}
+  probes:
+  - {name: shorten-and-redirect, passed: true, detail: redirect ok}
+  - {name: click-counting, passed: true, detail: click count ok}
+  duration_s: 1215.7
+- name: 03-groupbuy-auto
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 1
+  clean_reviews: 0
+  outcomes:
+  - {task_id: t1, status: built, review: REQUEST_CHANGES, detail: '(after fix iteration)'}
+  - {task_id: t2, status: spec_blocked, review: null, detail: 'lint 0 issue(s)'}
+  - {task_id: t3, status: build_failed, review: null, detail: 'build gate still failing after max iterations; nothing committed (failed attempt preserved)'}
+  - {task_id: t4, status: build_failed, review: null, detail: 'build gate still failing after max iterations; nothing committed (failed attempt preserved)'}
+  probes:
+  - {name: create-and-read-back, passed: true, detail: ''}
+  - {name: increasing-ids, passed: true, detail: ''}
+  - {name: fractional-price-preserved, passed: true, detail: ''}
+  - {name: reject-empty-item-name, passed: false, detail: 'AssertionError: missing error string: {}'}
+  - {name: reject-bad-price-and-extra-key, passed: false, detail: 'AssertionError: missing error string: {}'}
+  duration_s: 1325.4
+- name: 04-direction-workbench
+  autopilot_status: failed
+  tasks_total: 6
+  tasks_built: 1
+  clean_reviews: 0
+  outcomes:
+  - {task_id: t1, status: build_failed, review: null, detail: 'build gate still failing after max iterations; nothing committed (failed attempt preserved at .mas/failed-builds/create-candidate-endpoint; workspace reset)'}
+  - {task_id: t2, status: built, review: REQUEST_CHANGES, detail: '(after fix iteration)'}
+  - {task_id: t3, status: build_failed, review: null, detail: 'failed attempt preserved at .mas/failed-builds/read-direction-candidate-with-round-summaries-ge'}
+  - {task_id: t4, status: build_failed, review: null, detail: 'failed attempt preserved at .mas/failed-builds/list-candidates-ranked-by-round-total'}
+  - {task_id: t5, status: build_failed, review: null, detail: 'failed attempt preserved at .mas/failed-builds/candidate-elimination-and-eliminated-archive'}
+  - {task_id: t6, status: build_failed, review: null, detail: 'failed attempt preserved at .mas/failed-builds/two-round-comparison-for-direction-candidates'}
+  probes:
+  - {name: score-veto-qualify-sort, passed: true, detail: score/veto/sort ok}
+  - {name: score-validation-and-evidence-downgrade, passed: true, detail: validation ok}
+  - {name: eliminate-and-two-round-compare, passed: true, detail: eliminate/compare ok}
+  duration_s: 1739.7
+rates:
+  build_rate: 0.42
+  probe_pass_rate: 0.9
+  clean_review_rate: 0.0

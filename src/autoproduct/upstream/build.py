@@ -554,6 +554,27 @@ def _run_build_inner(
     claude_md = repo / "CLAUDE.md"
     constraints = claude_md.read_text(encoding="utf-8") if claude_md.exists() else ""
     existing = _related_sources(repo, spec)
+    fixture_blocks = []
+    for rel in ["conftest.py", "tests/conftest.py"] + sorted(
+        str(q.relative_to(repo)) for q in repo.glob("tests/helpers*.py")
+    ):
+        path = repo / rel
+        if path.is_file():
+            body = "\n".join(
+                path.read_text(encoding="utf-8", errors="replace").splitlines()[:200]
+            )
+            fixture_blocks.append(f'<existing_file path="{rel}">\n{body}\n</existing_file>')
+    if fixture_blocks:
+        # The vocabulary saga's root cause: _related_sources only surfaces
+        # files the spec's design text happens to mention, so implementers
+        # never saw the committed fixtures and re-invented them blindly
+        # (http/http_post/base_url across runs 7-9). Always show them.
+        existing = (existing + "\n\n" if existing else "") + (
+            '<shared_test_fixtures note="these already exist — USE these '
+            'fixture and helper names in your tests; extend additively, '
+            'never re-invent">\n' + "\n\n".join(fixture_blocks)
+            + "\n</shared_test_fixtures>"
+        )
     from autoproduct.upstream.blocks import blocks_context
     from autoproduct.upstream.provisioning import services_context
 

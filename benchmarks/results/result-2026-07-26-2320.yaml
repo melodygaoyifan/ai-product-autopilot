@@ -1,0 +1,170 @@
+cases:
+- name: 01-groupbuy-api
+  autopilot_status: completed
+  tasks_total: 3
+  tasks_built: 3
+  clean_reviews: 1
+  outcomes:
+  - task_id: t1
+    title: 团购创建与查询端点
+    status: built
+    review: REQUEST_CHANGES
+    detail: (after fix iteration)
+  - task_id: t2
+    title: 订单创建端点
+    status: built
+    review: REQUEST_CHANGES
+    detail: (after fix iteration)
+  - task_id: t3
+    title: 团购汇总端点
+    status: built
+    review: APPROVE
+    detail: ''
+  preserved_workspace: ''
+  probes:
+  - name: create-and-read
+    passed: true
+    detail: create/read ok
+  - name: order-summary-math
+    passed: true
+    detail: summary math ok
+  - name: unknown-id-is-client-error
+    passed: true
+    detail: 404 ok
+  duration_s: 1077.8
+- name: 02-shortener-api
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 1
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: Link persistence and short code generation
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/database-backed-link-model-with-server-side-shor;
+      workspace reset)
+  - task_id: t2
+    title: Create link endpoint with allowlist and input validation
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/post-api-links-create-short-link-with-validation;
+      workspace reset)
+  - task_id: t3
+    title: Redirect endpoint with click counting
+    status: built
+    review: REQUEST_CHANGES
+    detail: (after fix iteration)
+  - task_id: t4
+    title: Stats endpoint
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/stats-endpoint-for-short-code-get-api-links-code;
+      workspace reset)
+  preserved_workspace: .mas/product-bench/workspaces/02-shortener-api
+  probes:
+  - name: shorten-and-redirect
+    passed: true
+    detail: redirect ok
+  - name: click-counting
+    passed: true
+    detail: click count ok
+  duration_s: 1231.5
+- name: 03-groupbuy-auto
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 3
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: 持久化与创建团购端点
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t2
+    title: 查看团购端点
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t3
+    title: 住户下单端点
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t4
+    title: 团购汇总端点
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/groupbuy-order-summary-get-groupbuys-id-summary;
+      workspace reset)
+  preserved_workspace: .mas/product-bench/workspaces/03-groupbuy-auto
+  probes: []
+  duration_s: 907.6
+- name: 04-direction-workbench
+  autopilot_status: failed
+  tasks_total: 6
+  tasks_built: 1
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: Candidate creation and persistence
+    status: built
+    review: ESCALATE_SECURITY_RISK
+    detail: (after fix iteration)
+  - task_id: t2
+    title: Score submission with validation and veto rule
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/post-api-candidates-id-scores-round-scoring-with;
+      workspace reset)
+  - task_id: t3
+    title: Candidate detail endpoint
+    status: error
+    review: null
+    detail: 'malformed file entry (every entry needs ''path'' and COMPLETE ''new_content''):
+      "{''path'': ''app/main.py''}"'
+  - task_id: t4
+    title: Elimination endpoint and eliminated listing
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/eliminate-candidate-and-list-eliminated;
+      workspace reset)
+  - task_id: t5
+    title: Ranked candidate listing by round
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/list-candidates-by-round-sorted-by-total-get-api;
+      workspace reset)
+  - task_id: t6
+    title: Round comparison endpoint
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/get-api-candidates-id-compare-per-item-two-round;
+      workspace reset)
+  preserved_workspace: .mas/product-bench/workspaces/04-direction-workbench
+  probes:
+  - name: score-veto-qualify-sort
+    passed: true
+    detail: score/veto/sort ok
+  - name: score-validation-and-evidence-downgrade
+    passed: true
+    detail: validation ok
+  - name: eliminate-and-two-round-compare
+    passed: true
+    detail: eliminate/compare ok
+  duration_s: 1651.6
+build_rate: 0.5416666666666666
+probe_pass_rate: 0.75
+clean_review_rate: 0.08333333333333333
+rates:
+  build_rate: 0.542
+  probe_pass_rate: 0.75
+  clean_review_rate: 0.083

@@ -107,6 +107,10 @@ def test_implementer_receives_the_literal_source_contract(tmp_path, monkeypatch)
     approve_spec(root, spec.slug)
     contract = 'scores use the field name "item" and rounds "day5"/"day12"'
     (root / "FDR.md").write_text(contract, encoding="utf-8")
+    (root / "tests").mkdir(exist_ok=True)
+    (root / "tests" / "conftest.py").write_text(
+        "def marker_fixture():\n    return 1\n", encoding="utf-8"
+    )
 
     seen = []
 
@@ -122,6 +126,7 @@ def test_implementer_receives_the_literal_source_contract(tmp_path, monkeypatch)
     assert "<source_contract>" in prompt and '"item"' in prompt
     assert "LITERAL" in seen[0]["system"] and "4xx" in seen[0]["system"]
     assert "additively" in seen[0]["system"] and "tests-only" in seen[0]["system"]
+    assert "shared_test_fixtures" in prompt and "def marker_fixture" in prompt
 
 
 def test_shared_test_fixtures_are_additive_only(tmp_path):
@@ -198,3 +203,39 @@ def test_stale_import_note_names_phantom_imports(tmp_path):
     note = _stale_import_note(tmp_path)
     assert "test_stale.py" in note and "http_post" in note and "post" in note
     assert "test_ok.py" not in note
+
+
+def test_probegen_dry_case_is_visibly_unmeasured(tmp_path, monkeypatch):
+    """Zero generated probes must not read as a silently-scored 0% — run 9
+    case 03 had 3/4 built and NO behavioral measurement at all."""
+    from autoproduct import product_bench
+    from autoproduct.upstream import probegen as probegen_mod
+
+    calls = []
+    monkeypatch.setattr(
+        probegen_mod, "generate_probes",
+        lambda ws, provider="anthropic": (calls.append(1), ([], []))[1],
+    )
+    case = product_bench.ProductCase(
+        name="dry", fdr="a link sharing tool", auto_probes=True
+    )
+    result = product_bench.run_case(case, provider="mock", keep_dir=tmp_path)
+    assert len(calls) == 2  # one retry before declaring dry
+    synthetic = [p for p in result.probes if p.name == "probe-generation"]
+    assert len(synthetic) == 1 and not synthetic[0].passed
+    assert "UNMEASURED" in synthetic[0].detail
+
+
+def test_save_summary_dual_writes_to_tracked_results(tmp_path):
+    """.mas/ is gitignored and was lost once (2026-07-26, the whole bench
+    history) — scoreboards also land in tracked benchmarks/results/."""
+    from autoproduct.product_bench import BenchSummary, save_summary
+
+    (tmp_path / "benchmarks").mkdir()
+    summary = BenchSummary(
+        cases=[], build_rate=0.5, probe_pass_rate=0.5, clean_review_rate=0.5
+    )
+    path = save_summary(summary, tmp_path)
+    assert path.exists()
+    tracked = tmp_path / "benchmarks" / "results" / path.name
+    assert tracked.exists() and tracked.read_text() == path.read_text()

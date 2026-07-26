@@ -97,6 +97,15 @@ def csrf_ssrf_probe(diff: ParsedDiff, repo_dir: str) -> ToolReport:
             # Data/fixture files (.yaml, .md, .json) quote code without
             # executing it (found by the self-review of PR #6).
             continue
+        name = file.path.rsplit("/", 1)[-1]
+        if (
+            file.path.startswith("tests/") or "/tests/" in file.path
+            or name.startswith("test_") or name == "conftest.py"
+        ):
+            # Test clients hit variable localhost URLs by design and define
+            # no production routes — flagging them buried runs 7-9's reviews
+            # in SSRF noise (clean reviews pinned at 0%).
+            continue
         added_text = "\n".join(text for _, text in file.added)
         file_has_csrf = bool(_CSRF_HINT.search(added_text))
         for lineno, text in file.added:
