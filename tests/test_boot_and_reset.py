@@ -154,3 +154,47 @@ def test_shared_test_fixtures_are_additive_only(tmp_path):
         allowed_test_paths=set(),
     )
     assert written == ["tests/conftest.py"] and kept == []
+
+
+def test_private_names_are_not_vocabulary(tmp_path):
+    """A helpers rewrite may restructure _private internals freely — only
+    public names sibling tests can import are guarded (run 8, case 01 t3:
+    the guard blocked a rewrite over reshuffled _check_url/_do)."""
+    from autoproduct.upstream.build import _write_files
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "helpers.py").write_text(
+        "def _check_url(u):\n    return u\n\ndef post(base):\n    return 1\n"
+    )
+    written, kept = _write_files(
+        tmp_path,
+        [{"path": "tests/helpers.py",
+          "new_content": "def post(base):\n    return 1\n\ndef http_post(base):\n    return 2\n"}],
+        allowed_test_paths=set(),
+    )
+    assert written == ["tests/helpers.py"] and kept == []
+    # Dropping a PUBLIC name still keeps the file out.
+    written, kept = _write_files(
+        tmp_path,
+        [{"path": "tests/helpers.py",
+          "new_content": "def only_new(base):\n    return 3\n"}],
+        allowed_test_paths=set(),
+    )
+    assert written == [] and "post" in kept[0]
+
+
+def test_stale_import_note_names_phantom_imports(tmp_path):
+    """Files persisting across iterations that import names which don't
+    exist get a precise deterministic callout in the feedback."""
+    from autoproduct.upstream.build import _stale_import_note
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "helpers.py").write_text("def post(base):\n    return 1\n")
+    (tmp_path / "tests" / "test_ok.py").write_text("from tests.helpers import post\n")
+    assert _stale_import_note(tmp_path) == ""
+    (tmp_path / "tests" / "test_stale.py").write_text(
+        "from tests.helpers import http_post\n"
+    )
+    note = _stale_import_note(tmp_path)
+    assert "test_stale.py" in note and "http_post" in note and "post" in note
+    assert "test_ok.py" not in note

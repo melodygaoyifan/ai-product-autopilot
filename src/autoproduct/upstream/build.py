@@ -206,25 +206,80 @@ def _removed_names(old: str, new: str) -> set[str]:
     names, so removal breaks their collection (run 7, case 04: a conftest
     rewrite lost post_json/create_candidate and every iteration died on
     ImportError). Unparseable code returns empty — the suite gate judges it."""
-    import ast
-
-    def names(src: str) -> set[str] | None:
-        try:
-            tree = ast.parse(src)
-        except SyntaxError:
-            return None
-        return {
-            n.name for n in tree.body
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-        } | {
-            t.id for n in tree.body if isinstance(n, ast.Assign)
-            for t in n.targets if isinstance(t, ast.Name)
-        }
-
-    old_names, new_names = names(old), names(new)
+    old_names, new_names = _toplevel_names(old), _toplevel_names(new)
     if old_names is None or new_names is None:
         return set()
-    return old_names - new_names
+    # Privates are not vocabulary: nothing outside the module should import
+    # a _name, and guarding them blocks legitimate internal restructuring
+    # (run 8, case 01 t3: a helpers rewrite adding the public name its tests
+    # needed was droppable purely over reshuffled _check_url/_do).
+    return {n for n in (old_names - new_names) if not n.startswith("_")}
+
+
+def _toplevel_names(src: str) -> set[str] | None:
+    import ast
+
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return None
+    return {
+        n.name for n in tree.body
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    } | {
+        t.id for n in tree.body if isinstance(n, ast.Assign)
+        for t in n.targets if isinstance(t, ast.Name)
+    }
+
+
+def _stale_import_note(repo: Path) -> str:
+    """Cross-iteration drift detector. Files persist between build
+    iterations, so a vocabulary change mid-build leaves earlier files
+    importing names that never existed — collection dies before any test
+    runs (run 8, case 01 t3: half the tests imported http_post, half
+    post). A deterministic scan names the exact files and the available
+    names; returns '' when clean."""
+    import ast
+
+    problems: list[str] = []
+    seen: set[Path] = set()
+    for path in sorted(set(repo.glob("tests/**/*.py")) | set(repo.glob("tests/*.py"))):
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or node.level or not node.module:
+                continue
+            if not (node.module.startswith("tests") or node.module in ("conftest", "helpers")):
+                continue
+            target = repo / (node.module.replace(".", "/") + ".py")
+            if not target.is_file():
+                continue
+            available = _toplevel_names(
+                target.read_text(encoding="utf-8", errors="replace")
+            )
+            if available is None:
+                continue
+            for alias in node.names:
+                if alias.name != "*" and alias.name not in available:
+                    public = ", ".join(sorted(n for n in available if not n.startswith("_"))[:8])
+                    problems.append(
+                        f"- {path.relative_to(repo)}: `from {node.module} import "
+                        f"{alias.name}` — {target.relative_to(repo)} defines: {public or '(nothing public)'}"
+                    )
+    if not problems:
+        return ""
+    return (
+        "STALE IMPORTS — these files (yours, possibly from an earlier "
+        "iteration; files persist between iterations) import names that do "
+        "not exist:\n" + "\n".join(problems[:5]) + "\n"
+        "Resubmit those files to use the existing names, or add the missing "
+        "names additively to the module they import from."
+    )
 
 
 def _write_files(
@@ -604,6 +659,9 @@ def _run_build_inner(
             feedback = boot_failure
             continue
         feedback = report.detail or report.summary
+        stale = _stale_import_note(repo)
+        if stale:
+            feedback += "\n\n" + stale
         if kept:
             feedback += (
                 "\n\nNOTE — these skeleton test files were NOT replaced (your "
