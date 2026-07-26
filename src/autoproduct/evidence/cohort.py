@@ -90,6 +90,21 @@ def cohort_calc(
     return readings
 
 
+def required_n_two_proportions(
+    baseline: float, mde_relative: float, *, alpha: float = 0.05, power: float = 0.80
+) -> int:
+    """Per-group n for a two-proportion test at the stated effect size —
+    normal approximation, shared by sample_sufficiency_check and the
+    experiment MAS's power_calc."""
+    if not 0 < baseline < 1 or mde_relative <= 0:
+        raise ValueError("baseline must be in (0,1) and mde_relative positive")
+    p2 = min(baseline * (1 + mde_relative), 0.999)
+    z_alpha = _NORMAL.inv_cdf(1 - alpha / 2)
+    z_beta = _NORMAL.inv_cdf(power)
+    variance = baseline * (1 - baseline) + p2 * (1 - p2)
+    return math.ceil(((z_alpha + z_beta) ** 2 * variance) / (p2 - baseline) ** 2)
+
+
 def sample_sufficiency_check(
     *,
     n: int,
@@ -104,13 +119,9 @@ def sample_sufficiency_check(
     a small product is frequently `sufficient: false` with the required n
     stated (§22.62.2) — the same posture as BLOCKED(INSUFFICIENT_POWER).
     """
-    if not 0 < baseline < 1 or mde_relative <= 0:
-        raise ValueError("baseline must be in (0,1) and mde_relative positive")
-    p2 = min(baseline * (1 + mde_relative), 0.999)
-    z_alpha = _NORMAL.inv_cdf(1 - alpha / 2)
-    z_beta = _NORMAL.inv_cdf(power)
-    variance = baseline * (1 - baseline) + p2 * (1 - p2)
-    required = math.ceil(((z_alpha + z_beta) ** 2 * variance) / (p2 - baseline) ** 2)
+    required = required_n_two_proportions(
+        baseline, mde_relative, alpha=alpha, power=power
+    )
     sufficient = n >= required
     return SufficiencyVerdict(
         sufficient=sufficient,

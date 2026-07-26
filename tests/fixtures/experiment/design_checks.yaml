@@ -1,0 +1,69 @@
+# Experiment design-check fixture gate (§21.61, ADR-U24) — 8 cases.
+# schema_error = the design does not even parse; otherwise gate_passed +
+# findings_contain substrings against Gate PL3-exp output.
+_design_ok: &design_ok
+  id: EXP-2026-031
+  hypothesis: "Outcome-led headline raises signup-start rate among organic landing traffic"
+  primary_metric: signup_start_rate
+  guardrail_metrics: [activation_rate, unsubscribe_rate]
+  secondary_metrics: [scroll_depth]
+  design:
+    stage1: {arms: 6, allocation: equal, correction: benjamini_hochberg, q: 0.10}
+    stage2: {arms: 2, allocation: equal, fresh_sample: true}
+  power: {baseline: 0.062, mde_relative: 0.15, alpha: 0.05, power: 0.80}
+  monitoring: {method: sequential, spending: obrien_fleming, peeks: 4}
+  stopping_rule: "Stop at planned horizon or sequential boundary. No other stop is legal."
+  decision_rule: "Adopt only if stage2 primary is significant AND no guardrail degrades."
+  preregistration_hash: "sha256:pinned-by-test"
+_power_ok: &power_ok {weekly_traffic: 20000, max_days: 60}
+
+fixtures:
+  - label: two-primary-metrics-rejected-at-schema
+    expect: {schema_error: "exactly one primary"}
+    input:
+      design: {<<: *design_ok, primary_metric: "signup_start_rate and activation_rate"}
+      power_context: *power_ok
+  - label: missing-stopping-rule-rejected-at-schema
+    expect: {schema_error: "stated up front"}
+    input:
+      design: {<<: *design_ok, stopping_rule: "  "}
+      power_context: *power_ok
+  - label: multi-arm-screening-without-correction
+    expect: {gate_passed: false, findings_contain: ["no_screening_correction"]}
+    input:
+      design:
+        <<: *design_ok
+        design:
+          stage1: {arms: 6, correction: none, q: 0.10}
+          stage2: {arms: 2, fresh_sample: true}
+      power_context: *power_ok
+  - label: validation-on-stale-sample
+    expect: {gate_passed: false, findings_contain: ["stale_validation_sample"]}
+    input:
+      design:
+        <<: *design_ok
+        design:
+          stage1: {arms: 6, correction: benjamini_hochberg, q: 0.10}
+          stage2: {arms: 2, fresh_sample: false}
+      power_context: *power_ok
+  - label: underpowered-design-is-blocked-with-n-stated
+    expect: {gate_passed: false, findings_contain: ["BLOCKED(INSUFFICIENT_POWER)", "n="]}
+    input:
+      design: *design_ok
+      power_context: {weekly_traffic: 200, max_days: 23}
+  - label: unpinned-design-cannot-expose
+    expect: {gate_passed: false, findings_contain: ["pre-registration"]}
+    input:
+      design: {<<: *design_ok, preregistration_hash: ""}
+      power_context: *power_ok
+  - label: ethics-veto-stops-everything
+    expect: {gate_passed: false, findings_contain: ["ETHICS VETO"]}
+    input:
+      design: *design_ok
+      power_context: *power_ok
+      ethics_veto: "countdown timer resets on reload — manufactured urgency that is not true"
+  - label: clean-design-enters
+    expect: {gate_passed: true, findings_contain: []}
+    input:
+      design: *design_ok
+      power_context: *power_ok

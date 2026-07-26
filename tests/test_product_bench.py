@@ -61,7 +61,7 @@ def test_bench_is_honest_about_failing_probes(tmp_path):
     assert failing and "unreasonable-demand" in failing[0].name
 
 
-def test_crashed_case_still_records_duration(monkeypatch):
+def test_crashed_case_still_records_duration(monkeypatch, tmp_path):
     import autoproduct.product_bench as pb
 
     def _boom(case, provider=None):
@@ -71,7 +71,9 @@ def test_crashed_case_still_records_duration(monkeypatch):
         raise KeyError("new_content")
 
     monkeypatch.setattr(pb, "run_case", _boom)
-    summary = pb.run_product_bench(CASES, limit=1)
+    # repo_dir=tmp_path: the lock must not touch the real repo's pidfile —
+    # a live bench in this checkout would otherwise fail a hermetic test.
+    summary = pb.run_product_bench(CASES, limit=1, repo_dir=tmp_path)
     (case,) = summary.cases
     assert case.autopilot_status.startswith("error: KeyError")
     # A crashed case spent real wall-clock; 0.0 would read as "died instantly".
