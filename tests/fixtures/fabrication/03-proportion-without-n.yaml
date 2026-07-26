@@ -1,0 +1,18 @@
+# Planted failure: "3 of 5 vendors" with no denominator recorded — the
+# proportion claim that cannot be updated when a 6th vendor appears.
+label: proportion-without-n
+expect:
+  checker: claim_lint
+  rule: no_denominator
+kind: market
+claims:
+  - id: C-PROP
+    text: "3 of 5 mid-market ATS vendors expose bulk-export APIs"
+    kind: market_structure
+    source_type: primary_cited
+    evidence:
+      - method: api_doc_probe
+        locator: "https://vendor-b.example/docs/api/exports"
+        retrieved_at: "2026-07-21T11:04:22Z"
+        artifact_hash: "sha256:bb22e3a1f7c85d3daa4b6f9a2c1d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d"
+    falsifier: "A 4th vendor without bulk export moves this to 3/6 — restate, don't defend"

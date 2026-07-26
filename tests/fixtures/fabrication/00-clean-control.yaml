@@ -1,0 +1,46 @@
+# Clean control — a realistic market ledger on which no rule may fire.
+# claim_lint's zero-false-positive bar (§23 week P2) is measured here.
+label: clean-control
+expect:
+  checker: claim_lint
+  rule: null
+kind: market
+claims:
+  - id: C-1
+    text: "Vendor A lists workspace exports at $49 per seat per month"
+    kind: pricing
+    source_type: primary_cited
+    evidence:
+      - method: pricing_page_probe
+        locator: "https://vendor-a.example/pricing"
+        retrieved_at: "2026-07-20T09:00:00Z"
+        artifact_hash: "sha256:aa11d2f0e6b74c2c9d3a5e8f1b0c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c"
+    falsifier: "Vendor A's pricing page shows a different per-seat price on re-probe"
+    expires: "2026-10-20"
+  - id: C-2
+    text: "4 of 6 surveyed mid-market ATS vendors expose bulk-export APIs"
+    kind: market_structure
+    source_type: primary_cited
+    n: 6
+    evidence:
+      - method: api_doc_probe
+        locator: "https://vendor-b.example/docs/api/exports"
+        retrieved_at: "2026-07-21T11:04:22Z"
+        artifact_hash: "sha256:bb22e3a1f7c85d3daa4b6f9a2c1d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d"
+    falsifier: "A re-probe finding fewer than 4 of the 6 vendors with a bulk-export endpoint"
+    expires: "2026-10-21"
+  - id: C-3
+    text: "Our closed deals in the segment averaged $3,600 annual contract value"
+    kind: pricing
+    source_type: primary_measured
+    n: 27
+    evidence:
+      - method: crm_query
+        locator: "crm://reports/closed-won-2026H1"
+        retrieved_at: "2026-07-22T08:30:00Z"
+    falsifier: "Recomputing over the same closed-won set yields a mean outside $3,300-$3,900"
+  - id: C-4
+    text: "Buyers in this segment prefer annual billing over monthly"
+    kind: demand
+    source_type: model_inference
+    falsifier: "Won-deal billing terms showing monthly at parity or above annual"

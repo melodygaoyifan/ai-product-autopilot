@@ -1253,6 +1253,36 @@ def cab_package(
         raise typer.Exit(code=1)
 
 
+@app.command("claim-lint")
+def claim_lint_cmd(
+    ledger: str = typer.Argument(..., help="Path to a claims/*.claim.yaml ledger"),
+    kind: str = typer.Option(
+        "market", help="Artifact kind: opportunity | market | prd | launch"
+    ),
+    mas_dir: str = typer.Option(
+        ".mas", help="Workspace .mas directory (product-policy.yaml, evidence/)"
+    ),
+):
+    """Deterministic claim-ledger lint (§20.53.3) — the outer loop's ears_lint.
+
+    Exit 0 clean, 1 findings (JSONL on stdout), 2 malformed input."""
+    import json
+
+    from autoproduct.product import lint_ledger, load_ledger, load_product_policy
+
+    try:
+        doc = load_ledger(ledger)
+        policy = load_product_policy(mas_dir)
+    except Exception as exc:  # malformed input is exit 2, not a stack trace
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    findings = lint_ledger(doc, kind, policy=policy)
+    for finding in findings:
+        print(json.dumps(finding.model_dump()))
+    if findings:
+        raise typer.Exit(code=1)
+
+
 @app.command("evidence-bundle")
 def evidence_bundle(
     review_id: str = typer.Argument(..., help="Review ID (directory under .mas/reviews/)"),

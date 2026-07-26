@@ -1,0 +1,17 @@
+# Planted failure: a well-sourced claim that states no disconfirming
+# observation. A claim with no falsifier is a slogan (§20.53.3).
+label: missing-falsifier
+expect:
+  checker: claim_lint
+  rule: no_falsifier
+kind: market
+claims:
+  - id: C-SLOGAN
+    text: "Vendor B's changelog announced a bulk-export endpoint in June"
+    kind: competitor_fact
+    source_type: primary_cited
+    evidence:
+      - method: changelog_probe
+        locator: "https://vendor-b.example/changelog"
+        retrieved_at: "2026-07-21T11:04:22Z"
+        artifact_hash: "sha256:bb22e3a1f7c85d3daa4b6f9a2c1d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d"

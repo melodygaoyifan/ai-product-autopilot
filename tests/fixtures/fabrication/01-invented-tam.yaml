@@ -1,0 +1,43 @@
+# Planted failure: the invented TAM — a quantitative market size the model
+# reasoned out. The single most common outer-loop hallucination (§20.53.3).
+label: invented-tam
+expect:
+  checker: claim_lint
+  rule: unsourced_number
+kind: market
+claims:
+  - id: C-TAM
+    text: "The ATS-integration segment is a $2.4B TAM growing 22% CAGR"
+    kind: market_size
+    source_type: model_inference
+    falsifier: "A bottom-up build from sourced factors landing outside $1B-$4B"
+  - id: C-2
+    text: "Vendor A lists workspace exports at $49 per seat per month"
+    kind: pricing
+    source_type: primary_cited
+    evidence:
+      - method: pricing_page_probe
+        locator: "https://vendor-a.example/pricing"
+        retrieved_at: "2026-07-20T09:00:00Z"
+        artifact_hash: "sha256:aa11d2f0e6b74c2c9d3a5e8f1b0c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c"
+    falsifier: "Vendor A's pricing page shows a different per-seat price on re-probe"
+  - id: C-3
+    text: "Our closed deals in the segment averaged $3,600 annual contract value"
+    kind: pricing
+    source_type: primary_measured
+    n: 27
+    evidence:
+      - method: crm_query
+        locator: "crm://reports/closed-won-2026H1"
+        retrieved_at: "2026-07-22T08:30:00Z"
+    falsifier: "Recomputing over the same closed-won set yields a mean outside $3,300-$3,900"
+  - id: C-4
+    text: "Vendor B's changelog announced a bulk-export endpoint in June"
+    kind: competitor_fact
+    source_type: primary_cited
+    evidence:
+      - method: changelog_probe
+        locator: "https://vendor-b.example/changelog"
+        retrieved_at: "2026-07-21T11:04:22Z"
+        artifact_hash: "sha256:bb22e3a1f7c85d3daa4b6f9a2c1d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d"
+    falsifier: "The snapshotted changelog contains no bulk-export entry for June"

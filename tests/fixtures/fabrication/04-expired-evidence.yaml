@@ -1,0 +1,20 @@
+# Planted failure: a competitor's pricing page snapshotted in February and
+# still cited in July. Market facts rot; expired evidence is not evidence
+# about today (§20.53.6). Tests pin today = 2026-07-26.
+label: expired-evidence
+expect:
+  checker: claim_lint
+  rule: stale
+kind: market
+claims:
+  - id: C-STALE
+    text: "Vendor C prices its integration add-on at $199 per month"
+    kind: pricing
+    source_type: primary_cited
+    evidence:
+      - method: pricing_page_probe
+        locator: "https://vendor-c.example/pricing"
+        retrieved_at: "2026-02-01T10:00:00Z"
+        artifact_hash: "sha256:dd44a5c3b9ea7f5fcc6d8b1c4e3f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f"
+    falsifier: "A re-probe of the pricing page showing a different add-on price"
+    expires: "2026-05-01"

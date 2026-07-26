@@ -166,6 +166,7 @@ unaveraged in the product benchmark, including the runs that fail.
 | `serve` | webhook mode: PRs review themselves; incidents POST in |
 | `worker` | queue worker — set `AUTOPRODUCT_QUEUE_DB` on `serve` and run N workers to drain bursts in parallel (SQLite, one host; multi-host needs a shared broker) |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
+| `claim-lint` | outer-loop claim-ledger lint (docs 20–23): unsourced numbers, causal-without-holdout, missing falsifiers, inference ceilings |
 
 Setup: `uv sync`, `ANTHROPIC_API_KEY` (yours — keys live only in your
 environment, are never written to the workspace or git, and every
@@ -200,6 +201,7 @@ gate). Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.10 ✅ | founder experience complete + measured (Studio UI, product benchmark) |
 | v0.11 ✅ | traditional-industry adoption track |
 | v0.12 ✅ | adoption hardening (degraded mode, dwell metric, profile wiring, evaluator graduation) |
+| v0.13 ✅ | product-loop substrate (docs 20–23 weeks P1–P2): typed claim ledger, `claim_lint`, evidence snapshots, synthetic-persona scan, source standing, `user_data_taint` |
 | M2–M7 🔜 | screenshots of the built product, in-Studio correction loop, generated 验收清单, built-in telemetry, pre-built 微信支付/登录 blocks catalog |
 
 ## Star history

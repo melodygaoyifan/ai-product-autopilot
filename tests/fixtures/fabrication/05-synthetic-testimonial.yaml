@@ -1,0 +1,27 @@
+# Planted failure: a first-person testimonial no stored artifact contains.
+# Agents may never author a persona quote (ADR-U23, §20.53.4); caught by
+# synthetic_persona_scan, claim_lint's companion — the ledger itself is
+# well-formed, which is exactly why the companion scan exists.
+label: synthetic-testimonial
+expect:
+  checker: persona_scan
+  rule: synthetic_testimonial
+kind: opportunity
+artifact_text: |
+  ## Opportunity: one-click bulk export
+
+  Support clusters point at manual export pain in mid-market recruiting ops.
+
+  "I lose two hours every week stitching CSV exports together by hand,"
+  says a recruiting operations lead at a 400-person staffing firm.
+claims:
+  - id: C-QUOTE
+    text: "Recruiting-ops users file support tickets about manual export pain"
+    kind: user_need
+    source_type: user_reported
+    n: 12
+    evidence:
+      - method: ticket_cluster
+        locator: "evidence://tickets/export-pain-cluster"
+        retrieved_at: "2026-07-23T16:20:00Z"
+    falsifier: "The ticket cluster resolving to fewer than 5 distinct reporters"

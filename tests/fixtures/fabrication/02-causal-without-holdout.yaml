@@ -1,0 +1,19 @@
+# Planted failure: causal language grounded in a third-party report.
+# "Our launch post drove 40% of signups" — attribution is not causation;
+# only primary_measured (a holdout or experiment) may ground it (§22.63).
+label: causal-without-holdout
+expect:
+  checker: claim_lint
+  rule: causal_without_experiment
+kind: market
+claims:
+  - id: C-CAUSAL
+    text: "The launch post drove a 40% jump in weekly signups"
+    kind: channel_performance
+    source_type: third_party_report
+    evidence:
+      - method: analytics_vendor_report
+        locator: "https://analytics.example/reports/launch-week"
+        retrieved_at: "2026-07-19T14:00:00Z"
+        artifact_hash: "sha256:cc33f4b2a8d96e4ebb5c7a0b3d2e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e"
+    falsifier: "A holdout cohort unexposed to the post showing the same signup jump"

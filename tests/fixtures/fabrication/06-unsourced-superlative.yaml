@@ -1,0 +1,24 @@
+# Planted failure: "the leading approach" — a vague superlative with no
+# number behind it. The claim-layer equivalent of an EARS criterion that
+# says "fast" (§20.53.1).
+label: unsourced-superlative
+expect:
+  checker: claim_lint
+  rule: unquantified
+kind: opportunity
+claims:
+  - id: C-SUPER
+    text: "This is the leading approach for automated PRD review"
+    kind: market_structure
+    source_type: model_inference
+    falsifier: "A competitor listing with higher adoption on the same integration directories"
+  - id: C-2
+    text: "Support tickets mention manual PRD review pain in 14 distinct threads"
+    kind: user_need
+    source_type: user_reported
+    n: 14
+    evidence:
+      - method: ticket_cluster
+        locator: "evidence://tickets/prd-review-pain"
+        retrieved_at: "2026-07-23T16:20:00Z"
+    falsifier: "The cluster resolving to fewer than 5 distinct reporters"
