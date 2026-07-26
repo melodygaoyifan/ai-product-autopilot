@@ -153,7 +153,7 @@ def run_autopilot(
         if spec.status != "proposed":
             outcomes.append(
                 TaskOutcome(task_id=task.id, title=task.title, status="spec_blocked",
-                            detail=f"lint {len(spec.lint_issues)} issue(s)")
+                            detail="; ".join(spec.block_reasons) or "blocked (no reasons recorded)")
             )
             continue
         approve_spec(root, spec.slug)
@@ -542,8 +542,10 @@ def run_feature(
             source_contract=fdr_text,
         )
         if spec.status != "proposed":
-            outcomes.append(TaskOutcome(task_id=task.id, title=task.title,
-                                        status="spec_blocked"))
+            outcomes.append(TaskOutcome(
+                task_id=task.id, title=task.title, status="spec_blocked",
+                detail="; ".join(spec.block_reasons) or "blocked (no reasons recorded)",
+            ))
             continue
         approve_spec(root, spec.slug)
         auto_approvals.append(f"Gate U3 ({spec.slug}): auto — ears_lint + coverage passed")
@@ -645,7 +647,10 @@ def _build_wave_parallel(root, wave, *, provider, model, auto_approvals, fdr_tex
         )
         if spec.status != "proposed":
             outcomes.append(
-                TaskOutcome(task_id=task.id, title=task.title, status="spec_blocked")
+                TaskOutcome(
+                    task_id=task.id, title=task.title, status="spec_blocked",
+                    detail="; ".join(spec.block_reasons) or "blocked (no reasons recorded)",
+                )
             )
             continue
         approve_spec(root, spec.slug)

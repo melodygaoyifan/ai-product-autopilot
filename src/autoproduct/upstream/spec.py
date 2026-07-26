@@ -48,6 +48,11 @@ class Spec(BaseModel):
     test_skeletons: list[TestSkeleton]
     lint_issues: list[dict] = Field(default_factory=list)
     critic_issues: list[dict] = Field(default_factory=list)
+    block_reasons: list[str] = Field(
+        default_factory=list,
+        description="why status is 'blocked' — empty when proposed; a "
+        "gap-blocked spec used to surface as the useless 'lint 0 issue(s)'",
+    )
     revisions: int = 0
     built: bool = False
 
@@ -235,6 +240,20 @@ def run_spec_stage(
     gaps = _coverage_gaps(spec_data)
     has_criteria = bool(spec_data.get("criteria"))
     status = "proposed" if has_criteria and not lint and not gaps else "blocked"
+    block_reasons: list[str] = []
+    if status == "blocked":
+        if not has_criteria:
+            block_reasons.append("no acceptance criteria")
+        if lint:
+            block_reasons.append(
+                f"{len(lint)} EARS lint issue(s): "
+                + "; ".join(str(i.problem)[:80] for i in lint[:3])
+            )
+        if gaps:
+            block_reasons.append(
+                f"criteria {', '.join(str(g) for g in gaps)} covered by no "
+                "test skeleton"
+            )
     slug = _slugify(str(spec_data.get("title") or request))
 
     # SCR guard (ADR-U02): overwriting a spec that has been BUILT is the
@@ -262,6 +281,7 @@ def run_spec_stage(
         ],
         lint_issues=[i.model_dump() for i in lint],
         critic_issues=critics,
+        block_reasons=block_reasons,
         revisions=revision,
     )
     _save(repo_dir, spec)

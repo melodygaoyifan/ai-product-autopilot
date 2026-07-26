@@ -141,3 +141,31 @@ def test_spec_writer_receives_the_literal_source_contract(tmp_path, monkeypatch)
     (root / "FDR.md").write_text(contract, encoding="utf-8")
     spec_mod.run_spec_stage(root, "another task", provider="stub")
     assert '"day5"' in seen[0]["user"]
+
+
+def test_blocked_spec_records_why(tmp_path, monkeypatch):
+    """A gap-blocked spec used to surface downstream as the useless
+    'lint 0 issue(s)' (run 7 case 03 t2; live test t1) — the block reason
+    must name the uncovered criteria."""
+    import itertools
+
+    import autoproduct.upstream.spec as spec_mod
+
+    writer = (
+        'title: "t"\ndesign: |\n  d\n'
+        'criteria:\n'
+        '  - "When a request arrives, the system shall respond."\n'
+        '  - "When a bad request arrives, the system shall reject it."\n'
+        'test_skeletons:\n  - path: tests/test_a.py\n    purpose: "p"\n    covers: [0]\n'
+    )
+    responses = itertools.cycle([writer, "issues: []", "issues: []"])
+
+    class Stub:
+        def complete(self, **_kwargs):
+            return next(responses)
+
+    monkeypatch.setattr(spec_mod, "get_provider", lambda name: Stub())
+    root = init_workspace(tmp_path / "p", "p", "web")
+    spec = spec_mod.run_spec_stage(root, "a task", provider="stub")
+    assert spec.status == "blocked"
+    assert any("covered by no test skeleton" in r and "1" in r for r in spec.block_reasons)
