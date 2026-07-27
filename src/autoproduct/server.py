@@ -225,8 +225,16 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
         re-fired alert updates instead of multiplying."""
         if source == "sentry":
             event = payload.get("event") or payload
+            issue_id = str(
+                payload.get("issue_id")
+                or (payload.get("issue") or {}).get("id")
+                or event.get("issue_id")
+                or ""
+            )
             return {"title": str(event.get("title") or payload.get("message", "sentry event"))[:200],
                     "kind": "error", "source": "sentry",
+                    # The signal reader resolves this later, if a token exists.
+                    "external_id": issue_id,
                     "dedupe_key": str(payload.get("id") or event.get("event_id") or "")}
         if source == "datadog":
             return {"title": str(payload.get("title", "datadog monitor"))[:200],

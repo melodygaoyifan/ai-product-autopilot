@@ -47,6 +47,7 @@ class MaintenanceState(TypedDict, total=False):
     rootcause_model: str
     days: int
     started_at: float  # wall clock — survives resume, unlike monotonic
+    signal: dict | None  # external-source enrichment (maintenance/signals.py)
     suspects: list[dict]
     triage: dict
     learned: dict | None
@@ -61,6 +62,20 @@ def _incident(state: MaintenanceState) -> Incident:
 def intake_node(state: MaintenanceState, *, mirror: YamlMirror) -> dict[str, Any]:
     mirror.write("intake", {"incident": state["incident"]})
     return {}
+
+
+def signal_node(state: MaintenanceState, *, mirror: YamlMirror) -> dict[str, Any]:
+    """Enrich the incident from its source system when a reader exists and a
+    credential is configured (§17.2 maintenance_server). A skipped reader is
+    recorded as skipped: "never asked" must not read like "nothing found"."""
+    incident = _incident(state)
+    if incident.source != "sentry" or not incident.external_id:
+        return {"signal": None}
+    from autoproduct.maintenance.signals import sentry_get_issue
+
+    report = sentry_get_issue(incident.external_id)
+    mirror.write("signal", {"signal": report.model_dump(mode="json")})
+    return {"signal": report.model_dump(mode="json")}
 
 
 def correlate_node(state: MaintenanceState, *, mirror: YamlMirror) -> dict[str, Any]:
@@ -113,13 +128,23 @@ def rootcause_node(state: MaintenanceState, *, mirror: YamlMirror) -> dict[str, 
         if learned
         else ""
     )
+    signal = state.get("signal") or {}
+    # The source system's own account of the issue, still wrapped: it echoes
+    # user-supplied text, so it is data the hypothesis may cite, never
+    # instructions (ADR-U03).
+    signal_block = (
+        f"\n\n<source_system_issue>\n{signal.get('wrapped', '')}\n"
+        "</source_system_issue>"
+        if signal.get("status") == "ok"
+        else ""
+    )
     raw = provider_impl.complete(
         model=state["rootcause_model"],
         system=_ROOTCAUSE_SYSTEM,
         user=(
             f"<incident>\n{_incident(state).text}\n</incident>\n\n"
             f"<suspect_commits>\n{_render_suspects(suspects)}\n</suspect_commits>"
-            f"{skill_block}"
+            f"{skill_block}{signal_block}"
         ),
         max_tokens=1024,
     )
@@ -139,6 +164,8 @@ def finalize_node(state: MaintenanceState, *, mirror: YamlMirror) -> dict[str, A
         else None
     )
     learned = state.get("learned")
+    signal = state.get("signal") or {}
+    signal_status = signal.get("status", "")
 
     from autoproduct.policy import load_policy
 
@@ -181,6 +208,7 @@ def finalize_node(state: MaintenanceState, *, mirror: YamlMirror) -> dict[str, A
                 else "no root-cause pass (P4)"
             )
             + f"; {len(state.get('suspects', []))} suspect commit(s)"
+            + (f"; sentry: {signal_status}" if signal_status else "")
             + (f"; learned skill applied: {learned['name']}" if learned else "")
             + (f"; skill drafted: {drafted.name} (proposed)" if drafted else "")
             + f"; {time.time() - state['started_at']:.0f}s"
@@ -197,13 +225,15 @@ def build_maintenance_graph(*, repo_dir: str = ".", incident_id: str | None = No
 
     graph = StateGraph(MaintenanceState)
     graph.add_node("intake", functools.partial(intake_node, mirror=mirror))
+    graph.add_node("signal", functools.partial(signal_node, mirror=mirror))
     graph.add_node("correlate", functools.partial(correlate_node, mirror=mirror))
     graph.add_node("triage", functools.partial(triage_node, mirror=mirror))
     graph.add_node("learned", functools.partial(learned_node, mirror=mirror))
     graph.add_node("root_cause", functools.partial(rootcause_node, mirror=mirror))
     graph.add_node("finalize", functools.partial(finalize_node, mirror=mirror))
     graph.set_entry_point("intake")
-    graph.add_edge("intake", "correlate")
+    graph.add_edge("intake", "signal")
+    graph.add_edge("signal", "correlate")
     graph.add_edge("correlate", "triage")
     graph.add_edge("triage", "learned")
     graph.add_conditional_edges(

@@ -367,7 +367,7 @@ def test_stage_tools_return_errors_as_data(repo):
     assert "bad arguments" in call_stage_tool("migration_scan", repo, {"wrong": 1})
     assert set(stage_tool_names()) == {
         "migration_scan", "workflow_scan", "canary_scan",
-        "recent_commits", "correlate", "run_tests",
+        "recent_commits", "correlate", "sentry_get_issue", "run_tests",
     }
 
 

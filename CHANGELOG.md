@@ -4,6 +4,33 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.43.0 — the first external-service tool: sentry_get_issue
+- maintenance/signals.py: reads one Sentry issue over the documented REST
+  API, served by the L1 `maintenance` MCP partition. Adding it needed a row
+  in the partition table plus a reader module — no transport, host, or RBAC
+  change, which is what v0.40 claimed and this checks.
+- House rules, all enforced by test: the credential is `AUTOPRODUCT_SENTRY_TOKEN`
+  (raw or a `secret://ENV` ref through the v0.31 layer) and a configured-but-
+  unresolvable ref errors rather than going unauthenticated; no token is a
+  VISIBLE skip naming the env var, never an empty result, because "never
+  asked" must not read like "nothing found"; the reader is read-only (the
+  request builder sends no body and names no write verb, asserted on its
+  source); the payload arrives `wrap_research`-wrapped, so a hostile issue
+  title is data and consuming it taints the run out of L1+ (ADR-U03).
+- Wired end to end: the Sentry webhook now passes the issue id through as
+  `external_id`, and the maintenance graph gained a `signal` step that
+  enriches a Sentry-sourced incident before root-cause analysis and records
+  the wrapped payload in the mirror. A manual incident never calls out.
+- **Bug the suite found:** substring-scrubbing the token shredded any payload
+  containing its characters — with a 1-character token, everything. Scrubbing
+  now has a length floor, because mangling a payload is worse than not
+  scrubbing a string too short to be a credential.
+- Honest scope: exercised hermetically against a stub transport. It has NOT
+  been run against a live Sentry org here — no credential exists in this
+  repo to do that with, and the module docstring says so instead of implying
+  coverage it lacks.
+- Suite: 891 -> 908 hermetic tests
+
 ## v0.42.0 — grounding enforced on every build, and the gap it found
 - The Context Manifest is now wired into the build writer, not just
   available: every build assembles a manifest, records it at

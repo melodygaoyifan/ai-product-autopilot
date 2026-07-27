@@ -1,18 +1,18 @@
 """L1/L2 tool implementations served over MCP (doc 11 §17.2, second half).
 
-The §17.2 table names eight servers. v0.37 shipped the two L0 ones. The
-remaining six are listed there with tools that mostly do not exist in this
-codebase — `terraform_validate`, `sentry_get_issue`, `datadog_query_metrics`
-and friends are external-service integrations nobody has built. Stubbing
-them to complete a table would be exactly the dishonesty the map's "open"
-column exists to prevent.
+The §17.2 table names eight servers. v0.37 shipped the two L0 ones; v0.40
+partitioned the L1/L2 tools that already existed, and v0.43 added the first
+external-service integration. What is still unbuilt (`terraform_validate`,
+`datadog_query_metrics`, and the rest) stays named as open rather than
+stubbed — a shim that isolates nothing would be exactly the dishonesty the
+map's "open" column exists to prevent.
 
-So this module partitions the L1/L2 tools that **do** exist:
+This module holds the L1/L2 tool implementations:
 
 | server | risk | tools | what it wraps |
 |---|---|---|---|
 | `deploy` | L1 | `migration_scan`, `workflow_scan`, `canary_scan` | the deterministic deploy probes |
-| `maintenance` | L1 | `recent_commits`, `correlate` | git history + incident↔commit correlation |
+| `maintenance` | L1 | `recent_commits`, `correlate`, `sentry_get_issue` | git history, incident↔commit correlation, Sentry issue reads |
 | `test_exec` | L2 | `run_tests` | the test gate, which EXECUTES repo code |
 
 What this buys beyond the in-process call:
@@ -29,9 +29,11 @@ What this buys beyond the in-process call:
    `test_exec` being L2 is that tests execute code, so a malicious test
    could otherwise affect the harness process. That is now a child process.
 
-External-service integrations stay unbuilt and named as open. When they
-arrive, they are new tools in an existing partition — configuration, not
-architecture.
+`sentry_get_issue` (v0.43) is the first external-service tool, and it
+proved that claim: adding it was a registration in this table plus a reader
+module, with no change to the transport, the host, or the RBAC. The
+remaining §17.2 integrations (datadog, pagerduty, prometheus, loki, jaeger)
+follow the same shape.
 """
 
 from __future__ import annotations
@@ -115,6 +117,20 @@ def recent_commits_tool(root: pathlib.Path, days: int = 7, limit: int = 30) -> s
     from autoproduct.maintenance.correlate import recent_commits
 
     return _report(recent_commits(str(root), days=int(days), limit=int(limit)))
+
+
+@_register("sentry_get_issue", 1)
+def sentry_get_issue_tool(root: pathlib.Path, issue_id: str) -> str:
+    """The first real external-service tool from §17.2's table. Read-only,
+    availability-gated, and its payload arrives research-wrapped so
+    consuming it taints the run out of L1+ (ADR-U03)."""
+    from autoproduct.maintenance.signals import sentry_get_issue
+
+    report = sentry_get_issue(issue_id)
+    if report.status != "ok":
+        # A skip is reported, never rendered as "nothing found".
+        return _report({"status": report.status, "detail": report.detail})
+    return report.wrapped
 
 
 @_register("correlate", 1)

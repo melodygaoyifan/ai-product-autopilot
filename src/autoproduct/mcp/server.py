@@ -12,10 +12,11 @@ stage servers (v0.40) whose tools exist — deploy probes, maintenance
 correlation, and test execution. Each declares a risk tier, and the host
 refuses to mount one above the caller's ceiling.
 
-The §17.2 table's external-service tools (`terraform_validate`,
-`sentry_get_issue`, `datadog_query_metrics`, …) are unbuilt and stay named
-as open rather than stubbed: when they arrive they are new tools in an
-existing partition, which is configuration rather than architecture.
+`sentry_get_issue` (v0.43) is the first external-service tool, and adding
+it needed only a row in this table plus a reader module — no transport,
+host, or RBAC change. The remaining §17.2 integrations
+(`terraform_validate`, `datadog_query_metrics`, …) stay named as open rather
+than stubbed.
 """
 
 from __future__ import annotations
@@ -29,14 +30,14 @@ from autoproduct.mcp import protocol
 
 # server name → tools it serves (doc 11 §17.2). L0 partitions serve the
 # voter tool registry; L1/L2 partitions serve the stage tools in
-# mcp/stage_tools.py. External-service tools from the §17.2 table
-# (terraform_validate, sentry_get_issue, …) are unbuilt and stay named as
-# open rather than stubbed.
+# mcp/stage_tools.py. The §17.2 external-service tools that remain unbuilt
+# (terraform_validate, datadog_query_metrics, …) stay named as open in the
+# implementation map rather than stubbed here.
 SERVER_TOOLS: dict[str, tuple[str, ...]] = {
     "read_only": ("read_file", "grep", "list_files"),
     "code_intel": ("symbol_refs",),
     "deploy": ("migration_scan", "workflow_scan", "canary_scan"),
-    "maintenance": ("recent_commits", "correlate"),
+    "maintenance": ("recent_commits", "correlate", "sentry_get_issue"),
     "test_exec": ("run_tests",),
 }
 
@@ -130,6 +131,15 @@ TOOL_SCHEMAS: dict[str, dict] = {
             "properties": {"incident_text": {"type": "string"},
                            "days": {"type": "integer"}},
             "required": ["incident_text"],
+        },
+    },
+    "sentry_get_issue": {
+        "description": "Read one Sentry issue (read-only; payload is wrapped "
+                       "as untrusted research).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"issue_id": {"type": "string"}},
+            "required": ["issue_id"],
         },
     },
     "run_tests": {

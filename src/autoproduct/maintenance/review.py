@@ -38,6 +38,11 @@ class Incident(BaseModel):
     title: str
     body: str = ""
     source: str = "manual"
+    external_id: str = Field(
+        default="",
+        description="the id in the source system (e.g. a Sentry issue id) — "
+        "what the signal readers in maintenance/signals.py resolve",
+    )
 
     @classmethod
     def load(cls, path: str | Path) -> "Incident":
