@@ -9,25 +9,23 @@ same scoring. What differs is the verdict taxonomy and the policy input:
 - Trust tier ceiling: this stage RECOMMENDS. PROMOTE means "nothing blocks
   promotion", never "promoted" — production deploys stay human-executed
   forever (§08.1.8, hard architectural ceiling).
+
+This module holds the stage's primitives (policy, verdict taxonomy,
+deterministic enforcement); the checkpointed orchestration lives in
+`deploy/graph.py` since v0.32 (plan D15) — `run_deploy_review` is
+re-exported from there unchanged.
 """
 
 from __future__ import annotations
 
 import enum
-import time
-import uuid
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field
 
-from autoproduct import scoring, verify
-from autoproduct.deploy.probes import canary_scan, migration_scan, workflow_scan
-from autoproduct.diff import ParsedDiff, fetch_diff, parse_unified_diff
-from autoproduct.mirror import YamlMirror
-from autoproduct.state import Severity, VoterFinding, VoterOutput, VoterStatus
-from autoproduct.voters import load_voters
+from autoproduct.diff import ParsedDiff
+from autoproduct.state import Severity, VoterFinding
 
 DEFAULT_POLICY = {
     "tier": "insight",  # insight | assistive (autonomous requires track record, v0.8+)
@@ -122,137 +120,3 @@ def decide(findings: list[VoterFinding], blocked: list[str]) -> DeployVerdict:
     if findings or len(blocked) >= 2:
         return DeployVerdict.HOLD_FOR_HUMAN
     return DeployVerdict.PROMOTE
-
-
-def run_deploy_review(
-    target: str,
-    *,
-    repo_dir: str = ".",
-    skills_dir: str = "skills/deploy",
-    provider_override: str | None = None,
-    diff_text: str | None = None,
-    lint_only: bool = False,
-) -> DeployResult:
-    """`lint_only` is the substrate ladder's degraded mode (ADR-U15): only
-    the deterministic slice runs (probes + policy scan) — no voters, no
-    verification. Because the voter dimension never ran, a lint-only run can
-    escalate or hold but never PROMOTE, and it never feeds the promotion
-    track record."""
-    started = time.monotonic()
-    diff = (
-        parse_unified_diff(diff_text)
-        if diff_text is not None
-        else fetch_diff(target, repo_dir=repo_dir)
-    )
-    policy = load_policy(repo_dir)
-    review_id = uuid.uuid4().hex[:12]
-    mirror = YamlMirror(Path(repo_dir) / ".mas" / "deploy-reviews", review_id)
-
-    from autoproduct.deploy.probes import detect_deploy_files
-
-    deploy_files = detect_deploy_files(diff.changed_files)
-
-    reports = [
-        migration_scan(diff, repo_dir),
-        workflow_scan(diff, repo_dir),
-        canary_scan(diff, repo_dir),
-    ]
-    findings: list[VoterFinding] = [f for r in reports for f in r.findings]
-    findings += _policy_violations(diff, policy)
-    mirror.write(
-        "probes",
-        {"reports": [r.model_dump(mode="json") for r in reports],
-         "policy_violations": sum(1 for f in findings if f.taxonomy_hint == "deploy:policy")},
-    )
-
-    if lint_only:
-        mirror.write("vote", {"skipped": "lint_only degraded mode — no voters ran"})
-        findings.sort(key=lambda f: list(Severity).index(f.severity))
-        verdict = decide(findings, [])
-        if verdict is DeployVerdict.PROMOTE:
-            verdict = DeployVerdict.HOLD_FOR_HUMAN
-        result = DeployResult(
-            verdict=verdict,
-            tier=policy["tier"],
-            summary=(
-                f"{verdict.value} — DEGRADED config-lint-only (substrate below "
-                f"S4): {len(findings)} deterministic finding(s), voters did NOT "
-                "run, so this is never a promotion recommendation; "
-                f"{len(deploy_files)} deploy-relevant file(s), "
-                f"{time.monotonic() - started:.0f}s"
-            ),
-            findings=findings,
-            deploy_files=deploy_files,
-            artifacts_dir=str(mirror.dir),
-        )
-        mirror.write("final", result.model_dump(mode="json"))
-        return result
-
-    voters = load_voters(skills_dir, provider_override=provider_override)
-    context = _policy_prompt(policy)
-    with ThreadPoolExecutor(max_workers=len(voters)) as pool:
-        outputs = list(
-            pool.map(
-                lambda v: v.run(diff.raw, context=context, repo_dir=repo_dir), voters
-            )
-        )
-    mirror.write("vote", {"voter_outputs": [o.model_dump(mode="json") for o in outputs]})
-
-    voter_findings = [f for o in outputs for f in o.findings]
-    skills = {v.spec.name: v.skill for v in voters}
-    todo = [f for f in voter_findings if f.verification is None]
-
-    def check(finding: VoterFinding) -> None:
-        provider, model, fallback = verify.verifier_config_for(skills[finding.voter])
-        if provider_override:
-            provider, fallback = provider_override, None
-        finding.verification = verify.verify_finding(
-            finding, diff.raw, provider=provider, model=model, fallback=fallback
-        )
-
-    if todo:
-        with ThreadPoolExecutor(max_workers=min(8, len(todo))) as pool:
-            list(pool.map(check, todo))
-        everything = findings + voter_findings
-        for finding in todo:
-            finding.score = scoring.score_finding(finding, everything)
-
-    kept = findings + [
-        f
-        for f in voter_findings
-        if f.verification != "NOT_REPRODUCIBLE" and scoring.passes_threshold(f)
-    ]
-    kept.sort(key=lambda f: list(Severity).index(f.severity))
-    blocked = [o.voter for o in outputs if o.status is not VoterStatus.OK]
-
-    verdict = decide(kept, blocked)
-
-    from autoproduct.deploy import track_record
-
-    track_record.record_review(repo_dir, review_id, verdict.value)
-    ready = track_record.readiness(
-        repo_dir, needed=int(policy.get("promotion_track_record", 10))
-    )
-    tier_note = ""
-    if policy["tier"] == "insight" and ready.eligible:
-        tier_note = (
-            f"; track record {ready.streak}/{ready.needed} correct PROMOTEs — "
-            "eligible for assistive tier (human edits .mas/deploy-policy.yaml)"
-        )
-
-    result = DeployResult(
-        verdict=verdict,
-        tier=policy["tier"],
-        summary=(
-            f"{verdict.value} (tier: {policy['tier']}; recommendation only) — "
-            f"{len(kept)} finding(s), {len(blocked)} blocked voter(s), "
-            f"{len(deploy_files)} deploy-relevant file(s)"
-            f"{tier_note}, {time.monotonic() - started:.0f}s"
-        ),
-        findings=kept,
-        blocked_voters=blocked,
-        deploy_files=deploy_files,
-        artifacts_dir=str(mirror.dir),
-    )
-    mirror.write("final", result.model_dump(mode="json"))
-    return result

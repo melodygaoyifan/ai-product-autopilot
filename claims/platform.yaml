@@ -3,13 +3,13 @@
 # the hermetic suite enforces it (tests/test_editions_platform.py).
 claims:
   - id: PC-1
-    text: "688 hermetic tests pass via uv run pytest at the current tag"
+    text: "694 hermetic tests pass via uv run pytest at the current tag"
     kind: demand
     source_type: primary_measured
-    n: 688
+    n: 694
     evidence:
       - {method: pytest_run, locator: "repo://tests (uv run pytest)",
-         retrieved_at: "2026-07-26T17:30:00Z"}
+         retrieved_at: "2026-07-26T20:10:00Z"}
     falsifier: "the suite collecting or passing a different count at this tag"
   - id: PC-2
     text: "review benchmark: recall 100%, precision 67% on 13 labeled cases against bars of 40% and 50%"
@@ -35,7 +35,7 @@ claims:
     source_type: primary_cited
     evidence:
       - {method: design_doc_citation, locator: "autoproduct-design/11-ultimate-architecture.md section 11.19",
-         retrieved_at: "2026-07-26T17:30:00Z",
+         retrieved_at: "2026-07-26T20:10:00Z",
          artifact_hash: "sha256:1dc92e6ed8bb4d332f580567e379820b6e29646a2fed9522026eb0ed07734ef9"}
     falsifier: "the cited section stating a different floor"
   - id: PC-5

@@ -8,23 +8,24 @@ production — that ceiling is architectural (§08.1.8).
 
 Confidence discipline mirrors the design: a root-cause hypothesis below the
 60-point bar escalates instead of pretending certainty.
+
+This module holds the stage's primitives (incident model, verdicts,
+prompts); the checkpointed orchestration lives in `maintenance/graph.py`
+since v0.32 (plan D15) — `run_maintenance` is re-exported from there
+unchanged.
 """
 
 from __future__ import annotations
 
 import enum
 import json
-import time
 import uuid
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field
 
-from autoproduct.maintenance.correlate import Suspect, correlate
-from autoproduct.mirror import YamlMirror
-from autoproduct.providers import get_provider
-from autoproduct.yamlx import extract_mapping
+from autoproduct.maintenance.correlate import Suspect
 
 CONFIDENCE_MIN = 60
 
@@ -117,107 +118,3 @@ def _render_suspects(suspects: list[Suspect]) -> str:
         f"- {s.sha} (score {s.score}) {s.subject} — files: {', '.join(s.files[:6])}"
         for s in suspects
     )
-
-
-def run_maintenance(
-    incident: Incident,
-    *,
-    repo_dir: str = ".",
-    provider: str = "anthropic",
-    triage_model: str = "claude-haiku-4-5-20251001",
-    rootcause_model: str = "claude-opus-4-8",
-    days: int = 7,
-) -> MaintenanceResult:
-    started = time.monotonic()
-    mirror = YamlMirror(Path(repo_dir) / ".mas" / "incidents", incident.id)
-    mirror.write("intake", {"incident": incident.model_dump(mode="json")})
-
-    suspects = correlate(incident.text, repo_dir, days=days)
-    mirror.write("correlate", {"suspects": [s.__dict__ for s in suspects]})
-
-    provider_impl = get_provider(provider)
-    triage_raw = provider_impl.complete(
-        model=triage_model,
-        system=_TRIAGE_SYSTEM,
-        user=f"<incident>\n{incident.text}\n</incident>",
-        max_tokens=512,
-    )
-    triage = TriageResult.model_validate(extract_mapping(triage_raw, ("priority",)))
-    mirror.write("triage", {"triage": triage.model_dump(mode="json")})
-
-    from autoproduct.maintenance import skills_registry
-
-    learned = skills_registry.match(
-        incident.text, skills_registry.load_registry(repo_dir)
-    )
-    if learned:
-        mirror.write(
-            "learned_skill", {"applied": learned.name, "description": learned.description}
-        )
-
-    root_cause = None
-    if triage.priority in ("P1", "P2", "P3"):
-        skill_block = (
-            f"\n\n<learned_skill name=\"{learned.name}\">\n{learned.body}\n</learned_skill>"
-            if learned
-            else ""
-        )
-        rc_raw = provider_impl.complete(
-            model=rootcause_model,
-            system=_ROOTCAUSE_SYSTEM,
-            user=(
-                f"<incident>\n{incident.text}\n</incident>\n\n"
-                f"<suspect_commits>\n{_render_suspects(suspects)}\n</suspect_commits>"
-                f"{skill_block}"
-            ),
-            max_tokens=1024,
-        )
-        root_cause = RootCauseResult.model_validate(
-            extract_mapping(rc_raw, ("hypothesis",))
-        )
-        mirror.write("root_cause", {"root_cause": root_cause.model_dump(mode="json")})
-
-    if triage.priority == "P4":
-        verdict = MaintenanceVerdict.TRIAGED_LOW_PRIORITY
-    elif root_cause and root_cause.confidence >= CONFIDENCE_MIN:
-        verdict = MaintenanceVerdict.ROOT_CAUSE_PROPOSED
-    else:
-        verdict = MaintenanceVerdict.ESCALATE_INCIDENT_UNRESOLVED
-
-    similar = skills_registry.record_incident(repo_dir, incident.id, incident.text)
-    drafted = None
-    if len(similar) + 1 >= skills_registry.RECURRENCE_THRESHOLD:
-        drafted = skills_registry.maybe_draft_skill(
-            repo_dir,
-            [e.get("text", "") for e in similar] + [incident.text],
-            provider=provider,
-            model=triage_model,
-        )
-        if drafted:
-            mirror.write(
-                "skill_drafted",
-                {"name": drafted.name, "status": drafted.status, "path": drafted.path},
-            )
-
-    result = MaintenanceResult(
-        incident_id=incident.id,
-        verdict=verdict,
-        triage=triage,
-        root_cause=root_cause,
-        suspects=[s.__dict__ for s in suspects],
-        summary=(
-            f"{verdict.value} — {triage.priority}/{triage.category}; "
-            + (
-                f"hypothesis at {root_cause.confidence}% confidence"
-                if root_cause
-                else "no root-cause pass (P4)"
-            )
-            + f"; {len(suspects)} suspect commit(s)"
-            + (f"; learned skill applied: {learned.name}" if learned else "")
-            + (f"; skill drafted: {drafted.name} (proposed)" if drafted else "")
-            + f"; {time.monotonic() - started:.0f}s"
-        ),
-        artifacts_dir=str(mirror.dir),
-    )
-    mirror.write("final", result.model_dump(mode="json"))
-    return result

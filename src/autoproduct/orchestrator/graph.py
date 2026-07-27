@@ -17,14 +17,12 @@ later milestones.
 from __future__ import annotations
 
 import functools
-import sqlite3
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 import yaml as yaml_lib
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import Command, interrupt
 
@@ -34,6 +32,7 @@ from autoproduct import leader as leader_mod
 from autoproduct import scoring, verify
 from autoproduct.diff import ParsedDiff, fetch_diff, parse_unified_diff
 from autoproduct.mirror import YamlMirror
+from autoproduct.orchestrator.checkpoint import build_saver, encryption_status
 from autoproduct.orchestrator.mode_router import select_mode
 from autoproduct.state import (
     LeaderResult,
@@ -425,10 +424,7 @@ def build_graph(
     graph.add_edge("hitl", "post")
     graph.add_edge("post", END)
 
-    checkpoint_db = Path(repo_dir) / ".mas" / "checkpoints.db"
-    checkpoint_db.parent.mkdir(parents=True, exist_ok=True)
-    saver = SqliteSaver(sqlite3.connect(checkpoint_db, check_same_thread=False))
-    return graph.compile(checkpointer=saver), review_id
+    return graph.compile(checkpointer=build_saver(repo_dir)), review_id
 
 
 def _mirror_view(name: str, update: dict[str, Any]) -> dict[str, Any]:
@@ -460,6 +456,7 @@ def run_review(
         "repo_dir": repo_dir,
         "skills_dir": skills_dir,
         "provider_override": provider_override,
+        "checkpoint_encryption": encryption_status(),
     }
     meta_path = Path(repo_dir) / ".mas" / "reviews" / review_id / "meta.yaml"
     meta_path.write_text(yaml_lib.safe_dump(meta), encoding="utf-8")
