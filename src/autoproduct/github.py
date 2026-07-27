@@ -32,6 +32,28 @@ def post_pr_comment(target: str, body: str) -> str | None:
     return None if ok else f"gh pr comment failed: {output[:200]}"
 
 
+def merge_pr(target: str, *, method: str = "squash") -> tuple[bool, str]:
+    """Merge a PR. Reachable ONLY through `automation.evaluate_merge`
+    returning allowed=True (ADR-031) — never called from a review path.
+
+    Deliberately no `--admin`: if branch protection blocks the merge, that
+    is a human's configured intent and this must fail, not override it.
+    """
+    if not PR_URL.match(target):
+        return False, "target is not a PR URL; refusing to merge"
+    if method not in ("squash", "merge", "rebase"):
+        return False, f"unknown merge method {method!r}"
+    return _gh(["pr", "merge", target, f"--{method}"])
+
+
+def pr_head_branch(target: str) -> str | None:
+    if not PR_URL.match(target):
+        return None
+    ok, output = _gh(["pr", "view", target, "--json", "headRefName",
+                      "-q", ".headRefName"])
+    return output.strip() if ok else None
+
+
 def create_issue(repo_dir: str, title: str, body: str) -> tuple[str | None, str | None]:
     """Open a HITL issue on the reviewed repo's origin. Returns
     (issue_url, error_note)."""

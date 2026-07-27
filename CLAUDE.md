@@ -14,8 +14,14 @@ learned section below.
 - Voter tools are read-only, risk L0–L2, allowlisted in skill frontmatter,
   and budget-enforced at the `ToolBox` boundary. L3/L4 tools (secrets,
   migrations, deploys, auth) must not exist in any voter-reachable registry.
-- The system never merges PRs, never pushes to main on its own, and the
-  compounding loop only ever proposes CLAUDE.md changes via PR.
+- The system never pushes to main on its own, and the compounding loop
+  only ever proposes CLAUDE.md changes via PR. Merging and deploy
+  execution exist only behind a human-authored, attributed, expiring
+  policy file (`.mas/automerge-policy.yaml`, `.mas/deploy-exec-policy.yaml`
+  — ADR-031): disarmed by default, exact branch names only, earned by
+  track record, and never for a diff touching migrations, CI, IaC,
+  `CLAUDE.md`, `.mas/`, or the policy files themselves. No agent may arm
+  or widen a policy. Auto-hotfix remains out entirely.
 - A voter that cannot judge returns a `BLOCKED_*` status — never an empty
   findings list, never a guess. Findings require verbatim `evidence`.
 

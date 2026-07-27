@@ -1769,6 +1769,128 @@ def voter_gate_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("automerge")
+def automerge_cmd(
+    review_id: str = typer.Argument(..., help="A finished review's id"),
+    repo_dir: str = typer.Option(".", help="Repository the review ran in"),
+    method: str = typer.Option("squash", help="squash | merge | rebase"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Evaluate, never act"),
+):
+    """Merge a reviewed PR — only if an armed .mas/automerge-policy.yaml says
+    every condition holds (ADR-031). Disarmed by default; refusals are
+    logged with their reasons."""
+    from pathlib import Path as _Path
+
+    import yaml as _yaml
+
+    from autoproduct import automation, github
+
+    finals = sorted(
+        (_Path(repo_dir) / ".mas" / "reviews" / review_id).glob("[0-9]*-final.yaml")
+    )
+    if not finals:
+        console.print(f"[red]no finished review {review_id!r}[/red]")
+        raise typer.Exit(code=2)
+    final = _yaml.safe_load(finals[-1].read_text(encoding="utf-8")) or {}
+    target = str(final.get("target", ""))
+    verdict = str(final.get("verdict", ""))
+    test_report = final.get("test_report") or {}
+    branch = github.pr_head_branch(target) or ""
+
+    try:
+        decision = automation.evaluate_merge(
+            repo_dir,
+            verdict=verdict,
+            branch=branch,
+            changed_files=list((final.get("diff") or {}).get("changed_files") or []),
+            test_gate_status=test_report.get("status"),
+            escalated=bool((final.get("hitl") or {}).get("issue_url")),
+        )
+    except automation.PolicyError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+    if not decision.allowed:
+        automation.record(repo_dir, decision, detail=f"review {review_id}")
+        console.print(f"[yellow]merge refused[/yellow] for review {review_id}:")
+        for reason in decision.reasons:
+            console.print(f"  · {reason}")
+        raise typer.Exit(code=1)
+    if dry_run:
+        console.print(f"[green]merge would proceed[/green] ({target}, {method})")
+        return
+    ok, output = github.merge_pr(target, method=method)
+    automation.record(
+        repo_dir, decision,
+        detail=f"review {review_id}: {'merged' if ok else 'gh failed'} {output[:200]}",
+    )
+    if not ok:
+        console.print(f"[red]gh pr merge failed: {output[:200]}[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]merged[/green] {target}")
+
+
+@app.command("deploy-execute")
+def deploy_execute_cmd(
+    deploy_id: str = typer.Argument(..., help="A finished deploy review's id"),
+    repo_dir: str = typer.Option(".", help="Repository the review ran in"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Evaluate, never act"),
+):
+    """Run the deploy command a human wrote in .mas/deploy-exec-policy.yaml,
+    only on a PROMOTE with every condition met (ADR-031). The system never
+    composes the command."""
+    import subprocess as _sp
+    from pathlib import Path as _Path
+
+    import yaml as _yaml
+
+    from autoproduct import automation
+
+    finals = sorted(
+        (_Path(repo_dir) / ".mas" / "deploy-reviews" / deploy_id).glob("[0-9]*-final.yaml")
+    )
+    if not finals:
+        console.print(f"[red]no finished deploy review {deploy_id!r}[/red]")
+        raise typer.Exit(code=2)
+    final = _yaml.safe_load(finals[-1].read_text(encoding="utf-8")) or {}
+
+    try:
+        policy = automation.load_policy(repo_dir, automation.DEPLOY_EXEC_POLICY)
+        decision = automation.evaluate_deploy(
+            repo_dir,
+            verdict=str(final.get("verdict", "")),
+            branch=str(final.get("branch", "")) or "main",
+            changed_files=list(final.get("deploy_files") or []),
+        )
+    except automation.PolicyError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+    if not decision.allowed:
+        automation.record(repo_dir, decision, detail=f"deploy-review {deploy_id}")
+        console.print(f"[yellow]deploy not executed[/yellow] for {deploy_id}:")
+        for reason in decision.reasons:
+            console.print(f"  · {reason}")
+        raise typer.Exit(code=1)
+    console.print(f"[dim]$ {' '.join(policy.command)}[/dim]")
+    if dry_run:
+        console.print("[green]deploy would proceed[/green]")
+        return
+    proc = _sp.run(  # noqa: S603 — argv comes from the human-written policy
+        policy.command, cwd=repo_dir, capture_output=True, text=True, timeout=1800
+    )
+    automation.record(
+        repo_dir, decision,
+        detail=f"deploy-review {deploy_id}: exit {proc.returncode} "
+               f"{(proc.stdout or proc.stderr)[-200:]}",
+    )
+    console.print((proc.stdout or proc.stderr)[-2000:])
+    if proc.returncode != 0:
+        console.print(f"[red]deploy command exited {proc.returncode}[/red]")
+        raise typer.Exit(code=1)
+    console.print("[green]deploy command completed[/green]")
+
+
 @app.command("tenant")
 def tenant_cmd(
     action: str = typer.Argument(..., help="list | add"),

@@ -4,6 +4,30 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.39.0 — policy-armed merge and deploy execution (ADR-031)
+- `autoproduct automerge <review-id>` and `deploy-execute <id>`: the
+  capabilities the README listed as out-of-scope now exist, DISARMED. A
+  human arms them per repository in `.mas/automerge-policy.yaml` /
+  `.mas/deploy-exec-policy.yaml`; the system's job is to refuse unless
+  every declared condition mechanically holds.
+- The bounding, which is the actual work: absence is never permission
+  (`enabled: false` is the default inside a present file too); branch
+  globs are refused so a policy cannot arm what it does not name;
+  `armed_by` and `expires_at` are required and an expired policy is a hard
+  error; a minimum track record of correct recommendations must exist
+  before the first automated action; only APPROVE/APPROVE_WITH_NOTES may
+  precede a merge and an escalated review's decision stands; migrations,
+  IaC, Dockerfiles, CI workflows, k8s/Helm, CLAUDE.md, `.mas/`, and the
+  policy files themselves always demand a human — so automation can never
+  widen its own permissions; `deploy-execute` runs only the exact argv a
+  human wrote, never one the system composes; no `--admin` escape, so
+  branch protection wins.
+- `.mas/automation-log.jsonl` records actions AND refusals with reasons:
+  "why didn't it merge" deserves the same answer quality as "why did it".
+- CLAUDE.md's invariant revised to match the code, and ADR-031 records the
+  reversal with its mechanism. Auto-hotfix stays out entirely.
+- Suite: 817 -> 856 hermetic tests (36 of the 39 new ones assert refusals)
+
 ## v0.38.0 — multi-tenant server mode (ADR-030) + the ADR directory
 - One `serve` process may now front several isolated workspaces:
   `.mas/tenants.yaml` maps a tenant id to a SHA-256 token hash and a
