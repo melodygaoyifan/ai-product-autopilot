@@ -4,6 +4,23 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.34.0 — Studio live progress, interrupted-build recovery UX, the wire-up gate
+- Building page shows per-task state (from the same workspace files the
+  CLI writes) updating in place via /status polling — signals s1/s3, "it
+  looks frozen while it works"; one reload when the worker exits
+- Interrupted builds (dead worker, no report) get their own page: kept
+  modules shown ✅, per-module 继续 retry buttons through the existing
+  retry-task path (a blanket rebuild would trip the SCR freeze on built
+  specs — deliberately not offered), reset clears the stale pid marker
+- Wire-up gate (tests/test_studio_wireup.py): every form action, fetch,
+  link, and image src rendered by any Studio state must resolve to a
+  registered route with the right method — and every route must be
+  rendered by some state; the /status JSON contract is pinned to what the
+  building-page script reads
+- README: bring-your-own-keys contract spelled out (no shipped keys, no
+  proxy, no metered backend), AUTOPRODUCT_CHECKPOINT_KEY documented,
+  roadmap rows v0.31-v0.34, stale per-review-only recovery limit fixed
+
 ## v0.33.0 — gap plan D15 + D16 remainder: checkpointed deploy/maintenance, encrypted checkpoints
 - Deploy review and maintenance rebuilt as LangGraph graphs on the shared
   `.mas/checkpoints.db` saver (thread ids `deploy:<id>` / `incident:<id>`):

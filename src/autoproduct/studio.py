@@ -13,6 +13,7 @@ runs as the same detached worker the CLI uses.
 from __future__ import annotations
 
 import html
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -84,6 +85,43 @@ def _build_running(root: Path) -> bool:
         return False
 
 
+_TASK_MARKER = re.compile(r"\(task:([\w-]+)\)")
+_STATE_ICON = {"built": "✅", "pending": "⏳"}
+
+
+def _task_states(root: Path) -> list[dict]:
+    """Per-task build state from the workspace files the CLI writes (the
+    Studio is a veneer, never a second source of truth): a spec gains
+    `built: true` as the run progresses — its `(task:<id>)` request marker
+    links it back to the plan — and outcomes.yaml records failures when a
+    run finishes."""
+    plan_path = root / "product" / "plan.yaml"
+    if not plan_path.exists():
+        return []
+    plan = yaml.safe_load(plan_path.read_text(encoding="utf-8")) or {}
+    built_ids: set[str] = set()
+    for spec_file in (root / "specs").glob("*/spec.yaml"):
+        data = yaml.safe_load(spec_file.read_text(encoding="utf-8")) or {}
+        marker = _TASK_MARKER.search(str(data.get("request", "")))
+        if marker and data.get("built"):
+            built_ids.add(marker.group(1))
+    failed: dict[str, str] = {}
+    outcomes_path = root / "product" / "outcomes.yaml"
+    if outcomes_path.exists():
+        for o in yaml.safe_load(outcomes_path.read_text(encoding="utf-8")) or []:
+            if o.get("status") != "built" and o.get("task_id"):
+                failed[o["task_id"]] = str(o.get("status", "failed"))
+    return [
+        {
+            "id": t["id"],
+            "title": t.get("title", t["id"]),
+            "state": "built" if t["id"] in built_ids
+            else failed.get(t["id"], "pending"),
+        }
+        for t in plan.get("tasks", [])
+    ]
+
+
 def _progress(root: Path) -> dict:
     plan_path = root / "product" / "plan.yaml"
     total = built = 0
@@ -94,14 +132,31 @@ def _progress(root: Path) -> dict:
         ["git", "log", "--oneline"], cwd=root, capture_output=True, timeout=60, text=True
     ).stdout
     built = log.count("feat(")
-    return {"total": total, "built": built, "running": _build_running(root)}
+    return {
+        "total": total,
+        "built": built,
+        "running": _build_running(root),
+        "tasks": _task_states(root),
+    }
+
+
+def _task_list_html(tasks: list[dict]) -> str:
+    return "".join(
+        f"<li id='task-{html.escape(t['id'])}'>"
+        f"{_STATE_ICON.get(t['state'], '❌')} {html.escape(t['title'])}"
+        f"{'' if t['state'] in _STATE_ICON else ' <span class=bad>(' + html.escape(t['state']) + ')</span>'}"
+        f"</li>"
+        for t in tasks
+    )
 
 
 def create_studio_app(
     repo_dir: str | Path, *, spawn=None, provider: str = "anthropic"
 ) -> FastAPI:
     root = Path(repo_dir).resolve()
-    app = FastAPI(title="autoproduct studio", docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="autoproduct studio", docs_url=None, redoc_url=None, openapi_url=None
+    )
 
     @app.middleware("http")
     async def same_origin_guard(request: Request, call_next):
@@ -144,12 +199,69 @@ def create_studio_app(
         progress = _progress(root)
 
         if progress["running"]:
-            done, total = progress["built"], progress["total"] or "?"
+            tasks = progress["tasks"]
+            done = sum(1 for t in tasks if t["state"] == "built") or progress["built"]
+            total = progress["total"] or "?"
+            checklist = (
+                f"<ul id=tasks style='list-style:none;padding-left:0'>"
+                f"{_task_list_html(tasks)}</ul>"
+                if tasks
+                else "<p class=muted id=tasks>正在做计划… / planning…</p>"
+            )
+            # Live per-task progress (signal s3: "it looks frozen while it
+            # works") — poll /status, update in place, one full reload when
+            # the worker exits so the report page takes over.
             return _page(
                 "正在搭建 / Building…",
-                f"<div class=card><p>已完成 {done} / {total} 个模块。"
-                f"页面每 15 秒自动刷新。</p></div>"
-                "<script>setTimeout(()=>location.reload(),15000)</script>",
+                f"<div class=card><p>已完成 <b id=done>{done}</b> / "
+                f"<b id=total>{total}</b> 个模块 — 实时更新 / updates live.</p>"
+                f"{checklist}</div>"
+                "<script>\n"
+                "const ICONS={built:'✅',pending:'⏳'};\n"
+                "async function poll(){try{\n"
+                "  const s=await (await fetch('/status')).json();\n"
+                "  if(!s.running){location.reload();return}\n"
+                "  const built=s.tasks.filter(t=>t.state==='built').length;\n"
+                "  document.getElementById('done').textContent=built||s.built;\n"
+                "  if(s.total)document.getElementById('total').textContent=s.total;\n"
+                "  for(const t of s.tasks){\n"
+                "    const li=document.getElementById('task-'+t.id);\n"
+                "    if(li)li.textContent=(ICONS[t.state]||'❌')+' '+t.title\n"
+                "      +(ICONS[t.state]?'':' ('+t.state+')');\n"
+                "  }\n"
+                "}catch(e){}setTimeout(poll,5000)}\n"
+                "poll();\n"
+                "setTimeout(()=>location.reload(),120000)\n"
+                "</script>",
+            )
+        interrupted = (
+            (root / ".mas" / "build.pid").exists()
+            and not report.exists()
+            and progress["tasks"]
+        )
+        if interrupted:
+            tasks = progress["tasks"]
+            unbuilt = [t for t in tasks if t["state"] != "built"]
+            retries = "".join(
+                f"<form method=post action=/retry style='display:inline'>"
+                f"<input type=hidden name=task_id value='{html.escape(t['id'])}'>"
+                f"<button class=secondary>继续 {html.escape(t['title'])}</button></form> "
+                for t in unbuilt
+            )
+            done_note = (
+                "<p class=ok>所有模块其实都做完了 — 在终端运行 "
+                "<code>autoproduct preview</code> 查看产品。</p>"
+                if not unbuilt
+                else "<p>已完成的模块都保留着，逐个继续就行：</p>" + retries
+            )
+            return _page(
+                "搭建中断了 / Build was interrupted",
+                f"<div class=card><b class=warn>上次搭建没有做完就停了。"
+                f"</b><ul style='list-style:none;padding-left:0'>"
+                f"{_task_list_html(tasks)}</ul>{done_note}</div>"
+                "<form method=post action=/reset style='margin-top:1rem'>"
+                "<button class=secondary>改需求，重新来 / Edit FDR &amp; start over"
+                "</button></form>",
             )
         if report.exists():
             features_dir = root / "product" / "features"
@@ -362,7 +474,12 @@ def create_studio_app(
 
     @app.post("/reset")
     def reset():
-        for stale in ("product/CONFIRMATION.md", "product/BUILD-REPORT.md", "FDR-QUESTIONS.md"):
+        for stale in (
+            "product/CONFIRMATION.md",
+            "product/BUILD-REPORT.md",
+            "FDR-QUESTIONS.md",
+            ".mas/build.pid",  # else an interrupted build's marker loops the page
+        ):
             (root / stale).unlink(missing_ok=True)
         return RedirectResponse("/", status_code=303)
 

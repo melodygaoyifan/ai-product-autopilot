@@ -71,4 +71,59 @@ def test_report_state_renders_report(studio):
 def test_status_endpoint(studio):
     client, _, _ = studio
     data = client.get("/status").json()
-    assert set(data) == {"total", "built", "running"}
+    assert set(data) == {"total", "built", "running", "tasks"}
+
+
+# --- live progress + interrupted builds (signal s3 / s1) ----------------------
+
+
+def _fabricate_partial_build(root):
+    import yaml
+
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "plan.yaml").write_text(yaml.safe_dump({
+        "status": "locked", "brief_title": "x", "tasks": [
+            {"id": "t1", "title": "URL store", "estimate_hours": 1},
+            {"id": "t2", "title": "Shorten endpoint", "estimate_hours": 1},
+        ]}), encoding="utf-8")
+    spec_dir = root / "specs" / "url-store"
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    (spec_dir / "spec.yaml").write_text(yaml.safe_dump(
+        {"request": "an item store (task:t1)", "built": True}), encoding="utf-8")
+
+
+def test_building_page_shows_live_per_task_progress(studio):
+    import os
+
+    client, root, _ = studio
+    _fabricate_partial_build(root)
+    (root / ".mas" / "build.pid").write_text(str(os.getpid()))  # "running"
+    page = client.get("/").text
+    assert "fetch('/status')" in page  # polls in place, no blind reload
+    assert "task-t1" in page and "task-t2" in page
+    assert "✅ URL store" in page and "⏳ Shorten endpoint" in page
+
+    status = client.get("/status").json()
+    assert status["running"] is True
+    assert {t["id"]: t["state"] for t in status["tasks"]} == {
+        "t1": "built", "t2": "pending",
+    }
+
+
+def test_interrupted_build_offers_per_task_retry_and_reset_escapes(studio):
+    import subprocess as sp
+    import sys as _sys
+
+    client, root, _ = studio
+    _fabricate_partial_build(root)
+    proc = sp.Popen([_sys.executable, "-c", ""])
+    proc.wait()
+    (root / ".mas" / "build.pid").write_text(str(proc.pid))  # dead worker
+    page = client.get("/").text
+    assert "搭建中断" in page
+    assert "action=/retry" in page and "value='t2'" in page  # unbuilt task
+    assert "value='t1'" not in page  # built modules are kept, not retried
+
+    page = client.post("/reset", follow_redirects=True).text
+    assert "搭建中断" not in page  # stale pid cleared — back to the editor
+    assert not (root / ".mas" / "build.pid").exists()
