@@ -752,8 +752,9 @@ def studio(
     port: int = typer.Option(8433, help="Port"),
     profile: str = typer.Option(None, help="Profile (only needed for a new workspace)"),
     lang: str = typer.Option(
-        "zh", help="UI language: zh (bilingual, default) | en (English only). "
-                   "Your FDR may be in either language regardless."
+        "en", help="UI language: en (English, default) | zh (bilingual "
+                   "Chinese-first). Your FDR may be written in either "
+                   "language whichever UI you choose."
     ),
 ):
     """Founder Studio: the browser UI for the FDR flow (localhost only)."""

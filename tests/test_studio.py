@@ -18,10 +18,26 @@ GOOD_FDR = (
 
 @pytest.fixture
 def studio(tmp_path):
+    """The Chinese-founder flow: a 小程序 workspace with a Chinese FDR, so it
+    asks for the Chinese UI explicitly. English is the default since v0.53;
+    `studio_en` below covers that path."""
     root = init_workspace(tmp_path / "prod", "prod", "miniprogram")
     spawned = []
     client = TestClient(
-        create_studio_app(root, spawn=lambda r: spawned.append(r) or 4242, provider="mock")
+        create_studio_app(root, spawn=lambda r: spawned.append(r) or 4242,
+                          provider="mock", lang="zh")
+    )
+    return client, root, spawned
+
+
+@pytest.fixture
+def studio_en(tmp_path):
+    """The DEFAULT flow: no language argument at all."""
+    root = init_workspace(tmp_path / "prod-en", "prod-en", "web")
+    spawned = []
+    client = TestClient(
+        create_studio_app(root, spawn=lambda r: spawned.append(r) or 4242,
+                          provider="mock")
     )
     return client, root, spawned
 
@@ -157,20 +173,26 @@ def test_english_renders_with_no_chinese_anywhere(tmp_path):
     assert "What does success look like?" in page
 
 
-def test_chinese_default_is_unchanged(tmp_path):
-    """The default must behave exactly as before — existing users see no
-    difference, which is why zh keeps the original bilingual strings."""
+def test_chinese_is_still_available_character_for_character(tmp_path):
+    """Moving the default must not degrade the Chinese UI: `--lang zh` gives
+    exactly what 小程序 founders were using before."""
     root = init_workspace(tmp_path / "zh", "zh", "web")
-    default_page = _page(root, "zh")
-    assert "写下你的产品需求 / Describe your product" in default_page
-    assert "检查并生成计划" in default_page
-    assert "不需要任何技术词汇" in default_page  # the Chinese template
-    # ...and an unset language is the Chinese default.
+    page = _page(root, "zh")
+    assert "写下你的产品需求 / Describe your product" in page
+    assert "检查并生成计划" in page
+    assert "不需要任何技术词汇" in page  # the Chinese template
+
+
+def test_english_is_the_default_when_no_language_is_given(tmp_path):
+    import re
+
     from autoproduct.studio import create_studio_app
 
+    root = init_workspace(tmp_path / "default", "d", "web")
     unset = TestClient(create_studio_app(root, spawn=lambda r: 1,
                                          provider="mock")).get("/").text
-    assert unset == default_page
+    assert unset == _page(root, "en")
+    assert not re.search(r"[一-鿿]", unset)
 
 
 @pytest.mark.parametrize("given", ["EN", "en-US", "en_GB"])
@@ -185,7 +207,7 @@ def test_an_unknown_language_falls_back_rather_than_blanking_the_ui(tmp_path):
     broken one in none."""
     root = init_workspace(tmp_path / "xx", "xx", "web")
     page = _page(root, "klingon")
-    assert "写下你的产品需求" in page
+    assert "<title>Describe your product</title>" in page
 
 
 def test_every_string_exists_in_both_languages():
@@ -207,3 +229,25 @@ def test_the_english_readme_demo_shows_the_english_screenshot():
     assert "docs/media/studio-en.png" in readme
     assert "--lang en" in readme
     assert (repo / "docs" / "media" / "studio-en.png").exists()
+
+
+def test_default_flow_first_visit_is_english(studio_en):
+    client, _root, _ = studio_en
+    page = client.get("/").text
+    assert "<title>Describe your product</title>" in page
+    assert "Fill this in using your own words" in page  # English template
+    assert "How to write a good FDR" in page
+
+
+def test_default_flow_reaches_confirmation_in_english(studio_en):
+    client, root, _ = studio_en
+    english_fdr = (
+        "# Shared task list\n"
+        "The two of us track work in chat and lose it. Anyone adds a task with "
+        "a title and owner; anyone marks it done; we see open and done "
+        "separately.\nMust have: add, mark done, both lists. Not yet: logins.\n"
+        "Success: we stop tracking work in chat messages.\n"
+    )
+    response = client.post("/fdr", data={"fdr": english_fdr}, follow_redirects=True)
+    assert "Start building" in response.text
+    assert (root / "product" / "CONFIRMATION.md").exists()

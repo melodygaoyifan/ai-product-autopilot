@@ -33,9 +33,14 @@ def _workspace(tmp_path, fdr_text: str):
 
 
 def test_template_and_guide_written(tmp_path):
+    """English by default since v0.53; Chinese on request, same six
+    questions either way."""
     path = write_template(tmp_path / "w")
     assert path.name == "FDR.md"
-    assert "不需要任何技术词汇" in path.read_text()
+    assert "Fill this in using your own words" in path.read_text()
+
+    zh = write_template(tmp_path / "zh", lang="zh")
+    assert "不需要任何技术词汇" in zh.read_text()
     guide = (tmp_path / "w" / "FDR-GUIDE.md").read_text()
     assert "Four rules" in guide
     assert "One FDR = one thing" in guide  # the granularity contract

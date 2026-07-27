@@ -80,7 +80,7 @@ def test_launch_post_survives_the_backstops():
         path="/launch/post", title="One document in, an honest product decision out",
         text=text, author_name="Melody Gao",
         author_identity_url="https://github.com/melodygaoyifan",
-        canonical_url="https://github.com/melodygaoyifan/ai-product-autopilot/blob/main/launch/post.md",
+        canonical_url="https://github.com/melodygaoyifan/ai-venture-studio/blob/main/launch/post.md",
         published_at="2026-07-26", reviewer="melody",
         claim_ledger=_platform_ledger(),
     )

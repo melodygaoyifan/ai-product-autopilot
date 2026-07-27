@@ -13,6 +13,10 @@ run:
       unique_visitors_14d: 1
       evidence:
         method: "gh api repos/melodygaoyifan/ai-product-autopilot/traffic/views"
+        # NOTE: the repository was renamed melodygaoyifan/ai-product-autopilot
+        # -> ai-venture-studio on 2026-07-27. This locator is left as it was
+        # RECORDED — an evidence snapshot is not edited after the fact, and
+        # GitHub redirects it. Re-measurements use the new name.
         locator: "https://api.github.com/repos/melodygaoyifan/ai-product-autopilot/traffic/views"
         retrieved_at: "2026-07-26"
       caveat: >-

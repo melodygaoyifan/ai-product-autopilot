@@ -4,6 +4,30 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.53.0 — renamed to ai-venture-studio; English is the UI default
+- **Repository renamed** melodygaoyifan/ai-product-autopilot →
+  **ai-venture-studio**. Live references updated (pyproject URLs, README,
+  launch post, design canon links). GitHub redirects the old URLs, so
+  existing clones and links keep working.
+- **Recorded evidence was NOT rewritten.** The Gate PL5 and experiment-run
+  records cite `gh api repos/…/ai-product-autopilot` with a `retrieved_at`:
+  those are evidence snapshots, and an evidence snapshot is not edited after
+  the fact (the same rule that makes the attention log append-only). Each now
+  carries a note that the repo was renamed on 2026-07-27 and that
+  re-measurements use the new name.
+- **English is now the Studio default** (`DEFAULT_LANGUAGE = "en"`). The UI
+  began Chinese-first because its first users were 小程序 founders; the repo
+  is public and English-speaking, so the default now matches the audience
+  that meets it first. `--lang zh` restores the original bilingual UI
+  character for character — the strings were not touched, only the default —
+  and a test asserts exactly that so the move is not a quiet degradation.
+- The FDR template follows the same default, and the Chinese-founder tests
+  now ask for `lang="zh"` explicitly rather than relying on a default, with
+  new tests covering the English default path end to end.
+- The package and CLI are still named `autoproduct`: renaming those would
+  break every existing install, and that is a separate decision.
+- Suite: 1068 -> 1071 hermetic tests
+
 ## v0.52.0 — the Studio speaks English, and the README demo shows it
 - `autoproduct studio --lang en` renders the entire flow in English. Every
   user-facing string moved to `studio_i18n.py` keyed by language, and the

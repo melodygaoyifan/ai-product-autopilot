@@ -7,21 +7,27 @@ the README's product demo could not be shown in English at all.
 
 So every user-facing string lives here, keyed by language:
 
-- `zh` is the EXISTING bilingual text, character for character. Choosing it
-  changes nothing about how the Studio behaves today.
-- `en` is English only — no bilingual slash, because a bilingual UI is a
-  compromise for a mixed audience, not an improvement for a single one.
+- `en` is English only, and is the DEFAULT — no bilingual slash, because a
+  bilingual UI is a compromise for a mixed audience, not an improvement for
+  a single one.
+- `zh` is the ORIGINAL bilingual text, character for character. `--lang zh`
+  brings back exactly the UI 小程序 founders have been using; the strings
+  were not touched, only the default.
 
-`--lang` picks one. There is deliberately no autodetection: guessing a
-founder's language from a locale header and getting it wrong is worse than
-asking once, and the FDR itself may be in either language regardless of
-which UI they read.
+There is deliberately no autodetection: guessing a founder's language from a
+locale header and getting it wrong is worse than one flag, and the FDR itself
+may be written in either language whichever UI they read.
 """
 
 from __future__ import annotations
 
 LANGUAGES = ("zh", "en")
-DEFAULT_LANGUAGE = "zh"  # unchanged behaviour for existing users
+# English is the default (v0.53). The Studio began Chinese-first because its
+# first users were 小程序 founders; the repository is public and English-
+# speaking, so the default now matches the audience that meets it first.
+# `--lang zh` restores the original bilingual UI in full — nothing was
+# removed, only the default moved.
+DEFAULT_LANGUAGE = "en"
 
 STRINGS: dict[str, dict[str, str]] = {
     # --- page titles ---------------------------------------------------

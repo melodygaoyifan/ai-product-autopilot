@@ -144,7 +144,7 @@ questions: ["...", "..."]
 """
 
 
-def template_for(lang: str = "zh") -> str:
+def template_for(lang: str | None = None) -> str:
     """The blank FDR in the founder's language. The two templates ask the
     same six questions — a translation, not a different form."""
     from autoproduct.studio_i18n import normalize
@@ -152,7 +152,7 @@ def template_for(lang: str = "zh") -> str:
     return TEMPLATE_EN if normalize(lang) == "en" else TEMPLATE
 
 
-def write_template(workspace: str | Path, lang: str = "zh") -> Path:
+def write_template(workspace: str | Path, lang: str | None = None) -> Path:
     root = Path(workspace)
     root.mkdir(parents=True, exist_ok=True)
     (root / "FDR-GUIDE.md").write_text(GUIDE, encoding="utf-8")
