@@ -346,6 +346,15 @@ def triage(
     ),
 ):
     """Gate 6 intake — Maintenance MAS (§09.12): triage + root-cause."""
+    # Substrate ladder guard (ADR-U15): a stage below its
+    # infrastructure floor is inactive-never-degraded. No-op unless the
+    # workspace declares .mas/substrate-profile.yaml.
+    try:
+        check_stage(repo_dir, "maintenance")
+    except StageInactiveError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Run `autoproduct readiness` for the rung roadmap.")
+        raise typer.Exit(code=4) from exc
     from autoproduct.maintenance import Incident, run_maintenance
 
     incident = Incident.load(incident_file)
@@ -520,6 +529,15 @@ def spec(
     provider: str = typer.Option("anthropic", help="Provider (e.g. 'mock')"),
 ):
     """Spec stage: EARS criteria + test skeletons, linted and critiqued."""
+    # Substrate ladder guard (ADR-U15): a stage below its
+    # infrastructure floor is inactive-never-degraded. No-op unless the
+    # workspace declares .mas/substrate-profile.yaml.
+    try:
+        check_stage(repo_dir, "specification")
+    except StageInactiveError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Run `autoproduct readiness` for the rung roadmap.")
+        raise typer.Exit(code=4) from exc
     from autoproduct.upstream import run_spec_stage
 
     result = run_spec_stage(repo_dir, request, provider=provider)
@@ -565,6 +583,15 @@ def build(
 ):
     """Coding stage: test-first implementation of an approved spec; the
     commit is handed to the review pipeline (Gate U4 -> Gate 1)."""
+    # Substrate ladder guard (ADR-U15): a stage below its
+    # infrastructure floor is inactive-never-degraded. No-op unless the
+    # workspace declares .mas/substrate-profile.yaml.
+    try:
+        check_stage(repo_dir, "coding")
+    except StageInactiveError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Run `autoproduct readiness` for the rung roadmap.")
+        raise typer.Exit(code=4) from exc
     from autoproduct.upstream import run_build
 
     result = run_build(repo_dir, slug, provider=provider)
@@ -600,6 +627,15 @@ def discover(
     provider: str = typer.Option("anthropic", help="Provider (e.g. 'mock')"),
 ):
     """Discovery stage: evidence-tagged ProductBrief + hypothesis ledger."""
+    # Substrate ladder guard (ADR-U15): a stage below its
+    # infrastructure floor is inactive-never-degraded. No-op unless the
+    # workspace declares .mas/substrate-profile.yaml.
+    try:
+        check_stage(repo_dir, "discovery")
+    except StageInactiveError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Run `autoproduct readiness` for the rung roadmap.")
+        raise typer.Exit(code=4) from exc
     from autoproduct.upstream import run_discovery
 
     brief = run_discovery(repo_dir, idea, provider=provider)
@@ -626,6 +662,15 @@ def plan(
     provider: str = typer.Option("anthropic", help="Provider (e.g. 'mock')"),
 ):
     """Planning stage: task DAG from the approved brief (dag-checked)."""
+    # Substrate ladder guard (ADR-U15): a stage below its
+    # infrastructure floor is inactive-never-degraded. No-op unless the
+    # workspace declares .mas/substrate-profile.yaml.
+    try:
+        check_stage(repo_dir, "planning")
+    except StageInactiveError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("Run `autoproduct readiness` for the rung roadmap.")
+        raise typer.Exit(code=4) from exc
     from autoproduct.upstream import run_planning
 
     result = run_planning(repo_dir, provider=provider)

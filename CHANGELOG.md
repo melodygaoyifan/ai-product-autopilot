@@ -4,6 +4,30 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.49.0 — the use-case matrix, and the gap it found
+- New `tests/test_use_case_matrix.py` tests the canon's coverage CLAIMS as a
+  matrix instead of trusting that each part works because its own unit test
+  passes: five domain profiles spec-and-build end to end, three editions
+  resolve and lint narrowing-only, and the five-rung substrate ladder
+  activates exactly the stages its floors allow.
+- **The gap it found:** `STAGE_FLOORS` declared floors for eight stages, but
+  only `code_review` and `deploy_review` ever consulted them. So doc 18's
+  "stages below their infrastructure floor are inactive-never-degraded"
+  (ADR-U15) was unenforced for six stages — an S0 team with no git could run
+  `build`, and `triage` ran with no observability configured. discover,
+  plan, spec, build and triage now enforce their floors with the same
+  exit-code-4 refusal, and both directions are pinned: refused BELOW the
+  floor, and never refused AT it (a guard that blocks legitimate work is
+  worse than no guard).
+- Recorded rather than smoothed over: `deploy_review` is the designed
+  exception — above S0 it DEGRADES to config-lint-only instead of going
+  inactive, because a config lint still helps without progressive delivery.
+  A test pins that too, so the asymmetry stays deliberate.
+- An absent `.mas/substrate-profile.yaml` still gates nothing, so no
+  existing workspace starts refusing work because this exists.
+- Suite: 1012 -> 1041 hermetic tests (+3 skips: stages with an S0 floor have
+  no rung below them to be refused at)
+
 ## v0.48.0 — upstream resume, grounding at the spec writer, and the plan closed out
 - **Upstream resume (gap-plan item 15's second half).** A task is the
   expensive unit upstream — spec + build + review, minutes and real money
