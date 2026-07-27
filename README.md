@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-737-brightgreen)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-737-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -236,6 +236,8 @@ including the runs that fail.
 | `deploy-review` · `deploy-outcome` · `triage [--fix]` | Gates 5–6 |
 | `serve` · `worker` | webhook mode + queue workers (SQLite, one host) |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
+
+Install: `pip install autoproduct` ([PyPI](https://pypi.org/project/autoproduct/)) — or clone this repo for the benchmarks, voter fixtures, and bench history.
 
 Setup: `uv sync`, then **your own** `ANTHROPIC_API_KEY`. The repo ships
 no keys, no proxy, and no metered backend: every provider call is billed

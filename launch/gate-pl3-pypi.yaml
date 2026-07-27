@@ -1,0 +1,26 @@
+gate: PL3
+approval:
+  scope:
+    artifact_hash: sha256:2601ec649ab76fc31c4a739455d87b1f8344f9e4082db6cc676c744bb2dff637
+    channel: package_registry
+    surface: pypi.org/project/autoproduct
+    window_start: '2026-07-26'
+    window_end: ''   # a package listing is standing, not a campaign window
+  approver: melody
+  decision: approve
+  evidence: >-
+    operator selected "PyPI (needs your token)" in-session on 2026-07-26
+    and supplied an upload token — publish_external stays
+    FORBIDDEN_AUTONOMOUS; this record is the per-surface approval the
+    authoring policy requires.
+published_to: pypi autoproduct 0.33.1 (wheel + sdist, twine check clean)
+preflight:
+  twine_check: clean
+  clean_venv_install: "autoproduct --help ok; charters load from the wheel"
+  claims_in_listing: >-
+    the PyPI description is README.md — already governed by the
+    platform claim ledger (claims/platform.yaml), no new claims added
+    for this surface.
+verification:
+  method: "pip install autoproduct in a clean venv, importlib.metadata.version == 0.33.1"
+  retrieved_at: "2026-07-26"
