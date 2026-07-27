@@ -16,7 +16,9 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
-_PROFILES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "profiles"
+from ai_venture_studio.paths import profiles_root
+
+_PROFILES_DIR = profiles_root()
 
 
 class Project(BaseModel):

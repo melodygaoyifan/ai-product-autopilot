@@ -61,4 +61,7 @@ jobs:
       - name: check artifacts the way PyPI will
         run: uvx twine check dist/*
       - name: publish
-        run: uv publish        # no token: OIDC, scoped to this workflow
+        # --check-url makes this idempotent: files already on PyPI are skipped
+        # rather than failing the run, so re-tagging or a manual publish
+        # followed by a tag push does not produce a red release.
+        run: uv publish --check-url https://pypi.org/simple/

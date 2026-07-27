@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_BLOCKS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "blocks"
+from ai_venture_studio.paths import blocks_root
+
+_BLOCKS_DIR = blocks_root()
 
 _KEYWORDS = {
     "web/auth.py": {"login", "登录", "auth", "账号", "password", "密码", "register", "注册", "session"},

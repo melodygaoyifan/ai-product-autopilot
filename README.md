@@ -271,7 +271,7 @@ including the runs that fail.
 | `loop` | where the live product cycle stands against the v3.0.0 design gate ([runbook](docs/v3-live-loop.md)) — states, never decides |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
 
-Install: `pip install autoproduct` ([PyPI](https://pypi.org/project/autoproduct/)) — the published distribution is still named `autoproduct`; the rename to `ai-venture-studio` lands with the next release, and the `avs` command ships with it (the `autoproduct` command stays as an alias) — or clone this repo for the benchmarks, voter fixtures, and bench history.
+Install: `pip install ai-venture-studio` ([PyPI](https://pypi.org/project/ai-venture-studio/)) — the command is `avs`, with `autoproduct` kept as an alias. The older `autoproduct` distribution is frozen at its last release — or clone this repo for the benchmarks, voter fixtures, and bench history.
 
 Setup: `uv sync`, then **your own** `ANTHROPIC_API_KEY`. The repo ships
 no keys, no proxy, and no metered backend: every provider call is billed

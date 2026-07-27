@@ -4,6 +4,32 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.54.1 — packaging: every runtime resource now ships in the wheel
+- **0.54.0 was broken for pip users and is yanked.** Publishing it and then
+  installing it FROM PyPI is what found this: `avs init --profile web` — the
+  first command any new user runs — failed with `unknown profile 'web';
+  available: []`, and `avs replay --demo`, the README's no-API-key headline,
+  crashed on a missing directory.
+- The cause was systemic, not a one-off: ten data paths resolved through
+  `parents[N] / "profiles"`-style repo-root arithmetic, which points at
+  `site-packages/../../profiles` once installed. `paths.py` had documented
+  exactly this trap when `skills/` was fixed, and the rest of the class was
+  never swept.
+- `profiles/`, `blocks/`, and the edition presets + offline demo bundle now
+  live inside the package (`edition_data/`, renamed to avoid colliding with
+  `editions.py`), with repo-root symlinks so humans and docs keep the familiar
+  paths. Every consumer resolves through `paths.py`.
+- Development-only data (benchmark corpora, test fixtures) is deliberately
+  still NOT shipped — a wheel should not carry a benchmark corpus — so
+  `repo_data()` returns None and callers can say "needs a checkout" instead of
+  reporting an empty corpus as a result.
+- Verified the way it should have been the first time: installed from PyPI
+  into a clean venv and ran `init --profile web --edition solo` and
+  `replay --demo` end to end.
+- The lesson recorded, because the local build passed every check: a wheel
+  test that only runs `--help` proves the entry point resolves, nothing more.
+  Packaging bugs live in the resources, so a smoke test has to touch them.
+
 ## v0.54.0 — package and CLI renamed: `ai_venture_studio`, command `avs`
 - Release plumbing: `version` in pyproject was 0.33.1 while the CHANGELOG had
   reached v0.54.0 — the two now agree, because publishing a number that

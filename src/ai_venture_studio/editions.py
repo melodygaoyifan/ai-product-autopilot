@@ -21,7 +21,9 @@ from pydantic import BaseModel, Field
 from ai_venture_studio.marketing.channels import BUILTIN_CHANNELS
 
 EDITIONS = ("enterprise", "solo", "engineer")
-EDITIONS_ROOT = pathlib.Path(__file__).resolve().parents[2] / "editions"
+from ai_venture_studio.paths import editions_root
+
+EDITIONS_ROOT = editions_root()
 
 # The non-editable floor: these gate classes never batch (§70.1).
 NEVER_CONSOLIDATE_FLOOR = frozenset(
