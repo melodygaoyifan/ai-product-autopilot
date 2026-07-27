@@ -1,0 +1,18 @@
+# Loop-entry declaration for this repo's own product cycle (v0.36).
+#
+# `autoproduct loop --root launch` reads this to know which stages are in
+# scope. Entering above P0 is legal but never silent: the reason is
+# recorded here, so a skipped stage is a decision on the record rather
+# than a gap nobody noticed.
+cycle:
+  id: autoproduct-launch-1
+  entry_stage: P2
+  entry_reason: >-
+    The product existed before the outer loop was pointed at it, so there
+    was no opportunity to sense (P0) and no market to size before building
+    (P1): the PRD in launch/prd.yaml is the first artifact of this cycle.
+    P0/P1 become in-scope for cycle 2, whose candidates come out of this
+    cycle's Gate PL5 routing (doc 22 §65.6).
+  opened_at: "2026-07-26"
+  loop_index: 1
+  max_loops: 3

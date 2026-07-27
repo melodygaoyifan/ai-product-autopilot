@@ -1769,6 +1769,62 @@ def voter_gate_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("loop")
+def loop_cmd(
+    root: str = typer.Option("launch", help="Cycle artifact directory "
+                                           "(launch/ for this repo's own loop)"),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable state"),
+):
+    """Where the live product loop stands, and what closes the v3.0.0 design
+    gate. Reads the artifacts the stages already wrote; states, never
+    decides — the gate needs a recorded human kill-or-pivot at PL5."""
+    import json as _json
+
+    from autoproduct.product.cycle import read_cycle
+
+    try:
+        state = read_cycle(root)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    if json_out:
+        console.print_json(_json.dumps(state.model_dump(mode="json")))
+        raise typer.Exit(code=0)
+
+    console.print(f"\n[bold]cycle[/bold] {state.root} · entry {state.entry_stage}")
+    if state.entry_reason:
+        console.print(f"[dim]{state.entry_reason.strip()}[/dim]")
+    table = Table(show_lines=False)
+    for col in ("", "stage", "artifacts"):
+        table.add_column(col)
+    for stage in state.stages:
+        mark = "[green]✓[/green]" if stage.present else "[dim]·[/dim]"
+        table.add_row(mark, f"{stage.id} {stage.label}",
+                      ", ".join(stage.artifacts) or "[dim]none[/dim]")
+    console.print(table)
+    gates = Table(show_lines=False)
+    for col in ("", "gate", "record"):
+        gates.add_column(col)
+    for gate in state.gates:
+        mark = "[green]✓[/green]" if gate.present else "[dim]·[/dim]"
+        gates.add_row(mark, f"{gate.id} {gate.label}",
+                      ", ".join(gate.artifacts) or "[dim]none[/dim]")
+    console.print(gates)
+    console.print("[bold]v3.0.0 design gate[/bold]")
+    for criterion in state.criteria:
+        mark = "[green]met[/green]" if criterion.met else "[yellow]not yet[/yellow]"
+        console.print(f"  {mark} {criterion.id}: {criterion.requirement}")
+        console.print(f"        [dim]{criterion.detail}[/dim]")
+    verdict = (
+        "[bold green]design gate MET[/bold green]"
+        if state.design_gate_met
+        else "[bold yellow]design gate not met[/bold yellow]"
+    )
+    console.print(f"\n{verdict} — next: {state.next_action}")
+    if state.pl5_requires_human_decision and state.pl5_decision is None:
+        raise typer.Exit(code=3)  # a fired criterion is waiting on a human
+
+
 @app.command("review-gate")
 def review_gate_cmd(
     voter: str = typer.Option(None, help="One voter; default: all six"),

@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-766-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-778-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **766 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **778 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -235,6 +235,7 @@ including the runs that fail.
 | `review` · `resume` · `recover` · `replay` | review pipeline, HITL, crash recovery (reviews, deploy reviews, and incidents all resume from their checkpoints), audit trail |
 | `deploy-review` · `deploy-outcome` · `triage [--fix]` | Gates 5–6 |
 | `serve` · `worker` | webhook mode + queue workers (SQLite, one host) |
+| `loop` | where the live product cycle stands against the v3.0.0 design gate ([runbook](docs/v3-live-loop.md)) — states, never decides |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
 
 Install: `pip install autoproduct` ([PyPI](https://pypi.org/project/autoproduct/)) — or clone this repo for the benchmarks, voter fixtures, and bench history.
@@ -299,7 +300,8 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.33 ✅ | plan phase D15 + D16 remainder: deploy review and maintenance rebuilt as checkpointed graphs on the shared saver — a crash mid-vote resumes from the last completed super-step via `recover` instead of re-paying the pipeline — and checkpoint rows encrypted at rest under `AUTOPRODUCT_CHECKPOINT_KEY` (honored or loud error, never silent plaintext; mirrors stay readable on purpose) |
 | v0.34 ✅ | Studio live progress + the wire-up gate: the building page shows per-task state updating in place (signals s1/s3 — no more staring at a frozen page), interrupted builds surface per-module 继续 buttons instead of a dead confirm screen, and a bidirectional frontend↔backend wire-up test — every rendered button/link/fetch must resolve to a route, every route must be rendered by some state |
 | v0.35.0 ✅ | the last small open items: registration gates for the six review voters (8 fixtures each, run through the real seat; the vote node fails closed and refuses to review with no roster), per-project `policy:` thresholds in `project.yaml` (unknown keys are a loud error, ranges bounded, a weakened bar stamped into the verdict), and the ready-queue fix — `next_tasks` read a field that never existed, so the plan never advanced past task one |
-| next 🔜 | the v3.0.0 design gate: one live loop ending in a real recorded kill-or-pivot at Gate PL5 |
+| v0.36.0 ✅ | the instrument for that gate: `autoproduct loop` reads the cycle's own artifacts and reports the three criteria — and refuses to call the gate met on a quiet cycle or a recorded 'continue', because the gate is about the loop's ability to *stop* ([runbook](docs/v3-live-loop.md)) |
+| next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history
 

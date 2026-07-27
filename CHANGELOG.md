@@ -4,6 +4,24 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.36.0 — the live-loop instrument for the v3.0.0 design gate
+- autoproduct loop: reads a cycle's artifacts (stages P0-P5, gates
+  PL1/PL2/PL3/PL5) and reports the three v3.0.0 criteria with reasons.
+  States, never decides: a cycle where nothing fired is NOT the gate, and
+  a recorded 'continue' is not either — the gate is about the loop's
+  ability to stop, so only a human kill-or-pivot at PL5 closes it
+  (invariant 14.20, ADR-U19). Exit 3 when a fired criterion is waiting on
+  a human.
+- launch/cycle.yaml: loop-entry declaration. This repo's own cycle entered
+  at P2 (the product predated the loop), recorded with its reason instead
+  of left as a silent gap; P0/P1 are in scope for cycle 2.
+- docs/v3-live-loop.md: what closes the gate, why the system cannot close
+  it for itself, and the exact field a human records.
+- Current honest state: V3-1 and V3-2 met, V3-3 not — the launch PRD's
+  only kill criterion needs four consecutive logged attention weeks and
+  the log holds one untracked week.
+- Suite: 766 -> 778 hermetic tests
+
 ## v0.35.0 — the last small open items: review-voter gates, policy thresholds, the ready-queue fix
 - Review voters now register like every other roster (§11.19):
   `autoproduct review-gate` runs each of the six core charters against 8
