@@ -4,6 +4,34 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.47.0 — the bot fleet: the game profile's last unbuilt check
+- `autoproduct botfleet` runs N parallel bot sessions and triages what they
+  hit: crashes, softlocks, unreachable-state regressions, out-of-bounds
+  positions, and errors. Findings dedupe by signature across sessions and
+  each carries a reproduction command — a bug a fleet found that cannot be
+  replayed by hand is not actionable.
+- **The design decision that made this shippable without an engine:** the
+  fleet is defined by a session PROTOCOL (newline-delimited JSON events), not
+  by a game. So the detectors are real functions over a real stream, verified
+  against real subprocess sessions of a real deterministic simulation
+  (`benchmarks/botfleet/toy_sim.py`, which is also the reference emitter an
+  engine adapter copies). Wiring Unity or Unreal is now an adapter, not a
+  redesign — and that adapter is the honest remaining open item.
+- **Bug the first real run found:** one escaping bot produced 44 findings,
+  because the out-of-bounds signature included the per-tick state hash. A
+  continuing condition is now one finding per session, and the signature
+  names which axis and side left the play area rather than how far along it
+  the bot got. This is exactly what a stubbed stream would not have shown.
+- Honest by construction elsewhere too: a hung session is a crash rather
+  than a hang, a non-zero exit with no crash event is still a crash, an
+  unconfigured or unrunnable command is a VISIBLE skip ("never counted as a
+  clean overnight run"), and an undeclared netem profile is an error naming
+  the declared ones.
+- Scope, per §45.1: the fleet finds crashes and stuck states. A clean report
+  says so explicitly — whether the game is FUN is the human playtest gate's
+  question, and no bot replaces it.
+- Suite: 982 -> 1008 hermetic tests
+
 ## v0.46.0 — the attention collector: making the v3.0.0 criterion able to fire
 - `autoproduct attention` measures the OBSERVABLE FLOOR of weekly
   maintenance attention from ledgers `.mas/` already writes — gate dwell

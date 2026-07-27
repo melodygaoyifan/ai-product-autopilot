@@ -1946,6 +1946,51 @@ def tenant_cmd(
                   "save it now.[/yellow]")
 
 
+@app.command("botfleet")
+def botfleet_cmd(
+    command: str = typer.Argument(..., help="The bot session command "
+                                           "(emits the session protocol on stdout)"),
+    repo_dir: str = typer.Option(".", help="Where to run sessions"),
+    sessions: int = typer.Option(8, help="How many parallel sessions"),
+    seed: int = typer.Option(1, help="Base seed; each session gets seed+i"),
+    bounds: float = typer.Option(None, help="Play-area bound for out-of-bounds "
+                                           "detection (±bounds per axis)"),
+    net_profile: str = typer.Option("", help="Comma-separated netem profiles "
+                                             "(wifi_poor,mobile_4g,intercontinental)"),
+    workers: int = typer.Option(4, help="Concurrency"),
+):
+    """Bot playtests (doc 17 §45.2): run N sessions, triage crashes,
+    softlocks, unreachable states and out-of-bounds positions, dedupe by
+    signature, and print a reproduction command per finding.
+
+    Finds crashes and stuck states — never whether the game is fun. That is
+    the human playtest gate, which no bot replaces (§45.1)."""
+    import shlex
+
+    from autoproduct.lanes.botfleet import run_fleet
+
+    profiles = tuple(p.strip() for p in net_profile.split(",") if p.strip()) or None
+    report = run_fleet(
+        shlex.split(command), cwd=repo_dir, sessions=sessions, base_seed=seed,
+        net_profiles=profiles, bounds=bounds, workers=workers,
+    )
+    color = {"ok": "green", "findings": "yellow", "skipped": "yellow"}.get(
+        report.status, "red"
+    )
+    console.print(f"\n[bold {color}]{report.status}[/bold {color}] — {report.detail}")
+    for finding in report.findings:
+        console.print(f"\n  [yellow]{finding['kind']}[/yellow] "
+                      f"({finding['sessions']} session(s)"
+                      + (f", profiles: {', '.join(finding['net_profiles'])}"
+                         if finding["net_profiles"] else "")
+                      + f")\n    {finding['detail']}")
+        console.print(f"    [dim]reproduce: {finding['reproduce']}[/dim]")
+    if report.status == "findings":
+        raise typer.Exit(code=1)
+    if report.status == "error":
+        raise typer.Exit(code=2)
+
+
 @app.command("attention")
 def attention_cmd(
     week: str = typer.Option(None, help="ISO year-week (default: last week)"),

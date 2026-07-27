@@ -7,11 +7,14 @@ constraints:
   - A desync in any environment is an incident, never a nuisance (invariant 14.26).
   - Balance-constant changes and retail-branch promotion are human decisions — never autonomous.
 spec_extras:
+  - Name the bot-session entry point (a command emitting the session protocol) and the play-area bounds, so bot playtests can run unattended.
   - Name the replay-identity fixture (input stream + expected state-hash cadence) for every simulation-touching criterion.
   - State the tick budget (p99 per-tick ms × tick_rate < 1000ms) and the network-condition profiles the game must stay playable under (wifi_poor / mobile_4g / intercontinental).
 checks:
   - det_sim_scan (deterministic, lanes/realtime.py)
   - replay_identity / cross_build_replay / desync_probe (fixture-driven)
   - perf_spike over WS (reconnect stampede; availability-gated fortio/ghz)
-  - bot playtests under netem profiles (availability-gated; skipped VISIBLY)
+  - bot playtests under netem profiles (lanes/botfleet.py + `autoproduct botfleet`;
+    the session protocol is newline-delimited JSON — see benchmarks/botfleet/toy_sim.py
+    for the reference emitter; availability-gated on a runnable command, skipped VISIBLY)
 stack_hint: 'Deterministic simulation core (integer/fixed-point math, injected RNG and tick clock) separated from presentation. The human playtest gate is the release gate no bot replaces.'
