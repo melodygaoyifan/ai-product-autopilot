@@ -30,6 +30,9 @@ from autoproduct.upstream.context_assembler import (
     collect_candidates,
     content_hash,
     estimate_tokens,
+    grounding_receipts,
+    normalize,
+    verify_prompt_grounding,
     render_manifest,
     require_no_drift,
     verify_sources_read,
@@ -100,10 +103,18 @@ def test_optional_entries_are_dropped_to_fit_the_cap_but_required_never_is(works
     assert manifest.tokens <= manifest.cap_tokens
 
 
+def test_derived_views_are_optional_not_a_second_obligation(workspace):
+    """spec.md renders spec.yaml for a reader. Requiring both would fire a
+    violation over a heading the machine contract never had."""
+    manifest = assemble(workspace, "item-store")
+    assert manifest.entry("specs/item-store/spec.yaml").required is True
+    assert manifest.entry("specs/item-store/spec.md").required is False
+
+
 def test_required_context_over_the_cap_is_a_planning_defect(workspace):
     """A task whose contract does not fit is split, not compressed."""
-    (workspace / "specs" / "item-store" / "spec.md").write_text(
-        "x" * 40_000, encoding="utf-8"
+    (workspace / "specs" / "item-store" / "spec.yaml").write_text(
+        "criteria:\n  - " + "x" * 40_000, encoding="utf-8"
     )
     with pytest.raises(ContextOverflow) as exc:
         assemble(workspace, "item-store", cap_tokens=100)
@@ -309,3 +320,109 @@ def test_untainted_host_behaves_exactly_as_before(repo):
     with MCPHost(repo, ["read_file"], voter="style") as host:
         assert host.taint is None
         assert "def total" in host.call("read_file", {"path": "app/billing.py"})
+
+
+# --- the grounding gate on real generations (v0.42.0) -------------------------
+
+
+def _built_workspace(tmp_path):
+    from autoproduct.upstream import approve_spec, init_workspace
+    from autoproduct.upstream.spec import run_spec_stage
+
+    root = init_workspace(tmp_path / "w", "w", "web")
+    spec = run_spec_stage(root, "an item store API", provider="mock")
+    approve_spec(root, spec.slug)
+    return root, spec.slug
+
+
+def test_module_invariants_now_reach_the_implementer(tmp_path):
+    """The gap the gate was built to find: Code Review enforces
+    .mas/specs/*.spec.yaml, so an implementer that never saw the invariants
+    is being held to a contract it was not shown."""
+    from autoproduct.upstream.build import _module_spec_context
+
+    root, slug = _built_workspace(tmp_path)
+    (root / ".mas" / "specs").mkdir(parents=True, exist_ok=True)
+    (root / ".mas" / "specs" / "store.spec.yaml").write_text(
+        yaml.safe_dump({
+            "module": "store", "paths": ["feature_*.py"],
+            "invariants": ["item ids are stable across restarts and never reused"],
+            "forbidden_side_effects": ["os\\.remove"],
+        }),
+        encoding="utf-8",
+    )
+    block = _module_spec_context(root)
+    assert "item ids are stable across restarts" in block
+    assert "- os\\.remove" in block  # verbatim, no inserted label
+
+    from autoproduct.upstream import run_build
+
+    result = run_build(root, slug, provider="mock")
+    assert result.status == "built", result.detail
+    # And the manifest is on the record for the run.
+    manifest = yaml.safe_load(
+        (root / ".mas" / "manifests" / f"{slug}.yaml").read_text(encoding="utf-8")
+    )
+    module_entries = [
+        e for e in manifest["entries"] if e["kind"] == "module_spec"
+    ]
+    assert module_entries and all(e["required"] for e in module_entries)
+
+
+def test_build_blocks_when_a_required_entry_misses_the_prompt(tmp_path, monkeypatch):
+    """Simulate the regression the gate exists to prevent: a module spec
+    that assembly lists but prompt construction forgot."""
+    import autoproduct.upstream.build as build_mod
+
+    root, slug = _built_workspace(tmp_path)
+    (root / ".mas" / "specs").mkdir(parents=True, exist_ok=True)
+    (root / ".mas" / "specs" / "store.spec.yaml").write_text(
+        yaml.safe_dump({
+            "module": "store", "paths": ["feature_*.py"],
+            "invariants": ["item ids are stable across restarts and never reused"],
+        }),
+        encoding="utf-8",
+    )
+    # The bug: prompt construction silently drops the invariants block.
+    monkeypatch.setattr(build_mod, "_module_spec_context", lambda repo: "")
+    result = build_mod.run_build(root, slug, provider="mock")
+    assert result.status == "error"
+    assert "grounding violation" in result.detail
+    assert "store.spec.yaml" in result.detail
+    assert "unread_required" in result.detail
+
+
+def test_grounding_receipts_read_the_prompt_not_the_models_word(workspace):
+    manifest = assemble(workspace, "item-store")
+    claude = manifest.entry("CLAUDE.md")
+    assert claude.probe and claude.probe in "- no bare asserts"
+
+    prompt = f"<constraints>\n{(workspace / 'CLAUDE.md').read_text()}\n</constraints>"
+    receipts = grounding_receipts(manifest, prompt)
+    assert "CLAUDE.md" in receipts
+    assert "specs/item-store/spec.yaml" not in receipts  # genuinely absent
+
+    violations = verify_prompt_grounding(manifest, prompt)
+    missing = {v.path for v in violations}
+    assert "specs/item-store/spec.yaml" in missing
+    assert ".mas/specs/store.spec.yaml" in missing
+    assert "CLAUDE.md" not in missing
+
+
+def test_probe_survives_a_yaml_rewrap(workspace):
+    """A criterion wrapped at 80 columns on disk and re-wrapped elsewhere in
+    the prompt is the same content — normalization is what makes the receipt
+    mechanism usable rather than brittle."""
+    long_criterion = (
+        "When a client POSTs /items with a non-empty name, the system shall "
+        "store the item and return its integer id within 200ms"
+    )
+    (workspace / "specs" / "item-store" / "spec.yaml").write_text(
+        yaml.safe_dump({"criteria": [long_criterion]}, width=40), encoding="utf-8"
+    )
+    manifest = assemble(workspace, "item-store")
+    entry = manifest.entry("specs/item-store/spec.yaml")
+    # Dumped at a different width — no shared line breaks with the file.
+    prompt = yaml.safe_dump({"criteria": [long_criterion]}, width=200)
+    assert entry.probe in normalize(prompt)
+    assert "specs/item-store/spec.yaml" in grounding_receipts(manifest, prompt)

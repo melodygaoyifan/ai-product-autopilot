@@ -4,6 +4,28 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.42.0 — grounding enforced on every build, and the gap it found
+- The Context Manifest is now wired into the build writer, not just
+  available: every build assembles a manifest, records it at
+  `.mas/manifests/<slug>.yaml`, and BLOCKS when a required entry's content
+  never reached the implementer's prompt. Overflow blocks too, reported as
+  a Planning split proposal rather than trimmed.
+- Receipts for pushed context: `grounding_receipts` probes the prompt for
+  each entry's most distinctive line instead of trusting a model's
+  self-report. This checks assembly, not attention — it cannot prove the
+  model read what it was handed, and the docstring says so.
+- **The gap it found on the first run:** module-spec invariants
+  (`.mas/specs/*.spec.yaml`) were never in the implementer's prompt, even
+  though Code Review enforces them and flags SPEC_DRIFT_UNDOCUMENTED. The
+  implementer was being held to a contract it had not been shown.
+  Invariants and forbidden side effects now ship in the prompt, quoted
+  VERBATIM — the probe requires the contract text itself, and paraphrasing
+  a contract into a prompt is the smell the check exists to catch.
+- Modeling correction: `spec.md` renders `spec.yaml` for a reader, so it is
+  optional rather than a second obligation; requiring both fired a
+  violation over a heading the machine contract never had.
+- Suite: 886 -> 891 hermetic tests
+
 ## v0.41.0 — the ContextAssembler and research-session taint isolation
 - upstream/context_assembler.py (§13.25.2, §13.29.3, §13.35.5): builds a
   task's Context Manifest deterministically under a token cap — spec slice

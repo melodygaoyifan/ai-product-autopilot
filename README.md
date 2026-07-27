@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-886-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-891-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **886 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **891 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -324,6 +324,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.39.0 ✅ | policy-armed automation ([ADR-031](docs/adr/031-policy-armed-automation.md), the hardest reversal): `automerge` and `deploy-execute` exist but stay disarmed until a human writes an attributed, expiring policy naming exact branches — earned by track record, blocked on sensitive paths including the policy files themselves, and logging refusals as carefully as actions |
 | v0.40.0 ✅ | the L1/L2 MCP partitions (deploy probes, maintenance correlation, and test execution — five subprocess servers now) with risk-tier RBAC: a partition above the caller's declared ceiling is never mounted, and the audit ledger finally covers the tools that touch the most; plus the deploy-branch fix, where an unresolvable branch is a refusal rather than an assumed `main` |
 | v0.41.0 ✅ | the Context Manifest (content-hashed context assembly, grounding receipts where an unread contract is a violation, drift detection that refuses to build a spec edited outside the SCR channel, and overflow routed to Planning as a split) and research-session taint isolation (ADR-U03: consume research and the run loses L1+ tools for good, enforced at the transport rather than in a prompt) |
+| v0.42.0 ✅ | grounding enforced on every build: the manifest is assembled, recorded, and checked against the prompt, so a required contract that never reached the writer blocks the build — which immediately found that module-spec invariants were absent from the implementer's prompt while Code Review enforced them, and they are now quoted verbatim |
 | next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history

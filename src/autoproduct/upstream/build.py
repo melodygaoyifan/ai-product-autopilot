@@ -520,6 +520,82 @@ def run_build(
     )
 
 
+def _grounding_gate(repo: Path, slug: str, spec: Spec, prompt: str) -> str:
+    """Assemble the task's Context Manifest, record it, and verify the
+    required contract reached the prompt. Returns "" when clean, else the
+    blocking detail.
+
+    Overflow is Planning's problem, not a compression exercise: a task whose
+    required context does not fit is reported as such rather than silently
+    trimmed (§13.29.3).
+    """
+    from autoproduct.upstream.context_assembler import (
+        ContextOverflow,
+        assemble,
+        persist_manifest,
+        verify_prompt_grounding,
+    )
+
+    files_expected: list[str] = []
+    try:
+        from autoproduct.upstream.plan import TASK_MARKER, load_plan
+
+        marker = TASK_MARKER.search(spec.request or "")
+        if marker:
+            task = next(
+                (t for t in load_plan(repo).tasks if t.id == marker.group(1)), None
+            )
+            files_expected = list(task.files_expected) if task else []
+    except (FileNotFoundError, ValueError):
+        files_expected = []  # standalone spec (no plan): code stays optional
+
+    try:
+        manifest = assemble(
+            repo, slug, task_id=slug, files_expected=files_expected
+        )
+    except ContextOverflow as exc:
+        return (
+            f"{exc.code}: {exc} — split proposal: {'; '.join(exc.split_proposal)}"
+        )
+    persist_manifest(manifest, repo, slug)
+    violations = verify_prompt_grounding(manifest, prompt)
+    if not violations:
+        return ""
+    detail = "; ".join(f"{v.path} ({v.rule})" for v in violations[:4])
+    return (
+        f"grounding violation: required context missing from the implementer's "
+        f"prompt — {detail}. The artifact would be authored blind to a contract "
+        f"a later gate enforces; manifest recorded at .mas/manifests/{slug}.yaml"
+    )
+
+
+def _module_spec_context(repo: Path) -> str:
+    """The invariants Code Review will hold this change to, verbatim enough
+    that the grounding probe finds them."""
+    from autoproduct.module_specs import ModuleSpecError, load_module_specs
+
+    try:
+        specs = load_module_specs(repo / ".mas")
+    except (ModuleSpecError, OSError):
+        return ""  # a malformed module spec is the review stage's finding
+    blocks = []
+    for spec in specs:
+        lines = [f"module {spec.module} (owns {', '.join(spec.paths)})"]
+        if spec.invariants:
+            # Invariants are quoted VERBATIM, one per line, with no inserted
+            # label: the grounding probe requires the contract text itself to
+            # be present, and paraphrasing a contract into a prompt is the
+            # smell that check exists to catch.
+            lines.append("invariants (these must hold after your change):")
+            lines += [f"- {i}" for i in spec.invariants]
+        if spec.forbidden_side_effects:
+            lines.append("forbidden side effects (regex, scanned in your diff):")
+            lines += [f"- {f}" for f in spec.forbidden_side_effects]
+        if len(lines) > 1:
+            blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
 def _approval_drift(repo: Path, slug: str, spec: Spec) -> str:
     """§13.35.5 detector: has the approved contract moved since Gate U3?
 
@@ -615,8 +691,16 @@ def _run_build_inner(
     )
     if blocks:
         existing = (existing + "\n\n" if existing else "") + blocks
+    # Module-spec invariants belong in the implementer's prompt, not only in
+    # the reviewer's: Code Review enforces `.mas/specs/*.spec.yaml` and flags
+    # SPEC_DRIFT_UNDOCUMENTED, so an implementer that never saw the
+    # invariants is being asked to satisfy a contract it was not shown. The
+    # grounding check below is what surfaced this.
+    module_block = _module_spec_context(repo)
     base_user = (
         f"<constraints>\n{constraints}\n</constraints>\n\n"
+        + (f"<module_invariants>\n{module_block}\n</module_invariants>\n\n"
+           if module_block else "")
         + (f"<services>\n{services}\n</services>\n\n" if services else "")
         + f"<repo_tree>\n{_file_tree(repo)}\n</repo_tree>\n\n"
         + (f"{existing}\n\n" if existing else "")
@@ -633,6 +717,15 @@ def _run_build_inner(
         + "\n".join(f"- {s.path}: {s.purpose} (covers {s.covers})" for s in spec.test_skeletons)
         + "\n</spec>"
     )
+    # Grounding gate (§13.25.2): the contract this task will be judged
+    # against must actually be in the prompt. A required manifest entry
+    # whose content never reached the writer is a contract violation
+    # (§11.18.3) — unrecoverable, not a quality note — because the artifact
+    # would be authored blind to something a later gate enforces.
+    grounding = _grounding_gate(repo, slug, spec, base_user)
+    if grounding:
+        return BuildResult(slug=slug, status="error", detail=grounding)
+
     allowed_tests = {s.path for s in spec.test_skeletons}
     pre_existing = {
         str(p.relative_to(repo))

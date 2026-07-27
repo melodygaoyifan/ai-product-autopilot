@@ -50,6 +50,10 @@ _RANK: dict[str, int] = {
 # Kinds a writer cannot be correct without. Everything else is optional and
 # gets taken while it fits.
 _REQUIRED_KINDS = {"spec", "constraints", "module_spec"}
+# ...except artifacts that only RENDER a required one for humans. spec.md is
+# spec.yaml formatted for a reader; demanding both would make the machine
+# contract look like two obligations and fire a violation over a heading.
+_DERIVED_VIEWS = {"spec.md"}
 _CODE_SUFFIXES = (".py", ".js", ".ts", ".tsx", ".wxml", ".java", ".cs", ".go")
 
 
@@ -84,6 +88,12 @@ class ManifestEntry(BaseModel):
     required: bool
     content_hash: str
     tokens: int
+    probe: str = Field(
+        default="",
+        description="distinctive text from this entry whose presence in a "
+        "writer's prompt proves the entry reached it — the receipt mechanism "
+        "for pushed context (see grounding_receipts)",
+    )
 
 
 class ContextManifest(BaseModel):
@@ -112,17 +122,44 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text) // CHARS_PER_TOKEN)
 
 
+PROBE_CHARS = 80
+
+
+def normalize(text: str) -> str:
+    """Collapse all whitespace. Both sides of a grounding probe are
+    normalized, so a line re-wrapped by a YAML dump still matches the same
+    line read from disk — the content reached the writer either way."""
+    return " ".join((text or "").split())
+
+
+def make_probe(text: str) -> str:
+    """The most distinctive line in an artifact.
+
+    The longest line is a good proxy: in a spec it is an acceptance
+    criterion, in CLAUDE.md a constraint, in a module spec an invariant —
+    exactly the content whose absence from a prompt would matter. Short
+    files fall back to their whole normalized text.
+    """
+    lines = [normalize(line) for line in (text or "").splitlines()]
+    meaningful = [line for line in lines if len(line) >= 20]
+    if not meaningful:
+        return normalize(text)[:PROBE_CHARS]
+    return max(meaningful, key=len)[:PROBE_CHARS]
+
+
 def _candidate(root: pathlib.Path, path: pathlib.Path, kind: EntryKind):
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
+    required = kind in _REQUIRED_KINDS and path.name not in _DERIVED_VIEWS
     return ManifestEntry(
         path=str(path.relative_to(root)),
         kind=kind,
-        required=kind in _REQUIRED_KINDS,
+        required=required,
         content_hash=content_hash(text),
         tokens=estimate_tokens(text),
+        probe=make_probe(text),
     )
 
 
@@ -276,6 +313,54 @@ def verify_sources_read(
                 detail="read a different version than the manifest recorded",
             ))
     return violations
+
+
+def grounding_receipts(
+    manifest: ContextManifest, prompt_text: str
+) -> dict[str, str]:
+    """Receipts derived from what a prompt ACTUALLY contains.
+
+    The doc's `ArtifactWriter` has read_file tools and reports its own
+    `sources_read`. Our writers get context *pushed* into the prompt
+    instead, so a self-reported receipt would be the model's word about its
+    own attention. The mechanized equivalent for pushed context is to look:
+    an entry whose probe appears in the prompt demonstrably reached the
+    writer, and one whose probe is absent demonstrably did not.
+
+    This checks **assembly**, not attention — it cannot prove the model read
+    what it was handed. What it does catch is the real and recurring bug:
+    a prompt built without the module-spec invariants the artifact will be
+    judged against.
+    """
+    haystack = normalize(prompt_text)
+    receipts: dict[str, str] = {}
+    for entry in manifest.entries:
+        probe = normalize(entry.probe)
+        if probe and probe in haystack:
+            receipts[entry.path] = entry.content_hash
+    return receipts
+
+
+def verify_prompt_grounding(
+    manifest: ContextManifest, prompt_text: str
+) -> list[GroundingViolation]:
+    """Required entries whose content never made it into the prompt."""
+    return verify_sources_read(manifest, grounding_receipts(manifest, prompt_text))
+
+
+def persist_manifest(
+    manifest: ContextManifest, repo_dir: str | pathlib.Path, slug: str
+) -> pathlib.Path:
+    """Record the manifest beside the run for forensics (§13.35)."""
+    import yaml
+
+    path = pathlib.Path(repo_dir) / ".mas" / "manifests" / f"{slug}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump(manifest.model_dump(), sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return path
 
 
 def render_manifest(
