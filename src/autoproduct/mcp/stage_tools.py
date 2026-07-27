@@ -11,7 +11,7 @@ This module holds the L1/L2 tool implementations:
 
 | server | risk | tools | what it wraps |
 |---|---|---|---|
-| `deploy` | L1 | `migration_scan`, `workflow_scan`, `canary_scan` | the deterministic deploy probes |
+| `deploy` | L1 | `migration_scan`, `workflow_scan`, `canary_scan` + the six §17.2 CLI wrappers (terraform/helm/kubectl/argocd/flagger/railway) | deterministic deploy probes and read-only infrastructure tooling |
 | `maintenance` | L1 | `recent_commits`, `correlate`, and the six §17.2 signal readers (sentry/datadog/pagerduty/prometheus/loki/jaeger) | git history, incident↔commit correlation, external production signals |
 | `test_exec` | L2 | `run_tests` | the test gate, which EXECUTES repo code |
 
@@ -31,9 +31,8 @@ What this buys beyond the in-process call:
 
 The external-service tools (v0.43-v0.44) proved that claim: all six §17.2
 signal readers are registrations in this table plus one shared reader module,
-with no change to the transport, the host, or the RBAC. What remains unbuilt
-is the deploy-side CLI wrappers (terraform/helm/kubectl), which are a
-different shape — binaries rather than HTTP.
+with no change to the transport, the host, or the RBAC. The deploy-side CLI wrappers (v0.45) complete the table's other shape:
+binaries gated on being installed rather than HTTP gated on a credential.
 """
 
 from __future__ import annotations
@@ -107,6 +106,59 @@ def workflow_scan_tool(root: pathlib.Path, diff_text: str) -> str:
 @_register("canary_scan", 1)
 def canary_scan_tool(root: pathlib.Path, diff_text: str) -> str:
     return _scan("canary", root, diff_text)
+
+
+def _external(report) -> str:
+    """A binary wrapper's result as tool output. A skip stays a skip."""
+    return _report(report.model_dump(mode="json"))
+
+
+@_register("terraform_validate", 1)
+def terraform_validate_tool(root: pathlib.Path, config_dir: str) -> str:
+    from autoproduct.deploy.externals import terraform_validate
+
+    return _external(terraform_validate(config_dir, repo_dir=str(root)))
+
+
+@_register("helm_lint", 1)
+def helm_lint_tool(root: pathlib.Path, chart_dir: str) -> str:
+    from autoproduct.deploy.externals import helm_lint
+
+    return _external(helm_lint(chart_dir, repo_dir=str(root)))
+
+
+@_register("kubectl_dry_run", 1)
+def kubectl_dry_run_tool(
+    root: pathlib.Path, manifest: str, server_side: bool = False
+) -> str:
+    """Client-side by default: server-side dry-run talks to whatever cluster
+    the kubeconfig points at, so it is an explicit choice."""
+    from autoproduct.deploy.externals import kubectl_dry_run
+
+    return _external(
+        kubectl_dry_run(manifest, repo_dir=str(root), server_side=bool(server_side))
+    )
+
+
+@_register("argocd_app_diff", 1)
+def argocd_app_diff_tool(root: pathlib.Path, app: str) -> str:
+    from autoproduct.deploy.externals import argocd_app_diff
+
+    return _external(argocd_app_diff(app, repo_dir=str(root)))
+
+
+@_register("flagger_inspect", 1)
+def flagger_inspect_tool(root: pathlib.Path, namespace: str = "default") -> str:
+    from autoproduct.deploy.externals import flagger_inspect
+
+    return _external(flagger_inspect(namespace, repo_dir=str(root)))
+
+
+@_register("railway_inspect", 1)
+def railway_inspect_tool(root: pathlib.Path) -> str:
+    from autoproduct.deploy.externals import railway_inspect
+
+    return _external(railway_inspect(repo_dir=str(root)))
 
 
 # --- maintenance server (L1): production-signal reading ----------------------

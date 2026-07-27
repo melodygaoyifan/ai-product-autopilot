@@ -177,8 +177,10 @@ def test_audit_ledger_records_permitted_and_refused_calls(repo):
 
 
 def test_unroutable_allowlist_entries_are_reported_not_silently_dropped(repo):
-    host = MCPHost(repo, ["read_file", "terraform_validate"], voter="test")
-    assert host.unroutable_tools == ["terraform_validate"]  # unbuilt integration
+    # lsp_references is named in §17.2 but has no MCP registration yet: a
+    # tool no partition serves is REPORTED, not quietly dropped.
+    host = MCPHost(repo, ["read_file", "lsp_references"], voter="test")
+    assert host.unroutable_tools == ["lsp_references"]
     assert host.mounted_servers == ["read_only"]
 
 
@@ -365,11 +367,13 @@ def test_stage_tools_return_errors_as_data(repo):
     assert risk_of("read_file") is None  # L0 lives in the ToolBox, not here
     assert "error: unknown stage tool" in call_stage_tool("nope", repo, {})
     assert "bad arguments" in call_stage_tool("migration_scan", repo, {"wrong": 1})
+    from autoproduct.deploy.externals import DEPLOY_EXTERNALS
     from autoproduct.maintenance.signals import READERS
 
     assert set(stage_tool_names()) == {
         "migration_scan", "workflow_scan", "canary_scan",
-        "recent_commits", "correlate", "run_tests", *READERS,
+        "recent_commits", "correlate", "run_tests",
+        *READERS, *DEPLOY_EXTERNALS,
     }
 
 

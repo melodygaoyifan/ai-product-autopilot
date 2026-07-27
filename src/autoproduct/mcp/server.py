@@ -36,7 +36,12 @@ from autoproduct.mcp import protocol
 SERVER_TOOLS: dict[str, tuple[str, ...]] = {
     "read_only": ("read_file", "grep", "list_files"),
     "code_intel": ("symbol_refs",),
-    "deploy": ("migration_scan", "workflow_scan", "canary_scan"),
+    "deploy": (
+        "migration_scan", "workflow_scan", "canary_scan",
+        # The §17.2 deploy CLI wrappers (deploy/externals.py).
+        "terraform_validate", "helm_lint", "kubectl_dry_run",
+        "argocd_app_diff", "flagger_inspect", "railway_inspect",
+    ),
     "maintenance": (
         "recent_commits", "correlate",
         # The six §17.2 signal readers (maintenance/signals.py).
@@ -120,6 +125,41 @@ TOOL_SCHEMAS: dict[str, dict] = {
             "properties": {"diff_text": {"type": "string"}},
             "required": ["diff_text"],
         },
+    },
+    "terraform_validate": {
+        "description": "terraform validate -json in a config directory.",
+        "inputSchema": {"type": "object",
+                        "properties": {"config_dir": {"type": "string"}},
+                        "required": ["config_dir"]},
+    },
+    "helm_lint": {
+        "description": "helm lint one chart directory.",
+        "inputSchema": {"type": "object",
+                        "properties": {"chart_dir": {"type": "string"}},
+                        "required": ["chart_dir"]},
+    },
+    "kubectl_dry_run": {
+        "description": "kubectl apply --dry-run over a manifest (client-side "
+                       "by default; server_side contacts the current cluster).",
+        "inputSchema": {"type": "object",
+                        "properties": {"manifest": {"type": "string"},
+                                       "server_side": {"type": "boolean"}},
+                        "required": ["manifest"]},
+    },
+    "argocd_app_diff": {
+        "description": "argocd app diff for one application (read-only).",
+        "inputSchema": {"type": "object",
+                        "properties": {"app": {"type": "string"}},
+                        "required": ["app"]},
+    },
+    "flagger_inspect": {
+        "description": "Read Flagger Canary resources in a namespace.",
+        "inputSchema": {"type": "object",
+                        "properties": {"namespace": {"type": "string"}}},
+    },
+    "railway_inspect": {
+        "description": "railway status --json for the linked project.",
+        "inputSchema": {"type": "object", "properties": {}},
     },
     "recent_commits": {
         "description": "Recent commits with touched files, for correlation.",

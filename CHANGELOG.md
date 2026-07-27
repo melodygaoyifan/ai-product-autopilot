@@ -4,6 +4,35 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.45.0 — the deploy-side CLI wrappers complete the §17.2 table
+- terraform_validate, helm_lint, kubectl_dry_run, argocd_app_diff,
+  flagger_inspect, railway_inspect join the L1 `deploy` partition. This is
+  the table's other integration shape: BINARIES gated on being installed,
+  following the pattern tools/external.py set for the scanners — an absent
+  binary is a visible skip with the install hint, never counted as clean.
+- `kubectl_dry_run` defaults to `--dry-run=client`, which never contacts a
+  cluster. Server-side dry-run is real admission validation and more
+  useful, but it talks to whatever cluster the current kubeconfig points
+  at, so it is opt-in per call. A deploy review that silently reached into
+  production because a context happened to be current is exactly the
+  surprise this design spends its budget avoiding.
+- Read-only is structural, not documentation: no wrapper names sync,
+  rollback, up, redeploy, patch, delete, or destroy, and `apply` appears
+  only behind `--dry-run` — asserted against the module's own source.
+- Semantics that matter: argocd exits 1 when a diff EXISTS, so that is
+  findings rather than an error, while auth failures and missing apps are
+  errors; flagger flags unhealthy canaries but never patches one, because
+  promoting or aborting a canary is a human's call.
+- **Bug the tests found:** terraform with no parseable verdict (typically an
+  uninitialized directory) reported "findings: 0 diagnostic(s)", which reads
+  like a pass. A non-answer is now an error naming the likely cause.
+- migration_dryrun from the §17.2 table was already covered by
+  lanes.delivery.migration_rehearsal, so it was not duplicated.
+- Honest scope: hermetic via a stubbed subprocess boundary. None has run
+  against live infrastructure from this repo (no cluster, no cloud
+  credentials); first real invocation per tool stays an open item.
+- Suite: 932 -> 961 hermetic tests
+
 ## v0.44.0 — all six §17.2 signal readers, over one shared core
 - datadog_query_metrics, pagerduty_get_incident, prometheus_query,
   loki_query, jaeger_query_trace join sentry_get_issue in the L1
