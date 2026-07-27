@@ -1,0 +1,18 @@
+voter: design_fidelity
+fixtures:
+  - {label: hardcoded-color-over-token, kind: positive, should_find: true, must_mention: ["token"],
+     artifact: "design spec: buttons use color token --brand-primary.\nbuilt CSS: .btn { background: #4a7cff; }"}
+  - {label: missing-declared-breakpoint, kind: positive, should_find: true, must_mention: ["breakpoint"],
+     artifact: "design spec: breakpoints 640/1024/1440 with a stacked layout under 640.\nbuilt CSS: @media (min-width: 1024px) { ... }  /* the only media query */"}
+  - {label: unstyled-disabled-state, kind: positive, should_find: true, must_mention: ["disabled"],
+     artifact: "design spec: submit button has default, hover, focus, and disabled states.\nbuilt CSS: .submit{...} .submit:hover{...} .submit:focus{...}"}
+  - {label: substituted-component, kind: positive, should_find: true, must_mention: ["spec"],
+     artifact: "design spec: date entry uses the calendar picker component.\nbuilt: <input type=\"text\" placeholder=\"YYYY-MM-DD\"> with a format hint."}
+  - {label: clean-tokenized-build, kind: negative, should_find: false,
+     artifact: "design spec: buttons use --brand-primary; breakpoints 640/1024.\nbuilt CSS: .btn { background: var(--brand-primary); }\n@media (min-width: 640px){...} @media (min-width: 1024px){...} states: default/hover/focus/disabled all styled."}
+  - {label: clean-documented-deviation, kind: negative, should_find: false,
+     artifact: "built uses the native select instead of the spec's dropdown; the deviation is recorded in design-deltas.md with the designer's sign-off dated 2026-07-20."}
+  - {label: boundary-token-alias, kind: boundary, should_find: false,
+     artifact: "design spec: --brand-primary.\nbuilt CSS: .btn { background: var(--btn-bg); } where tokens.css defines --btn-bg: var(--brand-primary);"}
+  - {label: boundary-same-pixels-different-token, kind: boundary, should_find: true, must_mention: ["token"],
+     artifact: "design spec: card borders use --border-muted.\nbuilt CSS: .card { border-color: var(--divider); } — renders identically today; the two tokens diverge in dark theme."}

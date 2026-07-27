@@ -1,0 +1,18 @@
+voter: drift_cost
+fixtures:
+  - {label: silent-schema-widening-cost, kind: positive, should_find: true, must_mention: ["cost"],
+     artifact: "diff: SELECT * FROM raw_events → materialized hourly; raw_events just gained 14 columns from a new SDK; the hourly job's scan doubles and nobody re-estimated cost-per-run."}
+  - {label: distribution-drift-unmonitored, kind: positive, should_find: true, must_mention: ["drift"],
+     artifact: "the churn model's `days_since_last_order` feature: upstream changed order dedup so the median shifted 11→7; no drift monitor exists on the feature table; the model retrains monthly on the shifted input."}
+  - {label: freshness-slo-silently-eaten, kind: positive, should_find: true, must_mention: ["fresh"],
+     artifact: "the daily job's runtime grew from 40m to 3h50m over a quarter (new joins each sprint); the downstream SLA is 'ready by 6am'; the job now finishes 5:50am with no alert margin."}
+  - {label: eval-floor-not-rechecked, kind: positive, should_find: true, must_mention: ["eval"],
+     artifact: "prompt template for the classifier changed in this diff; the eval suite with the 0.85 floor was last run 6 weeks ago; the diff description says 'wording only'."}
+  - {label: clean-monitored-pipeline, kind: negative, should_find: false,
+     artifact: "job declares freshness SHALL freshness <= 2h AT p95, row_count_delta <= 5%; both monitored with alerts; cost-per-run recorded per run; eval gate pinned and green in this PR."}
+  - {label: clean-cost-paid-knowingly, kind: negative, should_find: false,
+     artifact: "diff doubles the lookback window; the PR includes the new scan estimate (2.1x, $14/day → $29/day), the owner's sign-off, and the updated cost_per_run bound."}
+  - {label: boundary-drift-in-a-leaf, kind: boundary, should_find: false,
+     artifact: "an internal-only debug table's distribution shifted; lineage declares consumers: [] and the table carries no SLO; noted in the digest, no gate."}
+  - {label: boundary-seasonal-vs-drift, kind: boundary, should_find: true, must_mention: ["baseline"],
+     artifact: "row counts dropped 35% this week and the drift monitor fired; the PR silences the alert as 'holiday seasonality' without adjusting the baseline definition or citing last year's holiday delta."}

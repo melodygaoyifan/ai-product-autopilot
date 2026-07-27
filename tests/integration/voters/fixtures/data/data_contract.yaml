@@ -1,0 +1,18 @@
+voter: data_contract
+fixtures:
+  - {label: cents-become-dollars, kind: positive, should_find: true, must_mention: ["unit"],
+     artifact: "diff: -amount = row.price_cents\n+amount = row.price_cents / 100\ncolumn name and type unchanged (INTEGER→computed float); downstream finance.report sums `amount` assuming cents."}
+  - {label: population-rule-drift, kind: positive, should_find: true, must_mention: ["revenue"],
+     artifact: "diff: revenue query now includes refunded orders (removed `AND status != 'refunded'`); the column keeps its name; three dashboards read `revenue` with the old rule documented."}
+  - {label: window-change-same-name, kind: positive, should_find: true, must_mention: ["window"],
+     artifact: "diff: active_user window changed 30d → 7d in the CTE; the output column `active_users` keeps its name; the retention job compares it to last quarter's 30d series."}
+  - {label: naive-joined-to-aware, kind: positive, should_find: true, must_mention: ["timezone"],
+     artifact: "diff: +JOIN sessions s ON s.started_at::timestamp = e.created_at  — sessions.started_at is timestamptz (UTC), events.created_at is naive local; the cast strips the zone."}
+  - {label: clean-additive-column, kind: negative, should_find: false,
+     artifact: "diff adds nullable column `discount_code` to orders_daily with a backfilled default NULL; consumers listed in lineage untouched; schema version bumped with a changelog entry."}
+  - {label: clean-rename-with-migration, kind: negative, should_find: false,
+     artifact: "diff renames `amt`→`amount_cents` via expand-contract: new column added and dual-written this PR; consumers migrate next; contract PR scheduled; lineage updated."}
+  - {label: boundary-precision-widening, kind: boundary, should_find: false,
+     artifact: "diff: price NUMERIC(10,2) → NUMERIC(12,2) — pure range widening, same scale, no consumer reads precision metadata."}
+  - {label: boundary-null-semantics-shift, kind: boundary, should_find: true, must_mention: ["null"],
+     artifact: "diff: unknown regions now load as NULL instead of the string 'unknown'; the column type is unchanged; the groupby dashboard has a bar named 'unknown' that will silently vanish."}

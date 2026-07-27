@@ -1724,13 +1724,15 @@ def voter_gate_cmd(
     from autoproduct.product.stage_engine import load_voter_charters
     from autoproduct.product.voter_gate import (
         VoterFixtureError,
+        family_roots,
         record_gate_run,
         run_voter_gate,
     )
 
+    skills_root, fixtures_root = family_roots(stage)
     charters = [
         (name, system)
-        for name, system in load_voter_charters(stage)
+        for name, system in load_voter_charters(stage, skills_root)
         if voter is None or name == voter
     ]
     if not charters:
@@ -1739,7 +1741,8 @@ def voter_gate_cmd(
     failed_any = False
     for name, system in charters:
         try:
-            run = run_voter_gate(stage, name, system, provider=provider)
+            run = run_voter_gate(stage, name, system, provider=provider,
+                                 fixtures_root=fixtures_root)
         except VoterFixtureError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=2) from exc

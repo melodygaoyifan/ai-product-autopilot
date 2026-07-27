@@ -1,0 +1,18 @@
+voter: device_reality
+fixtures:
+  - {label: offline-mid-transaction, kind: positive, should_find: true, must_mention: ["offline"],
+     artifact: "submitOrder(): await api.post('/orders'); on fetch failure shows toast('请检查网络') and clears the cart state."}
+  - {label: state-lost-on-background-kill, kind: positive, should_find: true, must_mention: ["state"],
+     artifact: "the 6-step onboarding keeps answers in a component-level variable; no persistence hooks; OS kill during step 5 restarts at step 1."}
+  - {label: permission-denial-dead-end, kind: positive, should_find: true, must_mention: ["permission"],
+     artifact: "scanReceipt(): if camera permission denied → showDialog('需要相机权限') with a single OK button returning to the same screen; no gallery-upload alternative."}
+  - {label: flagship-sized-animation, kind: positive, should_find: true, must_mention: ["device"],
+     artifact: "device matrix floor: 3GB RAM tier. home screen: 60fps particle background + 12 concurrently animated cards, all images decoded at 4x."}
+  - {label: clean-resilient-flow, kind: negative, should_find: false,
+     artifact: "orders queue locally (sqlite) and sync with retry+backoff; onSaveInstanceState persists the draft; camera denial falls back to gallery upload; animations gated by the low-end tier flag."}
+  - {label: clean-first-launch-offline, kind: negative, should_find: false,
+     artifact: "first launch renders the shell + cached catalog seed from assets; network content hydrates when available with a visible offline banner."}
+  - {label: boundary-declared-online-only, kind: boundary, should_find: false,
+     artifact: "the live-auction screen requires connectivity by nature; it says so, shows reconnect state with countdown, and preserves bid drafts across drops."}
+  - {label: boundary-interruption-audio, kind: boundary, should_find: true, must_mention: ["interrupt"],
+     artifact: "voice-note recording continues writing the buffer while a phone call takes audio focus; the saved note contains 40s of silence with no marker."}

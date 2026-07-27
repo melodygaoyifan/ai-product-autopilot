@@ -4,6 +4,12 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.29.0 — audit gap closures, phase B
+- Voter families: voter-gate now serves web/miniprogram/app/data alongside
+  the product stages (same skills+fixtures contract)
+- Five profile voter charters authored; 8-fixture gates for them and for
+  the three data voters (64 new fixture cases)
+
 ## v0.28.0 — audit gap closures, phase A
 - Web det-tool runners (axe/Lighthouse/size-limit, availability-gated)
 - Data NFR grammar + lineage impact check (doc 18 §48.1)

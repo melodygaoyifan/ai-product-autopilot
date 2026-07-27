@@ -1,0 +1,18 @@
+voter: backfill_safety
+fixtures:
+  - {label: non-idempotent-insert, kind: positive, should_find: true, must_mention: ["idempoten"],
+     artifact: "backfill script: for day in range: INSERT INTO facts SELECT ... WHERE date=day  — no delete-first, no ON CONFLICT; rerunning a crashed run duplicates rows."}
+  - {label: unbounded-backfill, kind: positive, should_find: true, must_mention: ["bound"],
+     artifact: "backfill: UPDATE events SET normalized = f(payload)  — no WHERE, no batching, no LIMIT; the table is 400M rows on the primary."}
+  - {label: no-dry-run-count, kind: positive, should_find: true, must_mention: ["count"],
+     artifact: "the runbook step says 'run the backfill'; there is no expected-row-count estimate, no pre/post count comparison, no sample validation step."}
+  - {label: destructive-without-snapshot, kind: positive, should_find: true, must_mention: ["snapshot"],
+     artifact: "backfill deletes and rewrites 90 days of partitions in place; no snapshot/export of the partitions is taken first; the down path is 'rerun upstream'."}
+  - {label: clean-idempotent-batched, kind: negative, should_find: false,
+     artifact: "backfill runs per-partition: DELETE WHERE date=:d then INSERT SELECT, batched 1 day at a time with row-count assertions per batch against the source, snapshot exported first, resumable from a checkpoint file."}
+  - {label: clean-additive-backfill, kind: negative, should_find: false,
+     artifact: "backfill only fills NULLs in the new column (UPDATE ... WHERE discount_code IS NULL), batched with LIMIT, idempotent by construction, counts logged per batch."}
+  - {label: boundary-small-table-in-place, kind: boundary, should_find: false,
+     artifact: "in-place rewrite of a 2,000-row reference table inside one transaction with a pre-copy to reference_table_bak and a diff check after."}
+  - {label: boundary-idempotent-but-clock-keyed, kind: boundary, should_find: true, must_mention: ["now"],
+     artifact: "backfill recomputes flags with WHERE updated_at < now() — reruns on a later day process a different row set; idempotent per run, not per intent."}

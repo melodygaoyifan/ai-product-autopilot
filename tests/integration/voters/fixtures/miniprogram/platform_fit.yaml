@@ -1,0 +1,18 @@
+voter: platform_fit
+fixtures:
+  - {label: gated-behind-share, kind: positive, should_find: true, must_mention: ["分享"],
+     artifact: "unlockCoupon() runs only after onShareAppMessage fires; the coupon page shows 分享到3个群解锁."}
+  - {label: qualification-missing-category, kind: positive, should_find: true, must_mention: ["资质"],
+     artifact: "new pages: 在线问诊 consultation with symptom intake and medicine suggestions; account category is 工具-效率, no medical 资质 on file."}
+  - {label: payment-around-wxpay, kind: positive, should_find: true, must_mention: ["支付"],
+     artifact: "checkout renders a QR image of the merchant's personal 收款码 with text 长按扫码付款; 微信支付 SDK not integrated."}
+  - {label: webview-wrapper-app, kind: positive, should_find: true, must_mention: ["web-view"],
+     artifact: "app.json pages: [pages/index/index]; index.wxml is a single <web-view src=\"https://m.myshop.example\"> wrapping the whole product."}
+  - {label: clean-native-flow, kind: negative, should_find: false,
+     artifact: "native pages for browse/order/pay via 微信支付; 授权 (getPhoneNumber) requested on the checkout page at tap time with a fallback guest flow; 隐私协议 declared."}
+  - {label: clean-share-as-bonus, kind: negative, should_find: false,
+     artifact: "sharing exists on the order-complete page as a plain share button; nothing is gated on it."}
+  - {label: boundary-authorization-with-visible-need, kind: boundary, should_find: false,
+     artifact: "getLocation requested when the user taps 附近门店, with a manual city picker offered on deny."}
+  - {label: boundary-external-link-in-content, kind: boundary, should_find: true, must_mention: ["跳转"],
+     artifact: "article pages render 点击复制链接到浏览器打开 with a copied URL to an uncategorized external site — the copy-link-to-evade-跳转-rules pattern reviewers name."}

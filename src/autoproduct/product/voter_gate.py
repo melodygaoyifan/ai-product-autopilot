@@ -25,10 +25,29 @@ from autoproduct.yamlx import extract_mapping
 
 VOTER_REGISTRY_FILE = "voter-registry.yaml"
 REGISTRATION_FLOOR = 0.875
-FIXTURES_ROOT = (
-    pathlib.Path(__file__).resolve().parents[3]
-    / "tests" / "integration" / "voters" / "fixtures" / "product"
-)
+_REPO = pathlib.Path(__file__).resolve().parents[3]
+FIXTURES_ROOT = _REPO / "tests" / "integration" / "voters" / "fixtures" / "product"
+
+# Voter families beyond the product stages (plan phase B): each maps to a
+# skills subtree and a fixture subtree; the 8-fixture / 87.5% contract is
+# identical for all of them.
+FAMILY_SKILLS = {
+    "web": _REPO / "skills" / "profiles" / "web",
+    "miniprogram": _REPO / "skills" / "profiles" / "miniprogram",
+    "app": _REPO / "skills" / "profiles" / "app",
+    "data": _REPO / "skills" / "data",
+}
+FAMILY_FIXTURES = {
+    name: _REPO / "tests" / "integration" / "voters" / "fixtures" / name
+    for name in FAMILY_SKILLS
+}
+
+
+def family_roots(stage: str):
+    """(skills_root_for_charters, fixtures_root) for a stage or family."""
+    if stage in FAMILY_SKILLS:
+        return FAMILY_SKILLS[stage].parent, FAMILY_FIXTURES[stage].parent
+    return None, None  # product stages use the defaults
 
 
 class VoterFixture(BaseModel):

@@ -1,0 +1,18 @@
+voter: a11y_semantics
+fixtures:
+  - {label: div-doing-a-buttons-job, kind: positive, should_find: true, must_mention: ["keyboard"],
+     artifact: "<div class=\"btn\" onClick={submitOrder}>Place order</div>"}
+  - {label: focus-order-fights-visual-order, kind: positive, should_find: true, must_mention: ["focus"],
+     artifact: "layout: form on the left, summary on the right.\nmarkup order: summary first, then form; tabindex not set — tab lands on the summary links before the first input."}
+  - {label: lying-aria-label, kind: positive, should_find: true, must_mention: ["aria"],
+     artifact: "<button aria-label=\"close dialog\" onClick={saveAndClose}>Save</button> — activating it saves the record."}
+  - {label: unannounced-error, kind: positive, should_find: true, must_mention: ["announce"],
+     artifact: "on validation failure: setState({error: 'Card declined'}) renders <span class=\"error-red\">Card declined</span> — no role=alert, no aria-live, focus stays on the button."}
+  - {label: clean-semantic-form, kind: negative, should_find: false,
+     artifact: "<form> with <label for> on every input, <button type=submit>, errors in an aria-live=polite region, modal with focus trap + Escape handling, logical DOM order."}
+  - {label: clean-decorative-image, kind: negative, should_find: false,
+     artifact: "<img src=\"divider.svg\" alt=\"\" role=\"presentation\"> — decorative, correctly hidden from the tree."}
+  - {label: boundary-custom-widget-done-right, kind: boundary, should_find: false,
+     artifact: "custom combobox: role=combobox, aria-expanded synced, arrow-key navigation, Escape closes, focus returned to the input on close."}
+  - {label: boundary-skip-link-present-but-broken, kind: boundary, should_find: true, must_mention: ["skip"],
+     artifact: "<a class=\"skip-link\" href=\"#main\">Skip to content</a> … <div id=\"main-content\"> — the anchor target #main does not exist."}

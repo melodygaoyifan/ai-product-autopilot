@@ -1,0 +1,18 @@
+voter: performance_delta
+fixtures:
+  - {label: dependency-for-one-function, kind: positive, should_find: true, must_mention: ["depend"],
+     artifact: "diff: +import moment from 'moment'  // 72kB min+gz\n+const label = moment(ts).format('YYYY-MM-DD')  — the only use in the codebase."}
+  - {label: unoptimized-hero-image, kind: positive, should_find: true, must_mention: ["image"],
+     artifact: "diff: +<img src=\"/assets/hero.png\">  — hero.png is 2.4MB, no srcset, no width/height attributes, above the fold."}
+  - {label: fetch-in-a-loop, kind: positive, should_find: true, must_mention: ["loop"],
+     artifact: "diff: +for (const id of orderIds) {\n+  const detail = await fetch(`/api/orders/${id}`)\n+  rows.push(await detail.json())\n+}  — orderIds is the full page of 50."}
+  - {label: eager-load-of-settings-panel, kind: positive, should_find: true, must_mention: ["critical"],
+     artifact: "diff: +import SettingsPanel from './SettingsPanel'  // 40kB, charts + editor\nrendered only when the user opens Settings; imported statically in App.tsx on the critical path."}
+  - {label: clean-lazy-and-sized, kind: negative, should_find: false,
+     artifact: "diff: +const Settings = lazy(() => import('./SettingsPanel'))\n+<img src=hero.avif srcset=... width=1200 height=480 loading=lazy>  — budget file untouched, bundle delta +1.2kB."}
+  - {label: clean-removal, kind: negative, should_find: false,
+     artifact: "diff removes lodash in favor of two native calls; bundle delta -18kB; no new requests."}
+  - {label: boundary-cost-paid-knowingly, kind: boundary, should_find: false,
+     artifact: "diff adds a 28kB charting lib behind a dynamic import on the analytics route only; the budget entry for that route was raised in the same PR with the reviewer note explaining why."}
+  - {label: boundary-tiny-dep-critical-path, kind: boundary, should_find: true, must_mention: ["path"],
+     artifact: "diff: +import confetti from 'canvas-confetti' // 5kB\nimported statically in main.tsx; fired only on the yearly badge screen."}
