@@ -275,14 +275,14 @@ def run_case(
         if case.auto_probes:
             from autoproduct.upstream import probegen as probegen_mod
 
-            generated, _ = probegen_mod.generate_probes(
+            generated, gen_notes = probegen_mod.generate_probes(
                 workspace, provider=provider or "anthropic"
             )
             if not generated:
                 # Model-shaped output: one retry before declaring the case
                 # unmeasured (run 9, case 03: zero probes silently scored
                 # as 0% and nothing said so).
-                generated, _ = probegen_mod.generate_probes(
+                generated, gen_notes = probegen_mod.generate_probes(
                     workspace, provider=provider or "anthropic"
                 )
             probegen_dry = case.auto_probes and not generated
@@ -292,8 +292,9 @@ def run_case(
             probes.append(ProbeResult(
                 name="probe-generation",
                 passed=False,
-                detail="probegen produced no probes after a retry — case "
-                "behavior UNMEASURED, scored as a failure",
+                detail=("probegen produced no probes after a retry — case "
+                        "behavior UNMEASURED, scored as a failure. Why: "
+                        + ("; ".join(gen_notes[:3]) if gen_notes else "no notes"))[:400],
             ))
         preserved = ""
         if result.status != "completed" or not all(p.passed for p in probes):

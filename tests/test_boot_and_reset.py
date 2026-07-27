@@ -214,7 +214,7 @@ def test_probegen_dry_case_is_visibly_unmeasured(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(
         probegen_mod, "generate_probes",
-        lambda ws, provider="anthropic": (calls.append(1), ([], []))[1],
+        lambda ws, provider="anthropic": (calls.append(1), ([], ["why-note"]))[1],
     )
     case = product_bench.ProductCase(
         name="dry", fdr="a link sharing tool", auto_probes=True
@@ -223,7 +223,7 @@ def test_probegen_dry_case_is_visibly_unmeasured(tmp_path, monkeypatch):
     assert len(calls) == 2  # one retry before declaring dry
     synthetic = [p for p in result.probes if p.name == "probe-generation"]
     assert len(synthetic) == 1 and not synthetic[0].passed
-    assert "UNMEASURED" in synthetic[0].detail
+    assert "UNMEASURED" in synthetic[0].detail and "why-note" in synthetic[0].detail
 
 
 def test_save_summary_dual_writes_to_tracked_results(tmp_path):
@@ -239,3 +239,36 @@ def test_save_summary_dual_writes_to_tracked_results(tmp_path):
     assert path.exists()
     tracked = tmp_path / "benchmarks" / "results" / path.name
     assert tracked.exists() and tracked.read_text() == path.read_text()
+
+
+def test_probegen_falls_back_to_source_literals_and_fdr(tmp_path, monkeypatch):
+    """Stdlib http.server products route by hand — invisible to
+    collect_routes, which left bench case 03 UNMEASURED for five runs.
+    With an entry point present, generation proceeds on scraped path
+    literals + the FDR instead of bailing before the model call."""
+    import autoproduct.upstream.probegen as probegen_mod
+
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "main.py").write_text(
+        'import re\n_R = re.compile(r"^[0-9]+$")\n'
+        'def route(p):\n    return p.rstrip("/") == "/groups"\n'
+    )
+    (tmp_path / "FDR.md").write_text("POST /api/groupbuys {\"title\", \"price\"}")
+
+    seen = []
+
+    class Stub:
+        def complete(self, **kwargs):
+            seen.append(kwargs)
+            return 'probes:\n  - name: "smoke"\n    body: "assert True"\n'
+
+    monkeypatch.setattr(probegen_mod, "get_provider", lambda name: Stub())
+    probes, notes = probegen_mod.generate_probes(tmp_path, provider="stub")
+    assert len(probes) == 1 and probes[0].name == "smoke"
+    assert "/groups" in seen[0]["user"]              # scraped literal offered
+    assert "authoritative" in seen[0]["user"]        # route_note present
+
+    # No entry point at all → still bails, visibly.
+    (tmp_path / "app" / "main.py").unlink()
+    probes, notes = probegen_mod.generate_probes(tmp_path, provider="stub")
+    assert probes == [] and any("no entry point" in n for n in notes)
