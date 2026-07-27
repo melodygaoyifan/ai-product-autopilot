@@ -4,6 +4,30 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.37.0 — MCP as the internal tool transport (doc 11 §17), first real slice
+- autoproduct/mcp/: JSON-RPC 2.0 over stdio (newline-delimited), two real
+  partitions from doc 11 §17.2 — read_only (read_file/grep/list_files) and
+  code_intel (symbol_refs) — each served by its own subprocess via
+  `python -m autoproduct.mcp.server <name>`.
+- The triple check made real (§17.3): the skill allowlist decides which
+  tools exist, MCPHost mounts only the servers those tools live in (so an
+  unlisted tool is unreachable, not merely refused), and the server itself
+  refuses anything outside its partition. Any one layer's bug fails closed.
+- Subprocess isolation is the property the in-process mapping could not
+  give: a path-traversal attempt is now refused inside the child process.
+- mcp-audit ledger (.mas/mcp-audit.jsonl): every call, permitted or
+  refused, with voter, server, tool, digested args, outcome and duration.
+  Arguments are digested rather than copied — the ledger records what was
+  asked for without duplicating searched content.
+- Transport switch: AUTOPRODUCT_TOOL_TRANSPORT=mcp opts in; in-process
+  stays the default because a subprocess spawn per server per invocation
+  should be paid deliberately. Both toolboxes present one surface, and the
+  caller's budget stays authoritative.
+- Still out, by design and named in the map: external MCP servers (doc 11
+  §17.1's supply-chain reasoning), and the L1/L2 deploy/maintenance/
+  test-exec partitions — two real servers beat eight stubs.
+- Suite: 778 -> 795 hermetic tests
+
 ## v0.36.0 — the live-loop instrument for the v3.0.0 design gate
 - autoproduct loop: reads a cycle's artifacts (stages P0-P5, gates
   PL1/PL2/PL3/PL5) and reports the three v3.0.0 criteria with reasons.

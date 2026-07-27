@@ -85,12 +85,27 @@ class Voter:
         attempts = 0
         while attempts <= self.spec.max_retries:
             try:
+                # Transport switch (doc 11 §17): in-process by default, or
+                # subprocess-isolated MCP servers under
+                # AUTOPRODUCT_TOOL_TRANSPORT=mcp. Same surface either way.
+                from autoproduct.mcp.toolbox import build_toolbox
+
                 toolbox = (
-                    ToolBox(repo_dir, self.spec.tools, budget=self.spec.tool_budget)
+                    build_toolbox(repo_dir, self.spec.tools,
+                                  budget=self.spec.tool_budget,
+                                  voter=self.spec.name)
                     if self.spec.tools and repo_dir
                     else None
                 )
-                output = self._investigate(provider_name, model, system, user, toolbox)
+                try:
+                    output = self._investigate(
+                        provider_name, model, system, user, toolbox
+                    )
+                finally:
+                    # MCP servers are subprocesses; they do not outlive the
+                    # invocation that mounted them.
+                    if hasattr(toolbox, "close"):
+                        toolbox.close()
                 output.model = model
                 output.substituted_from = substituted_from
                 output.duration_s = time.monotonic() - start
