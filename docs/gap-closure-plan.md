@@ -36,14 +36,14 @@ Ordered by leverage ÷ size. Each phase is independently shippable; the
     mapping onto the existing /incidents ingestion + dedupe window.
 
 ## Phase D — architectural (target: v0.30+, one per release)
-13. Per-voter upstream critique rosters: port discover/plan/spec critics
+13. ✅ v0.32 — Per-voter upstream critique rosters: port discover/plan/spec critics
     onto the product stage_engine (charters + verify + leader), retiring
     the single-panel prompt (doc 13 §25).
-14. GEPA proposer loop, budget-gated by the v0.27 gepa.yaml schema
+14. ✅ v0.31 — GEPA proposer loop, budget-gated by the v0.27 gepa.yaml schema
     (holdout fixtures, one agent per cycle, weekly rollout cap).
-15. Checkpointed graphs for deploy/maintenance (SqliteSaver reuse), then
+15. (in progress, parallel session) Checkpointed graphs for deploy/maintenance (SqliteSaver reuse), then
     upstream — restores mid-stage resume those stages' docs promise.
-16. Secrets layer + encrypted checkpointer serde (doc 09 §3.1).
+16. ✅ v0.31 — Secrets layer + encrypted checkpointer serde (doc 09 §3.1).
 
 ## Recorded non-goals (stay in the map's Open column)
 MCP server partitioning (in-process by ADR'd mapping) · pilot/live-shaped
