@@ -4,6 +4,19 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.31.0 — gap plan D14 + D16: GEPA proposer, secrets layer
+- GEPA proposer (`gepa.py`): budget-gated by the v0.27 `gepa.yaml` schema
+  (refuses at zero weekly rollouts or unlisted targets), deterministic
+  salted-hash holdout split the proposer never sees, old-vs-new charter
+  scored by the same fixture gate voters register through; improvements
+  emit a `.mas/gepa/` proposal record for human review — nothing
+  self-installs
+- Secrets layer (`secrets.py`): `secret://ENV` resolution that errors
+  loudly on missing values, `Secret` with masked repr and a single
+  deliberate `reveal()`, `scrub()` stripping every resolved value from
+  outbound text
+- Suite: 673 → 688 hermetic tests (ledger PC-1 synced)
+
 ## v0.30.0 — audit gap closures, phase C
 - Cost/observability ledger: config-priced estimates, unpriced-call
   visibility, monthly cap check, tool-audit + evidence-ledger writers,

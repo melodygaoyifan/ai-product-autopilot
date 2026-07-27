@@ -118,6 +118,15 @@ class MockProvider(Provider):
                 ]},
                 sort_keys=False,
             )
+        from autoproduct.gepa import GEPA_PROPOSER_MARKER
+
+        if GEPA_PROPOSER_MARKER in system:
+            return yaml.safe_dump(
+                {"charter": "mock improved charter: judge the artifact, cite "
+                            "verbatim evidence, never widen scope",
+                 "rationale": "mock: sharpened the evidence-citation rule"},
+                sort_keys=False,
+            )
         from autoproduct.product.stage_engine import (
             PRODUCT_LEADER_MARKER,
             PRODUCT_VERIFIER_MARKER,
