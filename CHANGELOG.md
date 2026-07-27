@@ -25,7 +25,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
   A test pins that too, so the asymmetry stays deliberate.
 - An absent `.mas/substrate-profile.yaml` still gates nothing, so no
   existing workspace starts refusing work because this exists.
-- Suite: 1012 -> 1041 hermetic tests (+3 skips: stages with an S0 floor have
+- Suite: 1012 -> 1043 hermetic tests (+3 skips: stages with an S0 floor have
   no rung below them to be refused at)
 
 ## v0.48.0 — upstream resume, grounding at the spec writer, and the plan closed out
