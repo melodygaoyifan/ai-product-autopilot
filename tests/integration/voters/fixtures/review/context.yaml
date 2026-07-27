@@ -1,0 +1,136 @@
+voter: context
+fixtures:
+- label: reimplements-existing-helper
+  kind: positive
+  should_find: true
+  must_mention:
+  - duplicat
+  artifact: 'diff --git a/app/dates.py b/app/dates.py
+
+    --- a/app/dates.py
+
+    +++ b/app/dates.py
+
+    @@ -1,1 +1,2 @@
+
+    +def to_iso(dt):
+
+    +    return dt.strftime(''%Y-%m-%dT%H:%M:%S'')
+
+    '
+- label: bare-assert-against-claude-md
+  kind: positive
+  should_find: true
+  must_mention:
+  - assert
+  artifact: 'diff --git a/app/guard.py b/app/guard.py
+
+    --- a/app/guard.py
+
+    +++ b/app/guard.py
+
+    @@ -1,1 +1,1 @@
+
+    +    assert user.is_admin, ''admin required''
+
+    '
+- label: shell-true-against-project-rule
+  kind: positive
+  should_find: true
+  must_mention:
+  - shell
+  artifact: 'diff --git a/app/tools.py b/app/tools.py
+
+    --- a/app/tools.py
+
+    +++ b/app/tools.py
+
+    @@ -1,1 +1,1 @@
+
+    +    subprocess.run(cmd, shell=True)
+
+    '
+- label: raw-yaml-load-of-model-output
+  kind: positive
+  should_find: true
+  must_mention:
+  - yaml
+  artifact: 'diff --git a/app/parse.py b/app/parse.py
+
+    --- a/app/parse.py
+
+    +++ b/app/parse.py
+
+    @@ -1,1 +1,1 @@
+
+    +    data = yaml.safe_load(response_text)
+
+    '
+- label: uses-the-shared-helper
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/dates.py b/app/dates.py
+
+    --- a/app/dates.py
+
+    +++ b/app/dates.py
+
+    @@ -1,1 +1,3 @@
+
+    +from app.util.time import to_iso
+
+    +
+
+    +stamp = to_iso(now())
+
+    '
+- label: new-module-no-overlap
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/tax.py b/app/tax.py
+
+    --- a/app/tax.py
+
+    +++ b/app/tax.py
+
+    @@ -1,1 +1,2 @@
+
+    +def vat_rate(country):
+
+    +    return RATES[country]
+
+    '
+- label: similar-name-different-domain
+  kind: boundary
+  should_find: false
+  artifact: 'diff --git a/app/invoice.py b/app/invoice.py
+
+    --- a/app/invoice.py
+
+    +++ b/app/invoice.py
+
+    @@ -1,1 +1,2 @@
+
+    +def format_invoice_id(n):
+
+    +    return f''INV-{n:06d}''
+
+    '
+- label: copy-pasted-block-twice
+  kind: boundary
+  should_find: true
+  must_mention:
+  - duplicat
+  artifact: 'diff --git a/app/handlers.py b/app/handlers.py
+
+    --- a/app/handlers.py
+
+    +++ b/app/handlers.py
+
+    @@ -1,1 +1,2 @@
+
+    +    total = sum(i.price * i.qty for i in items)  # block A
+
+    +    total = sum(i.price * i.qty for i in items)  # block B
+
+    '

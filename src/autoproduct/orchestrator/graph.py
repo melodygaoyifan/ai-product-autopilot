@@ -65,17 +65,23 @@ def dor_gate_node(state: ReviewState, *, repo_dir: str) -> dict[str, Any]:
     else:
         diff = fetch_diff(target, repo_dir=repo_dir)
 
+    from autoproduct.policy import load_policy
+
+    policy = load_policy(repo_dir)  # PolicyError is fatal, by design
     reasons = []
     if not diff.files:
         reasons.append("empty diff — nothing to review")
-    if diff.changed_lines > MAX_REVIEWABLE_LINES:
+    if diff.changed_lines > policy.max_reviewable_lines:
         reasons.append(
-            f"diff too large ({diff.changed_lines} lines > {MAX_REVIEWABLE_LINES}); split the PR"
+            f"diff too large ({diff.changed_lines} lines > "
+            f"{policy.max_reviewable_lines}); split the PR"
         )
     return {
         "dor_pass": not reasons,
         "dor_reasons": reasons,
         "diff": diff.to_dict(),
+        "policy": policy.as_dict(),
+        "policy_weakened": policy.weakened(),
     }
 
 
@@ -118,6 +124,26 @@ def vote_node(
     state: ReviewState, *, skills_dir: str, provider_override: str | None, repo_dir: str
 ) -> dict[str, Any]:
     voters = load_voters(skills_dir, provider_override=provider_override)
+    # §11.19 fail-closed: a review voter whose latest fixture-gate run
+    # FAILED does not vote. Unregistered voters (no gate run recorded) do
+    # vote, with the fact carried into the report — visible, never silent.
+    from autoproduct.product.voter_gate import registry_status
+    from autoproduct.review_gate import REVIEW_STAGE
+
+    mas_dir = Path(repo_dir) / ".mas"
+    statuses = {
+        v.spec.name: registry_status(mas_dir, REVIEW_STAGE, v.spec.name)
+        for v in voters
+    }
+    excluded = sorted(n for n, s in statuses.items() if s == "failed")
+    unregistered = sorted(n for n, s in statuses.items() if s == "unregistered")
+    voters = [v for v in voters if statuses[v.spec.name] != "failed"]
+    if not voters:
+        raise RuntimeError(
+            "every review voter failed its fixture gate "
+            f"({excluded}) — refusing to review with no roster; re-run "
+            "`autoproduct review-gate` after fixing the charters"
+        )
     if state.get("mode") == "fast":
         fast = [v for v in voters if v.spec.name in FAST_MODE_ROSTER]
         voters = fast or voters[:1]
@@ -136,7 +162,11 @@ def vote_node(
                 lambda v: v.run(diff_raw, context=context, repo_dir=repo_dir), voters
             )
         )
-    return {"voter_outputs": [o.model_dump(mode="json") for o in outputs]}
+    return {
+        "voter_outputs": [o.model_dump(mode="json") for o in outputs],
+        "excluded_voters": excluded,
+        "unregistered_voters": unregistered,
+    }
 
 
 def verify_node(
@@ -174,7 +204,16 @@ def verify_node(
 def leader_node(state: ReviewState, *, provider_override: str | None) -> dict[str, Any]:
     raw = state.get("verified_outputs") or state["voter_outputs"]
     outputs = [VoterOutput.model_validate(o) for o in raw]
-    result = leader_mod.synthesize(outputs)
+    from autoproduct.policy import Policy
+
+    # Absent on checkpoints written before v0.35 — defaults, never a crash.
+    result = leader_mod.synthesize(outputs, Policy(**(state.get("policy") or {})))
+    weakened = state.get("policy_weakened") or []
+    if weakened:
+        # A lowered bar never hides inside a clean-looking verdict.
+        result.summary = (
+            f"[policy weakened: {'; '.join(weakened)}] " + result.summary
+        )
     if state.get("mode") != "fast":
         provider, model = (
             (provider_override, "leader") if provider_override else LEADER_PROVIDER
@@ -320,6 +359,10 @@ def post_node(
             "review_id": state["review_id"],
             "target": state["target"],
             "mode": state.get("mode"),
+            "policy": state.get("policy"),
+            "policy_weakened": state.get("policy_weakened") or [],
+            "excluded_voters": state.get("excluded_voters") or [],
+            "unregistered_voters": state.get("unregistered_voters") or [],
             "verdict": state["leader"]["verdict"],
             "summary": state["leader"]["summary"],
             "findings": state["leader"]["findings"],

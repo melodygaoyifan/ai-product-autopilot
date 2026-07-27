@@ -120,9 +120,13 @@ class ReviewState(TypedDict, total=False):
     dor_pass: bool
     dor_reasons: list[str]
     diff: dict[str, Any]  # serialized ParsedDiff
+    policy: dict[str, int]  # effective thresholds (autoproduct.policy)
+    policy_weakened: list[str]  # thresholds looser than the shipped defaults
     project_context: str  # CLAUDE.md contents, if present
     tool_reports: Annotated[list[dict[str, Any]], operator.add]
     voter_outputs: Annotated[list[dict[str, Any]], operator.add]
+    excluded_voters: list[str]  # failed their fixture gate — did not vote
+    unregistered_voters: list[str]  # no gate run recorded — voted, visibly
     verified_outputs: list[dict[str, Any]]  # voter_outputs after §09.4.6/§09.4.7
     leader: dict[str, Any]  # serialized LeaderResult
     test_report: dict[str, Any]  # Gate 2 result (§09.5.4.10)

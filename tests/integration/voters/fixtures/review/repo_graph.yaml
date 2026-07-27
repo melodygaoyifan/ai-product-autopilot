@@ -1,0 +1,140 @@
+voter: repo_graph
+fixtures:
+- label: public-signature-changed
+  kind: positive
+  should_find: true
+  must_mention:
+  - caller
+  artifact: 'diff --git a/app/api/client.py b/app/api/client.py
+
+    --- a/app/api/client.py
+
+    +++ b/app/api/client.py
+
+    @@ -1,1 +1,1 @@
+
+    -def fetch(url, *, timeout=5):
+
+    +def fetch(url, *, timeout, retries):
+
+    '
+- label: exported-name-removed
+  kind: positive
+  should_find: true
+  must_mention:
+  - remov
+  artifact: 'diff --git a/app/util/__init__.py b/app/util/__init__.py
+
+    --- a/app/util/__init__.py
+
+    +++ b/app/util/__init__.py
+
+    @@ -1,1 +1,1 @@
+
+    -__all__ = [''to_iso'', ''parse_iso'']
+
+    +__all__ = [''to_iso'']
+
+    '
+- label: response-field-renamed
+  kind: positive
+  should_find: true
+  must_mention:
+  - renam
+  artifact: 'diff --git a/app/schema.py b/app/schema.py
+
+    --- a/app/schema.py
+
+    +++ b/app/schema.py
+
+    @@ -1,1 +1,1 @@
+
+    -    name: str
+
+    +    customer_name: str
+
+    '
+- label: migration-without-consumer-update
+  kind: positive
+  should_find: true
+  must_mention:
+  - column
+  artifact: 'diff --git a/migrations/0044_rename_col.sql b/migrations/0044_rename_col.sql
+
+    --- a/migrations/0044_rename_col.sql
+
+    +++ b/migrations/0044_rename_col.sql
+
+    @@ -1,1 +1,1 @@
+
+    +ALTER TABLE orders RENAME COLUMN qty TO quantity;
+
+    '
+- label: internal-helper-renamed-with-callers
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/report.py b/app/report.py
+
+    --- a/app/report.py
+
+    +++ b/app/report.py
+
+    @@ -1,1 +1,2 @@
+
+    +def _rows_for(order):  # single caller, same file
+
+    +    return order.rows
+
+    '
+- label: new-endpoint-additive
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/api/routes.py b/app/api/routes.py
+
+    --- a/app/api/routes.py
+
+    +++ b/app/api/routes.py
+
+    @@ -1,1 +1,3 @@
+
+    +@app.get(''/health/live'')
+
+    +def live():
+
+    +    return {''ok'': True}
+
+    '
+- label: kwarg-added-with-default
+  kind: boundary
+  should_find: false
+  artifact: 'diff --git a/app/api/client.py b/app/api/client.py
+
+    --- a/app/api/client.py
+
+    +++ b/app/api/client.py
+
+    @@ -1,1 +1,1 @@
+
+    -def fetch(url, *, timeout=5):
+
+    +def fetch(url, *, timeout=5, verify=True):
+
+    '
+- label: enum-value-dropped
+  kind: boundary
+  should_find: true
+  must_mention:
+  - pending
+  artifact: 'diff --git a/app/status.py b/app/status.py
+
+    --- a/app/status.py
+
+    +++ b/app/status.py
+
+    @@ -1,1 +1,1 @@
+
+    -STATUSES = [''open'', ''pending'', ''closed'']
+
+    +STATUSES = [''open'', ''closed'']
+
+    '

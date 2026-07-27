@@ -12,6 +12,7 @@ mode the SCR back-edge exists to prevent (ADR-U02).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -352,16 +353,31 @@ def approve_plan(repo_dir: str | Path) -> Plan:
     return plan
 
 
+TASK_MARKER = re.compile(r"\(task:([\w-]+)\)")
+
+
+def built_task_ids(repo_dir: str | Path) -> set[str]:
+    """Task ids whose spec exists and is built.
+
+    The link is the `(task:<id>)` marker autopilot/retry-task put in the
+    spec request — Spec has no `task_id` field, so the earlier lookup for
+    one silently matched nothing and every task always looked unbuilt.
+    """
+    done: set[str] = set()
+    for spec_file in (Path(repo_dir) / "specs").glob("*/spec.yaml"):
+        data = yaml.safe_load(spec_file.read_text(encoding="utf-8")) or {}
+        if not data.get("built"):
+            continue
+        marker = TASK_MARKER.search(str(data.get("request", "")))
+        if marker:
+            done.add(marker.group(1))
+    return done
+
+
 def next_tasks(repo_dir: str | Path) -> list[Task]:
-    """Tasks whose dependencies are all spec'd+built (tracked by specs/ dirs
-    with a built marker) — the work queue view."""
+    """Tasks not yet built whose dependencies all are — the work queue view."""
     plan = load_plan(repo_dir)
-    done = set()
-    specs_dir = Path(repo_dir) / "specs"
-    for spec_dir in specs_dir.glob("*/spec.yaml"):
-        data = yaml.safe_load(spec_dir.read_text(encoding="utf-8")) or {}
-        if data.get("task_id") and data.get("built"):
-            done.add(data["task_id"])
+    done = built_task_ids(repo_dir)
     return [
         t for t in plan.tasks
         if t.id not in done and all(d in done for d in t.depends_on)

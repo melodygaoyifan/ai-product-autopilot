@@ -1,0 +1,152 @@
+voter: correctness
+fixtures:
+- label: off-by-one-slice
+  kind: positive
+  should_find: true
+  must_mention:
+  - limit
+  artifact: 'diff --git a/app/paging.py b/app/paging.py
+
+    --- a/app/paging.py
+
+    +++ b/app/paging.py
+
+    @@ -1,1 +1,1 @@
+
+    +    return items[offset:offset + limit - 1]
+
+    '
+- label: swallowed-exception
+  kind: positive
+  should_find: true
+  must_mention:
+  - except
+  artifact: 'diff --git a/app/sync.py b/app/sync.py
+
+    --- a/app/sync.py
+
+    +++ b/app/sync.py
+
+    @@ -1,1 +1,4 @@
+
+    +    try:
+
+    +        push_batch(rows)
+
+    +    except Exception:
+
+    +        pass
+
+    '
+- label: inverted-operator
+  kind: positive
+  should_find: true
+  must_mention:
+  - return
+  artifact: 'diff --git a/app/billing.py b/app/billing.py
+
+    --- a/app/billing.py
+
+    +++ b/app/billing.py
+
+    @@ -1,1 +1,2 @@
+
+    +def total(a, b):
+
+    +    return a - b
+
+    '
+- label: unchecked-none-deref
+  kind: positive
+  should_find: true
+  must_mention:
+  - none
+  artifact: 'diff --git a/app/profile.py b/app/profile.py
+
+    --- a/app/profile.py
+
+    +++ b/app/profile.py
+
+    @@ -1,1 +1,2 @@
+
+    +    user = find_user(uid)
+
+    +    return user.email.lower()
+
+    '
+- label: guarded-division-clean
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/stats.py b/app/stats.py
+
+    --- a/app/stats.py
+
+    +++ b/app/stats.py
+
+    @@ -1,1 +1,3 @@
+
+    +    if not n:
+
+    +        return 0.0
+
+    +    return total / n
+
+    '
+- label: test-added-for-new-branch
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/tests/test_stats.py b/tests/test_stats.py
+
+    --- a/tests/test_stats.py
+
+    +++ b/tests/test_stats.py
+
+    @@ -1,1 +1,2 @@
+
+    +def test_empty_returns_zero():
+
+    +    assert mean([]) == 0.0
+
+    '
+- label: early-return-restructure
+  kind: boundary
+  should_find: false
+  artifact: 'diff --git a/app/auth.py b/app/auth.py
+
+    --- a/app/auth.py
+
+    +++ b/app/auth.py
+
+    @@ -1,3 +1,3 @@
+
+    -    if token:
+
+    -        return decode(token)
+
+    -    return None
+
+    +    if not token:
+
+    +        return None
+
+    +    return decode(token)
+
+    '
+- label: assertion-weakened-in-test
+  kind: boundary
+  should_find: true
+  must_mention:
+  - assert
+  artifact: 'diff --git a/tests/test_billing.py b/tests/test_billing.py
+
+    --- a/tests/test_billing.py
+
+    +++ b/tests/test_billing.py
+
+    @@ -1,1 +1,1 @@
+
+    -    assert total(1, 2) == 3
+
+    +    assert total(1, 2) is not None
+
+    '

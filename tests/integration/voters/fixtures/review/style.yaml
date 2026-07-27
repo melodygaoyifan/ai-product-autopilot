@@ -1,0 +1,146 @@
+voter: style
+fixtures:
+- label: single-letter-domain-names
+  kind: positive
+  should_find: true
+  must_mention:
+  - name
+  artifact: 'diff --git a/app/pricing.py b/app/pricing.py
+
+    --- a/app/pricing.py
+
+    +++ b/app/pricing.py
+
+    @@ -1,1 +1,2 @@
+
+    +def c(x, y, z):
+
+    +    return x * y - z
+
+    '
+- label: dead-commented-out-code
+  kind: positive
+  should_find: true
+  must_mention:
+  - comment
+  artifact: 'diff --git a/app/sync.py b/app/sync.py
+
+    --- a/app/sync.py
+
+    +++ b/app/sync.py
+
+    @@ -1,1 +1,2 @@
+
+    +# def old_push(rows):
+
+    +#     legacy_client.send(rows)
+
+    '
+- label: inconsistent-quote-and-format
+  kind: positive
+  should_find: true
+  must_mention:
+  - consistent
+  artifact: 'diff --git a/app/config.py b/app/config.py
+
+    --- a/app/config.py
+
+    +++ b/app/config.py
+
+    @@ -1,1 +1,3 @@
+
+    +NAME = "svc"
+
+    +REGION = ''us-east-1''
+
+    +TIER   =    "gold"
+
+    '
+- label: unused-import-added
+  kind: positive
+  should_find: true
+  must_mention:
+  - unused
+  artifact: 'diff --git a/app/report.py b/app/report.py
+
+    --- a/app/report.py
+
+    +++ b/app/report.py
+
+    @@ -1,1 +1,2 @@
+
+    +import json
+
+    +import os  # unused
+
+    '
+- label: clear-named-function-clean
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/pricing.py b/app/pricing.py
+
+    --- a/app/pricing.py
+
+    +++ b/app/pricing.py
+
+    @@ -1,1 +1,2 @@
+
+    +def net_price(gross, discount):
+
+    +    return gross - discount
+
+    '
+- label: formatted-consistently
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/config.py b/app/config.py
+
+    --- a/app/config.py
+
+    +++ b/app/config.py
+
+    @@ -1,1 +1,2 @@
+
+    +NAME = "svc"
+
+    +REGION = "us-east-1"
+
+    '
+- label: long-but-cohesive-function
+  kind: boundary
+  should_find: false
+  artifact: 'diff --git a/app/report.py b/app/report.py
+
+    --- a/app/report.py
+
+    +++ b/app/report.py
+
+    @@ -1,1 +1,4 @@
+
+    +def build_monthly_report(orders):
+
+    +    header = _header(orders)
+
+    +    body = _body(orders)
+
+    +    return header + body
+
+    '
+- label: misleading-name-vs-behavior
+  kind: boundary
+  should_find: true
+  must_mention:
+  - name
+  artifact: 'diff --git a/app/cache.py b/app/cache.py
+
+    --- a/app/cache.py
+
+    +++ b/app/cache.py
+
+    @@ -1,1 +1,2 @@
+
+    +def get_cached(key):
+
+    +    return db.query_fresh(key)
+
+    '

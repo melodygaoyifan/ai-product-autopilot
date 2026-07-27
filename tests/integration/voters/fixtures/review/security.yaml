@@ -1,0 +1,134 @@
+voter: security
+fixtures:
+- label: sql-string-interpolation
+  kind: positive
+  should_find: true
+  must_mention:
+  - sql
+  artifact: 'diff --git a/app/users.py b/app/users.py
+
+    --- a/app/users.py
+
+    +++ b/app/users.py
+
+    @@ -1,1 +1,2 @@
+
+    +    q = f"SELECT * FROM users WHERE email = ''{email}''"
+
+    +    return db.execute(q).fetchall()
+
+    '
+- label: auth-decorator-removed
+  kind: positive
+  should_find: true
+  must_mention:
+  - auth
+  artifact: 'diff --git a/app/admin.py b/app/admin.py
+
+    --- a/app/admin.py
+
+    +++ b/app/admin.py
+
+    @@ -1,2 +1,1 @@
+
+    -@require_admin
+
+    -def delete_tenant(tenant_id):
+
+    +def delete_tenant(tenant_id):
+
+    '
+- label: command-injection-shell-true
+  kind: positive
+  should_find: true
+  must_mention:
+  - shell
+  artifact: 'diff --git a/app/backup.py b/app/backup.py
+
+    --- a/app/backup.py
+
+    +++ b/app/backup.py
+
+    @@ -1,1 +1,1 @@
+
+    +    subprocess.run(f"tar czf {name}.tgz {path}", shell=True)
+
+    '
+- label: ssrf-unvalidated-fetch
+  kind: positive
+  should_find: true
+  must_mention:
+  - url
+  artifact: 'diff --git a/app/webhooks.py b/app/webhooks.py
+
+    --- a/app/webhooks.py
+
+    +++ b/app/webhooks.py
+
+    @@ -1,1 +1,2 @@
+
+    +def relay(url):
+
+    +    return requests.get(url, timeout=5).text
+
+    '
+- label: parameterized-query-clean
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/users.py b/app/users.py
+
+    --- a/app/users.py
+
+    +++ b/app/users.py
+
+    @@ -1,1 +1,1 @@
+
+    +    return db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchall()
+
+    '
+- label: docstring-only-change
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/users.py b/app/users.py
+
+    --- a/app/users.py
+
+    +++ b/app/users.py
+
+    @@ -1,1 +1,1 @@
+
+    +    """Look up a user by email address."""
+
+    '
+- label: validation-replaced-by-stronger
+  kind: boundary
+  should_find: false
+  artifact: 'diff --git a/app/orders.py b/app/orders.py
+
+    --- a/app/orders.py
+
+    +++ b/app/orders.py
+
+    @@ -1,1 +1,1 @@
+
+    -    validate_order_loose(payload)
+
+    +    validate_order_strict(payload)  # supersedes the loose check
+
+    '
+- label: hardcoded-credential
+  kind: boundary
+  should_find: true
+  must_mention:
+  - password
+  artifact: 'diff --git a/app/config.py b/app/config.py
+
+    --- a/app/config.py
+
+    +++ b/app/config.py
+
+    @@ -1,1 +1,1 @@
+
+    +DB_PASSWORD = "hunter2-prod-primary"
+
+    '

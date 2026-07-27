@@ -32,7 +32,7 @@ from autoproduct.state import (
 _ACTIONABLE_SEVERITIES = {Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM}
 
 
-def _keep(finding: VoterFinding, all_findings: list[VoterFinding]) -> bool:
+def _keep(finding: VoterFinding, all_findings: list[VoterFinding], policy=None) -> bool:
     if finding.verification is None:
         # Verification pass didn't run (fast mode): fall back to the
         # coarse self-confidence filter.
@@ -42,10 +42,12 @@ def _keep(finding: VoterFinding, all_findings: list[VoterFinding]) -> bool:
         )
     if finding.score is None:
         finding.score = scoring.score_finding(finding, all_findings)
-    return scoring.passes_threshold(finding)
+    return scoring.passes_threshold(finding, policy)
 
 
-def synthesize(outputs: list[VoterOutput]) -> LeaderResult:
+def synthesize(outputs: list[VoterOutput], policy=None) -> LeaderResult:
+    """`policy` (autoproduct.policy.Policy) supplies per-project reporting
+    thresholds; without it the shipped defaults apply."""
     blocked = [o.voter for o in outputs if o.status is not VoterStatus.OK]
     tool_failures = [
         o.voter for o in outputs if o.status is VoterStatus.BLOCKED_TOOL_FAILURE
@@ -62,7 +64,7 @@ def synthesize(outputs: list[VoterOutput]) -> LeaderResult:
     dropped = 0
     for output in outputs:
         for finding in output.findings:
-            if not _keep(finding, all_findings):
+            if not _keep(finding, all_findings, policy):
                 dropped += 1
                 continue
             key = (finding.file_path, finding.line_start, finding.title.lower())

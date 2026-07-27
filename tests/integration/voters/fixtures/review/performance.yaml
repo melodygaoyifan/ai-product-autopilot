@@ -1,0 +1,142 @@
+voter: performance
+fixtures:
+- label: n-plus-one-query-in-loop
+  kind: positive
+  should_find: true
+  must_mention:
+  - loop
+  artifact: 'diff --git a/app/report.py b/app/report.py
+
+    --- a/app/report.py
+
+    +++ b/app/report.py
+
+    @@ -1,1 +1,2 @@
+
+    +    for order in orders:
+
+    +        customer = db.query(Customer).get(order.customer_id)
+
+    '
+- label: quadratic-membership-scan
+  kind: positive
+  should_find: true
+  must_mention:
+  - list
+  artifact: 'diff --git a/app/dedupe.py b/app/dedupe.py
+
+    --- a/app/dedupe.py
+
+    +++ b/app/dedupe.py
+
+    @@ -1,1 +1,4 @@
+
+    +    for row in rows:
+
+    +        if row.id in seen_list:
+
+    +            continue
+
+    +        seen_list.append(row.id)
+
+    '
+- label: blocking-io-in-async
+  kind: positive
+  should_find: true
+  must_mention:
+  - async
+  artifact: 'diff --git a/app/api.py b/app/api.py
+
+    --- a/app/api.py
+
+    +++ b/app/api.py
+
+    @@ -1,1 +1,2 @@
+
+    +async def handler(req):
+
+    +    data = requests.get(UPSTREAM, timeout=30).json()
+
+    '
+- label: unbounded-result-set
+  kind: positive
+  should_find: true
+  must_mention:
+  - all
+  artifact: 'diff --git a/app/export.py b/app/export.py
+
+    --- a/app/export.py
+
+    +++ b/app/export.py
+
+    @@ -1,1 +1,1 @@
+
+    +    rows = db.execute(''SELECT * FROM events'').fetchall()
+
+    '
+- label: batched-query-clean
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/app/report.py b/app/report.py
+
+    --- a/app/report.py
+
+    +++ b/app/report.py
+
+    @@ -1,1 +1,2 @@
+
+    +    ids = [o.customer_id for o in orders]
+
+    +    customers = db.query(Customer).filter(Customer.id.in_(ids)).all()
+
+    '
+- label: readme-table-update
+  kind: negative
+  should_find: false
+  artifact: 'diff --git a/README.md b/README.md
+
+    --- a/README.md
+
+    +++ b/README.md
+
+    @@ -1,1 +1,1 @@
+
+    +| latency | p95 under 200ms |
+
+    '
+- label: cache-added-with-bounded-size
+  kind: boundary
+  should_find: false
+  artifact: 'diff --git a/app/geo.py b/app/geo.py
+
+    --- a/app/geo.py
+
+    +++ b/app/geo.py
+
+    @@ -1,1 +1,2 @@
+
+    +@lru_cache(maxsize=1024)
+
+    +def lookup(ip):
+
+    '
+- label: sleep-in-request-path
+  kind: boundary
+  should_find: true
+  must_mention:
+  - sleep
+  artifact: 'diff --git a/app/retry.py b/app/retry.py
+
+    --- a/app/retry.py
+
+    +++ b/app/retry.py
+
+    @@ -1,1 +1,3 @@
+
+    +def handler(req):
+
+    +    time.sleep(2)
+
+    +    return fetch(req)
+
+    '

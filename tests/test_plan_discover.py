@@ -104,6 +104,36 @@ def test_scope_lock_and_ready_queue(tmp_path):
     assert [t.id for t in ready] == ["t1"]  # only the task with no deps
 
 
+def test_ready_queue_advances_as_specs_are_built(tmp_path):
+    """The plan→spec link is the `(task:<id>)` marker in the spec request.
+    Before v0.35 next_tasks looked for a `task_id` field Spec never had, so
+    the queue never advanced past the first task."""
+    import yaml
+
+    from autoproduct.upstream.plan import built_task_ids
+
+    root = init_workspace(tmp_path / "p", "p", "web")
+    run_discovery(root, "a link sharing tool", provider="mock")
+    approve_brief(root)
+    run_planning(root, provider="mock")
+    approve_plan(root)
+    assert built_task_ids(root) == set()
+
+    spec_dir = root / "specs" / "url-store"
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    (spec_dir / "spec.yaml").write_text(yaml.safe_dump(
+        {"request": "an item store (task:t1)", "built": True}), encoding="utf-8")
+    assert built_task_ids(root) == {"t1"}
+    assert [t.id for t in next_tasks(root)] == ["t2"]  # t2 depends on t1
+
+    # An unbuilt spec for t2 does not unblock t3.
+    spec2 = root / "specs" / "shorten"
+    spec2.mkdir(parents=True, exist_ok=True)
+    (spec2 / "spec.yaml").write_text(yaml.safe_dump(
+        {"request": "POST /links (task:t2)", "built": False}), encoding="utf-8")
+    assert [t.id for t in next_tasks(root)] == ["t2"]
+
+
 def test_brief_writer_survives_a_bad_parse_streak(tmp_path, monkeypatch):
     """Unparseable writer output consumes a revision; the budget must
     survive a streak — run 4, case 02 died after only 2 attempts."""

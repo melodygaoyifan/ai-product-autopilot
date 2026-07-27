@@ -46,12 +46,15 @@ def score_finding(finding: VoterFinding, all_findings: list[VoterFinding]) -> in
     return min(points, 100)
 
 
-def passes_threshold(finding: VoterFinding) -> bool:
+def passes_threshold(finding: VoterFinding, policy=None) -> bool:
+    """`policy` is a Policy (autoproduct.policy) when the caller knows the
+    workspace; without it the shipped defaults apply."""
     if finding.score is None:
         return False
-    threshold = (
-        HIGH_SEVERITY_THRESHOLD
-        if finding.severity in _HIGH_SEVERITIES
-        else REPORT_THRESHOLD
-    )
+    if finding.severity in _HIGH_SEVERITIES:
+        threshold = (
+            policy.high_severity_threshold if policy else HIGH_SEVERITY_THRESHOLD
+        )
+    else:
+        threshold = policy.report_threshold if policy else REPORT_THRESHOLD
     return finding.score >= threshold

@@ -4,6 +4,28 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.35.0 — the last small open items: review-voter gates, policy thresholds, the ready-queue fix
+- Review voters now register like every other roster (§11.19):
+  `autoproduct review-gate` runs each of the six core charters against 8
+  fixtures (4 positive / 2 negative / 2 boundary, unified diffs) through
+  the REAL Voter seat, ≥87.5% to register, recorded under `review/<voter>`
+  in `.mas/voter-registry.yaml`. The vote node fails closed on a FAILED
+  voter, reports unregistered ones, and refuses to review at all if the
+  whole roster failed. Review voters no longer ride `bench` alone.
+- Policy thresholds move into `.mas/project.yaml` (`policy:` block, doc 09
+  open item): max_reviewable_lines, report_threshold,
+  high_severity_threshold, rootcause_confidence_min. Unknown keys are a
+  loud error (a typo silently keeping the default is worse), ranges are
+  bounded so a project cannot set a meaningless bar, effective values are
+  recorded in the run mirror, and any threshold looser than the shipped
+  default is stamped into the leader summary — a lowered bar never hides
+  inside a clean-looking verdict.
+- Fixed: `next_tasks` matched a `task_id` field Spec never had, so the
+  ready queue never advanced past the first task. It now reads the
+  `(task:<id>)` marker in the spec request — one shared definition of
+  "built", reused by the Studio's per-task progress.
+- Suite: 737 → 766 hermetic tests
+
 ## v0.34.0 — Studio live progress, interrupted-build recovery UX, the wire-up gate
 - Building page shows per-task state (from the same workspace files the
   CLI writes) updating in place via /status polling — signals s1/s3, "it

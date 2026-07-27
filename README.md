@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-737-brightgreen)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-766-brightgreen)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **737 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **766 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -227,7 +227,7 @@ including the runs that fail.
 | | |
 |---|---|
 | `opportunity` · `market` / `market-approve` · `prd` / `prd-approve` · `evidence` | the outer loop as one-command stages: writer → det tools → charter voters → verify → leader → gate; human decisions recorded at PL1/PL2 |
-| `voter-gate <stage>` | register voters against their 8-fixture gates (≥87.5%); failed voters stop voting |
+| `voter-gate <stage>` · `review-gate` | register voters against their 8-fixture gates (≥87.5%); failed voters stop voting — `review-gate` covers the six review seats, `voter-gate` every other family |
 | `claim-lint` · `prd-lint` · `handoff-check` | outer-loop gates standalone: claim ledgers, PRD boundary/kill-criteria/instrumentation, the machine-checked P2→Stage-1 handoff |
 | `preregister` · `experiment-check` | pin an experiment design before exposure; schema + FDR plan + power + pin integrity |
 | `discover / plan / spec / build` (+ `*-approve`) | inner-loop upstream stages, gates U1–U4 |
@@ -296,6 +296,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.32 ✅ | plan phase D13: the discover/plan/spec critics as fourteen registered charter voters on the shared stage engine (each behind its 8-fixture gate; failed gates exclude the voter, unregistered voters are reported), retiring the single-panel critique prompts — `voter-gate discovery\|planning\|spec` |
 | v0.33 ✅ | plan phase D15 + D16 remainder: deploy review and maintenance rebuilt as checkpointed graphs on the shared saver — a crash mid-vote resumes from the last completed super-step via `recover` instead of re-paying the pipeline — and checkpoint rows encrypted at rest under `AUTOPRODUCT_CHECKPOINT_KEY` (honored or loud error, never silent plaintext; mirrors stay readable on purpose) |
 | v0.34 ✅ | Studio live progress + the wire-up gate: the building page shows per-task state updating in place (signals s1/s3 — no more staring at a frozen page), interrupted builds surface per-module 继续 buttons instead of a dead confirm screen, and a bidirectional frontend↔backend wire-up test — every rendered button/link/fetch must resolve to a route, every route must be rendered by some state |
+| v0.35.0 ✅ | the last small open items: registration gates for the six review voters (8 fixtures each, run through the real seat; the vote node fails closed and refuses to review with no roster), per-project `policy:` thresholds in `project.yaml` (unknown keys are a loud error, ranges bounded, a weakened bar stamped into the verdict), and the ready-queue fix — `next_tasks` read a field that never existed, so the plan never advanced past task one |
 | next 🔜 | the v3.0.0 design gate: one live loop ending in a real recorded kill-or-pivot at Gate PL5 |
 
 ## Star history

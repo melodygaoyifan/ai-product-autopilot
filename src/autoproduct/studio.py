@@ -13,7 +13,6 @@ runs as the same detached worker the CLI uses.
 from __future__ import annotations
 
 import html
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -85,7 +84,6 @@ def _build_running(root: Path) -> bool:
         return False
 
 
-_TASK_MARKER = re.compile(r"\(task:([\w-]+)\)")
 _STATE_ICON = {"built": "✅", "pending": "⏳"}
 
 
@@ -99,12 +97,9 @@ def _task_states(root: Path) -> list[dict]:
     if not plan_path.exists():
         return []
     plan = yaml.safe_load(plan_path.read_text(encoding="utf-8")) or {}
-    built_ids: set[str] = set()
-    for spec_file in (root / "specs").glob("*/spec.yaml"):
-        data = yaml.safe_load(spec_file.read_text(encoding="utf-8")) or {}
-        marker = _TASK_MARKER.search(str(data.get("request", "")))
-        if marker and data.get("built"):
-            built_ids.add(marker.group(1))
+    from autoproduct.upstream.plan import built_task_ids
+
+    built_ids = built_task_ids(root)  # one definition of "built", shared
     failed: dict[str, str] = {}
     outcomes_path = root / "product" / "outcomes.yaml"
     if outcomes_path.exists():

@@ -1769,6 +1769,42 @@ def voter_gate_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("review-gate")
+def review_gate_cmd(
+    voter: str = typer.Option(None, help="One voter; default: all six"),
+    workspace: str = typer.Option(".", help="Where .mas/voter-registry.yaml lives"),
+    provider: str = typer.Option(None, help="Force one provider (e.g. 'mock')"),
+):
+    """Fixture-registration gate for the REVIEW voters (§11.19): 8 fixtures
+    each, >=87.5% to register. A failed voter stops voting — `review` runs
+    without it and says so."""
+    from pathlib import Path as _Path
+
+    from autoproduct.product.voter_gate import VoterFixtureError, record_gate_run
+    from autoproduct.review_gate import review_voter_names, run_review_voter_gate
+
+    names = [voter] if voter else review_voter_names()
+    failed_any = False
+    for name in names:
+        try:
+            run = run_review_voter_gate(
+                name, provider_override=provider, repo_dir=workspace
+            )
+        except VoterFixtureError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
+        record_gate_run(_Path(workspace) / ".mas", run)
+        color = "green" if run.status == "registered" else "red"
+        console.print(f"[{color}]review/{name}: {run.status}[/{color}] "
+                      f"({run.passed}/{run.total})")
+        for result in run.results:
+            if not result.passed:
+                console.print(f"    [red]{result.label}[/red]: {result.detail}")
+        failed_any = failed_any or run.status != "registered"
+    if failed_any:
+        raise typer.Exit(code=1)
+
+
 @app.command("prd-lint")
 def prd_lint_cmd(
     prd_yaml: str = typer.Argument(..., help="PRD yaml (a 'prd:' mapping, §20.56.2)"),

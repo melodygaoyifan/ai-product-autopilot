@@ -5,7 +5,8 @@ becomes a LangGraph StateGraph on the shared `.mas/checkpoints.db` saver
 (thread ids `incident:<id>`), so a crash between triage and root-cause
 resumes instead of re-paying the pipeline. Mirror step names are
 preserved exactly (intake → correlate → triage → [learned_skill] →
-[root_cause] → [skill_drafted] → final), the 60-point confidence floor
+[root_cause] → [skill_drafted] → final), the confidence floor (policy-
+ configurable since v0.35, default 60)
 and P4 skip-root-cause routing are unchanged, and nothing here mutates
 production — that ceiling is architectural (§08.1.8).
 """
@@ -23,7 +24,6 @@ from langgraph.graph import END, StateGraph
 
 from autoproduct.maintenance.correlate import Suspect, correlate
 from autoproduct.maintenance.review import (
-    CONFIDENCE_MIN,
     _ROOTCAUSE_SYSTEM,
     _TRIAGE_SYSTEM,
     Incident,
@@ -140,9 +140,12 @@ def finalize_node(state: MaintenanceState, *, mirror: YamlMirror) -> dict[str, A
     )
     learned = state.get("learned")
 
+    from autoproduct.policy import load_policy
+
+    floor = load_policy(state["repo_dir"]).rootcause_confidence_min
     if triage.priority == "P4":
         verdict = MaintenanceVerdict.TRIAGED_LOW_PRIORITY
-    elif root_cause and root_cause.confidence >= CONFIDENCE_MIN:
+    elif root_cause and root_cause.confidence >= floor:
         verdict = MaintenanceVerdict.ROOT_CAUSE_PROPOSED
     else:
         verdict = MaintenanceVerdict.ESCALATE_INCIDENT_UNRESOLVED
