@@ -20,7 +20,9 @@ from autoproduct.state import Verdict
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
 
-_DEFAULT_SKILLS = Path(__file__).resolve().parent.parent.parent / "skills"
+from autoproduct.paths import skills_root as _skills_root
+
+_DEFAULT_SKILLS = _skills_root()
 
 
 @app.callback()
@@ -285,7 +287,7 @@ def bench(
         raise typer.Exit(code=1)
 
 
-_DEPLOY_SKILLS = Path(__file__).resolve().parent.parent.parent / "skills" / "deploy"
+_DEPLOY_SKILLS = _skills_root() / "deploy"
 
 
 @app.command("deploy-review")

@@ -332,7 +332,9 @@ def _review_head(root: Path, provider: str):
     from autoproduct.orchestrator import run_review
     from autoproduct.upstream.workspace import load_project
 
-    skills = Path(__file__).resolve().parent.parent.parent.parent / "skills"
+    from autoproduct.paths import skills_root
+
+    skills = skills_root()
     skills_dir = str(skills)
     try:
         if load_project(root).profile == "data":

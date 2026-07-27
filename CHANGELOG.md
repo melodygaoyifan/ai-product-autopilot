@@ -19,6 +19,21 @@ and are summarized in the README roadmap and docs/implementation-map.md.
   stays deliberately plaintext (§09.6 audit asymmetry)
 - Suite: 688 → 694 on the D15 branch (727 after merging v0.32; ledger
   PC-1 synced at the merge)
+
+## v0.33.1 — operator pass: live records + installable package
+- Live operator records: first Gate PL5 evaluation (nothing fired — 0 of
+  4 attention weeks exist; decision explicitly NOT due), the launch
+  experiment's power verdict against real traffic (n=1 unique visitor vs
+  2,936 required → BLOCKED(INSUFFICIENT_POWER), exactly as pre-registered;
+  clone spike recorded as CI-confounded), and the append-only
+  weekly-attention log (2026-W30 honestly `not_tracked`; discipline
+  starts 2026-W31) — each with a test that re-derives it
+- Packaging: voter charters moved into the package
+  (`src/autoproduct/skills/`, root symlink kept) so the installed wheel
+  runs stage commands; pip-installed builds previously crashed loading
+  charters. MIT LICENSE file added; PyPI metadata completed
+- Suite: 727 → 732 hermetic tests on the rebased tree (ledger PC-1 synced)
+
 ## v0.32.0 — gap plan D13: upstream critique rosters
 - Discover/plan/spec critics ported onto the shared stage engine as 14
   registered charter voters (discovery: desirability/feasibility/

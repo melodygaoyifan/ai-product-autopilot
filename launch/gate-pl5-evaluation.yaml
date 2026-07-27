@@ -1,0 +1,37 @@
+# Gate PL5 — first live evaluation of the launch PRD's kill criteria,
+# run mechanically on 2026-07-26 (§22.65: criteria authored at P2 on
+# 2026-07-26 pre-launch, evaluated here, never rationalized post hoc).
+evaluation:
+  prd_ref: launch/prd.yaml
+  evaluated_at: "2026-07-26"
+  loop_index: 1
+  max_loops: 3
+  criteria:
+    - text: >-
+        If the framework's own weekly maintenance attention exceeds its
+        budget (4.0 hours) for 4 consecutive weeks, scope is cut per
+        Gate PL5 (doc 25 §76.4, verbatim).
+      fired: false
+      reading: >-
+        0 of the 4 required consecutive weeks exist: the attention log
+        (metrics/attention-log.yaml) holds one not_tracked week and no
+        logged hours yet. A criterion cannot fire on data that was never
+        collected — and it cannot be declared safe on it either.
+  fired: []
+  loop_budget_exhausted: false
+  requires_human_decision: false
+  status: >-
+    no decision due. 'continue' stays legal because nothing fired —
+    NOT because anyone chose it. Next evaluation: after four logged
+    weeks (earliest 2026-08-24) or at loop 3, whichever first.
+  demand_hypotheses:
+    - id: H-L1
+      verdict: unresolved
+      reading: "qualitative check pending at n=0 adopters (launch/experiment-run.yaml)"
+  observed_context:
+    stars: 2
+    unique_visitors_14d: 1
+    evidence:
+      method: "gh api repos/melodygaoyifan/ai-product-autopilot (+ /traffic/views)"
+      locator: "https://api.github.com/repos/melodygaoyifan/ai-product-autopilot"
+      retrieved_at: "2026-07-26"
