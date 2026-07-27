@@ -253,7 +253,11 @@ self-preference when Claude reviews Claude-written code; without it those
 seats visibly fall back (`substituted_from`).
 `GEMINI_API_KEY`/`XAI_API_KEY` optional likewise. Optional
 `AUTOPRODUCT_CHECKPOINT_KEY` encrypts checkpoint rows at rest — honored
-or a loud error, never a silent plaintext fallback. `gh` auth, Docker
+or a loud error, never a silent plaintext fallback. Optional
+`AUTOPRODUCT_TOOL_TRANSPORT=mcp` runs voter tools in subprocess-isolated
+MCP servers instead of in-process ([ADR-029](docs/adr/029-mcp-transport-partial.md));
+in-process is the default because a spawn per server per invocation is a
+real cost you should choose deliberately. `gh` auth, Docker
 optional (network-isolated test sandbox), Node optional (JS test gate).
 Operations guide: [RUNBOOK.md](RUNBOOK.md).
 
@@ -263,7 +267,9 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
   smoke, but its release bar is honest: it is unproven until a real Gate
   PL5 records a real kill or pivot on a live cycle.
 - Cloud services are guided, not auto-provisioned; deploys generate
-  artifacts + instructions, the button stays yours.
+  artifacts + instructions, and the button stays yours until you arm a
+  policy that says otherwise ([ADR-031](docs/adr/031-policy-armed-automation.md)
+  — disarmed by default, attributed, expiring).
 - 小程序 page-level testing needs `miniprogram-simulate` installed;
   pure-logic modules are gated via `node --test` today.
 - Single-machine operation; crash recovery resumes reviews, deploy
@@ -274,6 +280,9 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
   threat model, run one process per tenant ([ADR-030](docs/adr/030-multi-tenant-server.md)).
 
 ## Roadmap
+
+<details>
+<summary><b>v0.8 → v0.30</b> — the four downstream MASes, the founder autopilot, the adoption track, the outer product loop, domain profiles, the Sweep role, and the two audit gap-closure passes (22 releases, expand for the record)</summary>
 
 | | |
 |---|---|
@@ -299,12 +308,17 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.28 ✅ | gap-closure plan + phase A ([the plan](docs/gap-closure-plan.md) is a committed artifact; phases B–D queued): web det-tool runners (axe/Lighthouse/size-limit, gated), the data NFR grammar + lineage impact check, the full typed upstream verdict vocabulary, Gate P1 platform preflight (stale checklists and evidence-free checkboxes both fail; a named human submits), data-classification tags with downgrade refusal, and CHANGELOG.md |
 | v0.29 ✅ | plan phase B: five profile voter charters (web DesignFidelity/A11ySemantics/PerformanceDelta, 小程序 PlatformFit, app DeviceReality) and 8-fixture registration gates for them AND the three data voters — `voter-gate web\|miniprogram\|app\|data` now serves every family under the same 87.5% contract |
 | v0.30 ✅ | plan phase C: the cost/observability ledger (prices are config never constants, unpriced calls counted never zeroed, the monthly cap warns and a human decides; per-review tool-audit + evidence-ledger receipts; `/metrics` in Prometheus text, aggregate-only), the module-spec invariant layer (`.mas/specs/*.spec.yaml` — `SPEC_DRIFT_UNDOCUMENTED` on unexpected change patterns, forbidden side effects scanned in diffs), and named signal webhooks (`/webhooks/sentry\|datadog\|pagerduty` → the incident inbox, bearer-authed, deduped) |
+
+</details>
+
+| | |
+|---|---|
 | v0.31 ✅ | plan phase D, first half: the GEPA proposer loop (budget-gated by `gepa.yaml`, holdout-scored through the same fixture gate voters register through, proposal records only — nothing self-installs) and the secrets layer (`secret://ENV` loud resolution, masked repr, outbound scrub) |
 | v0.32 ✅ | plan phase D13: the discover/plan/spec critics as fourteen registered charter voters on the shared stage engine (each behind its 8-fixture gate; failed gates exclude the voter, unregistered voters are reported), retiring the single-panel critique prompts — `voter-gate discovery\|planning\|spec` |
 | v0.33 ✅ | plan phase D15 + D16 remainder: deploy review and maintenance rebuilt as checkpointed graphs on the shared saver — a crash mid-vote resumes from the last completed super-step via `recover` instead of re-paying the pipeline — and checkpoint rows encrypted at rest under `AUTOPRODUCT_CHECKPOINT_KEY` (honored or loud error, never silent plaintext; mirrors stay readable on purpose) |
 | v0.34 ✅ | Studio live progress + the wire-up gate: the building page shows per-task state updating in place (signals s1/s3 — no more staring at a frozen page), interrupted builds surface per-module 继续 buttons instead of a dead confirm screen, and a bidirectional frontend↔backend wire-up test — every rendered button/link/fetch must resolve to a route, every route must be rendered by some state |
 | v0.35.0 ✅ | the last small open items: registration gates for the six review voters (8 fixtures each, run through the real seat; the vote node fails closed and refuses to review with no roster), per-project `policy:` thresholds in `project.yaml` (unknown keys are a loud error, ranges bounded, a weakened bar stamped into the verdict), and the ready-queue fix — `next_tasks` read a field that never existed, so the plan never advanced past task one |
-| v0.36.0 ✅ | the instrument for that gate: `autoproduct loop` reads the cycle's own artifacts and reports the three criteria — and refuses to call the gate met on a quiet cycle or a recorded 'continue', because the gate is about the loop's ability to *stop* ([runbook](docs/v3-live-loop.md)) |
+| v0.36.0 ✅ | the instrument for the v3.0.0 design gate: `autoproduct loop` reads the cycle's own artifacts and reports the three criteria — and refuses to call the gate met on a quiet cycle or a recorded 'continue', because the gate is about the loop's ability to *stop* ([runbook](docs/v3-live-loop.md)) |
 | v0.37.0 ✅ | MCP becomes the real internal tool transport (doc 11 §17): two subprocess-isolated partitions (`read_only`, `code_intel`) speaking JSON-RPC over stdio, the spec→host→server triple check where an unlisted tool is *unreachable* rather than refused, and the `mcp-audit` ledger recording every call with digested arguments — opt in with `AUTOPRODUCT_TOOL_TRANSPORT=mcp` |
 | v0.38.0 ✅ | multi-tenant server mode ([ADR-030](docs/adr/030-multi-tenant-server.md), a recorded reversal of a non-goal — the server half only, never SaaS): token→workspace resolution where workspaces must be provably disjoint, per-tenant `secret://` webhook secrets, tenant-scoped reads, and uniform 401s that never enumerate tenants; plus [docs/adr/](docs/adr/) recording every reversal |
 | v0.39.0 ✅ | policy-armed automation ([ADR-031](docs/adr/031-policy-armed-automation.md), the hardest reversal): `automerge` and `deploy-execute` exist but stay disarmed until a human writes an attributed, expiring policy naming exact branches — earned by track record, blocked on sensitive paths including the policy files themselves, and logging refusals as carefully as actions |
