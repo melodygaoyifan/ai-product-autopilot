@@ -77,6 +77,17 @@ class AttentionProgress(BaseModel):
     last_week_untracked: bool = False  # a row exists, recorded as not tracked
 
 
+class CapabilityProgress(BaseModel):
+    """The second kill-criterion axis (PRD O-L2): product-bench capability.
+    Its series already exists, so unlike attention it can fire immediately."""
+
+    tracked: bool = False
+    streak: int = 0
+    needed: int = 0
+    fires: bool = False
+    detail: str = ""
+
+
 class CycleState(BaseModel):
     root: str
     entry_stage: str = "P0"
@@ -87,6 +98,7 @@ class CycleState(BaseModel):
     pl5_requires_human_decision: bool = False
     criteria: list[GateCriterion] = Field(default_factory=list)
     attention: AttentionProgress | None = None
+    capability: CapabilityProgress | None = None
     next_action: str = ""
 
     @property
@@ -126,6 +138,17 @@ def read_attention(repo_dir: str | pathlib.Path) -> AttentionProgress:
         # a gap to fill — so it is reported as itself rather than as "logged".
         next_week="" if row is not None else last_week,
         last_week_untracked=row is not None and row.status != "logged",
+    )
+
+
+def read_capability(repo_dir: str | pathlib.Path) -> CapabilityProgress:
+    """The capability axis, joined in like the attention one."""
+    from autoproduct.bench_criterion import evaluate
+
+    state = evaluate(repo_dir)
+    return CapabilityProgress(
+        tracked=bool(state.runs_considered), streak=state.streak,
+        needed=state.needed, fires=state.fires, detail=state.detail,
     )
 
 
@@ -201,7 +224,9 @@ def read_cycle(root: str | pathlib.Path) -> CycleState:
 
     # The blocking criterion's own series lives at the repo root, not in the
     # cycle directory (launch/../metrics/attention-log.yaml).
-    attention = read_attention(base.parent if base.name else base)
+    repo_root = base.parent if base.name else base
+    attention = read_attention(repo_root)
+    capability = read_capability(repo_root)
     scoped = [s for s in stages if s.id in in_scope]
     missing_scoped = [s for s in scoped if not s.present]
     span = f"{entry_stage}-P5" if entry_stage != "P0" else "P0-P5"
@@ -230,7 +255,7 @@ def read_cycle(root: str | pathlib.Path) -> CycleState:
             requirement="the PL5 record carries a human kill-or-pivot decision",
             met=pl5_decision in DECISIVE,
             detail=_decision_detail(pl5_path, pl5_decision, requires_human, fired,
-                                    attention),
+                                    attention, capability),
         ),
     ]
     return CycleState(
@@ -240,13 +265,14 @@ def read_cycle(root: str | pathlib.Path) -> CycleState:
         pl5_requires_human_decision=requires_human,
         criteria=criteria,
         attention=attention if attention.tracked else None,
+        capability=capability if capability.tracked else None,
         next_action=_next_action(scoped, criteria, requires_human, pl5_decision,
-                                 attention),
+                                 attention, capability),
     )
 
 
 def _decision_detail(pl5_path, decision, requires_human, fired,
-                     attention=None) -> str:
+                     attention=None, capability=None) -> str:
     if decision in DECISIVE:
         return f"recorded decision: {decision}"
     if decision == "continue":
@@ -267,14 +293,19 @@ def _decision_detail(pl5_path, decision, requires_human, fired,
         "because nothing fired, not because anyone chose it — the gate is "
         "not met by a quiet cycle"
     )
-    if attention is not None and attention.tracked:
-        # Say how far away it actually is, rather than leaving the operator to
-        # run `autoproduct attention` and join the two reports by hand.
-        return f"{quiet}. {attention.detail}"
+    axes = [
+        a.detail for a in (attention, capability)
+        if a is not None and a.tracked
+    ]
+    if axes:
+        # Say how far away each axis actually is, rather than leaving the
+        # operator to run two more commands and join the reports by hand.
+        return quiet + ". " + " | ".join(axes)
     return quiet
 
 
-def _next_action(stages, criteria, requires_human, decision, attention=None) -> str:
+def _next_action(stages, criteria, requires_human, decision, attention=None,
+                 capability=None) -> str:
     missing = [s for s in stages if not s.present]
     if missing:
         first = missing[0]
@@ -290,6 +321,12 @@ def _next_action(stages, criteria, requires_human, decision, attention=None) -> 
         )
     if decision in DECISIVE:
         return "v3.0.0 design gate met — the loop closed on a real decision"
+    if capability is not None and capability.tracked and capability.fires:
+        return (
+            "the capability criterion HAS FIRED (product-bench below its "
+            "floors) — record the human decision in the PL5 evaluation "
+            "(invariant 14.20)"
+        )
     if attention is not None and attention.tracked:
         if attention.fires:
             return (

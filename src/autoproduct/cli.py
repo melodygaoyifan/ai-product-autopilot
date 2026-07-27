@@ -2036,6 +2036,29 @@ def botfleet_cmd(
         raise typer.Exit(code=2)
 
 
+@app.command("bench-criterion")
+def bench_criterion_cmd(
+    repo_dir: str = typer.Option(".", help="Repository holding benchmarks/results/"),
+):
+    """The capability kill criterion (PRD O-L2): has product-bench fallen
+    below its floors for two consecutive runs? States, never decides — a
+    fired criterion needs a recorded human decision at Gate PL5."""
+    from autoproduct.bench_criterion import evaluate
+
+    state = evaluate(repo_dir)
+    for run in state.runs_considered:
+        console.print(f"  [dim]{run.summary()}[/dim]")
+    color = "red" if state.fires else "green"
+    console.print(f"[{color}]{state.detail}[/{color}]")
+    if state.fires:
+        console.print(
+            "\n[bold]Gate PL5 requires YOUR recorded decision[/bold] — kill, "
+            "pivot, or continue — in launch/gate-pl5-evaluation.yaml. Nothing "
+            "here decides it."
+        )
+        raise typer.Exit(code=3)
+
+
 @app.command("attention")
 def attention_cmd(
     week: str = typer.Option(None, help="ISO year-week (default: last week)"),

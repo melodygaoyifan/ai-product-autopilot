@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-1048-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-1060-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **1048 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **1060 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -237,6 +237,7 @@ including the runs that fail.
 | `automerge` · `deploy-execute` | merge/deploy only under a human-armed, attributed, expiring policy — disarmed by default ([ADR-031](docs/adr/031-policy-armed-automation.md)) |
 | `serve` · `worker` · `tenant` | webhook mode + queue workers (SQLite, one host); `tenant add` fronts several isolated workspaces from one process ([ADR-030](docs/adr/030-multi-tenant-server.md)) |
 | `botfleet` | bot playtests: N parallel sessions, triaged and deduped, each finding with a reproduction command — crashes and stuck states, never whether the game is fun |
+| `bench-criterion` | the capability kill criterion (PRD O-L2): has product-bench fallen below its floors for two consecutive runs? |
 | `attention` | the weekly maintenance-attention series the launch PRD's kill criterion is falsifiable by: the machine measures the observable floor from the ledgers, you log the hours |
 | `loop` | where the live product cycle stands against the v3.0.0 design gate ([runbook](docs/v3-live-loop.md)) — states, never decides |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
@@ -335,6 +336,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.48.0 ✅ | upstream resume (a crashed `create` skips tasks already built instead of re-paying them — task-granular, and said so plainly), grounding extended to the spec writer (which immediately showed the spec writer never saw CLAUDE.md or the module invariants it must not contradict), and the gap-closure plan closed out |
 | v0.49.0 ✅ | the use-case matrix: every profile builds, every edition narrows, every substrate rung activates exactly what its floors allow — which found that six of eight stages knew their infrastructure floor without enforcing it (an S0 team with no git could still run `build`), now fixed and pinned in both directions |
 | v0.50.0 ✅ | `loop` and `attention` joined: the gate report now names the real distance to firing and the exact command to run next, and reports a `not_tracked` week as the recorded decision it is rather than as logged or as a gap |
+| v0.51.0 ✅ | a second kill-criterion axis, chosen by the human and evaluated by the machine: product-bench capability regression, whose series is already collected weekly — so unlike the attention axis it can fire on the next run, with floors read off the observed distribution rather than picked |
 | next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history

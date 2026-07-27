@@ -4,6 +4,34 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.51.0 — a second kill-criterion axis, chosen by the human, evaluated by the machine
+- The launch PRD now carries TWO axes. The new one (O-L2, capability
+  regression) fires if the product-bench build rate falls below 60% OR the
+  probe pass rate below 50% for 2 consecutive weekly runs.
+- **Why this axis and not another:** its series already exists.
+  `benchmarks/results/*.yaml` records build/probe/clean rates per run and the
+  cadence is weekly, so this criterion can fire on the NEXT run — while the
+  attention axis cannot fire until four consecutive weeks are logged. A
+  second axis that also cannot fire would have added no coverage.
+- **The floors are read, not chosen.** Runs 4-5 sat at 8-33% build, runs 6-9
+  climbed 42-72%, runs 10-11 hold 74-75%. 60/50 sits below the current level
+  and above the pre-fix era: crossing it means regressing into territory the
+  system already climbed out of once. Two runs rather than one because at
+  n=4 cases a single dip is noise, and a criterion that cries wolf gets
+  ignored.
+- `autoproduct bench-criterion` evaluates it, and `autoproduct loop` now
+  reports both axes with their real readings in one line. Either firing
+  demands a recorded human decision at Gate PL5 (invariant 14.20); neither
+  evaluator decides.
+- metrics/product_bench_capability.md defines the series, its exclusions
+  (harness-noise runs, corpus changes that reset comparability), and its
+  falsifier.
+- **The PRD linter caught me:** the outcome instrumented
+  `product_bench.run_recorded` while the metric counts
+  `product_bench.case_built`, so P4 would have read zero. That is precisely
+  the class of bug prd_lint exists for, and it fired on its own author.
+- Suite: 1048 -> 1060 hermetic tests
+
 ## v0.50.0 — `loop` and `attention` now answer one question together
 - `autoproduct loop` reads the attention streak, so the v3.0.0 gate report
   states the real distance to firing ("2/4 consecutive logged weeks over

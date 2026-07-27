@@ -42,8 +42,10 @@ skip is recorded with its reason rather than left as a silent gap; P0/P1
 are in scope for cycle 2, whose candidates come from this cycle's PL5
 routing.
 
-V3-1 and V3-2 are met. V3-3 is not, and *cannot honestly be* yet: the
-launch PRD's only kill criterion needs four consecutive weeks of logged
+V3-1 and V3-2 are met. V3-3 is not. Since v0.51 the PRD carries **two**
+axes: the capability criterion (product-bench below its floors for two
+consecutive runs) can fire on the next weekly run, and the attention
+criterion needs four consecutive weeks of logged
 maintenance attention, and the attention log holds one untracked week. A
 criterion cannot fire on data that was never collected — and it cannot be
 declared safe on it either (`launch/gate-pl5-evaluation.yaml` says exactly
