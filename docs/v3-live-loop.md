@@ -51,8 +51,19 @@ this).
 
 ## Closing it, when the data exists
 
-1. Log maintenance attention weekly (`metrics/attention-log.yaml`) until
-   four consecutive weeks exist, or reach loop 3 — whichever comes first.
+1. Log maintenance attention weekly, once per week, with:
+
+   ```
+   autoproduct attention                      # last week's floor + streak state
+   autoproduct attention --confirm-hours 5.5 --by <you>
+   ```
+
+   The first form measures only what left a timestamp (gate dwell, recorded
+   decisions) and states that floor; the second logs *your* number beside it.
+   The machine never authors the hours, and the log is append-only. Repeat
+   until four consecutive logged weeks exist, or you reach loop 3 —
+   whichever comes first. When the criterion fires, the command exits 3 and
+   points here.
 2. Re-run the evaluation mechanically against `launch/prd.yaml`'s criteria.
 3. If a criterion fires, `loop` exits **3** and says a decision is due.
    Record it in `launch/gate-pl5-evaluation.yaml`:

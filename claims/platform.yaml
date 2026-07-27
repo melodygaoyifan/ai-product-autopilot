@@ -3,10 +3,10 @@
 # the hermetic suite enforces it (tests/test_editions_platform.py).
 claims:
   - id: PC-1
-    text: "961 hermetic tests pass via uv run pytest at the current tag"
+    text: "982 hermetic tests pass via uv run pytest at the current tag"
     kind: demand
     source_type: primary_measured
-    n: 961
+    n: 982
     evidence:
       - {method: pytest_run, locator: "repo://tests (uv run pytest)",
          retrieved_at: "2026-07-26T20:45:00Z"}

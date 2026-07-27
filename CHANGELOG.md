@@ -4,6 +4,32 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.46.0 — the attention collector: making the v3.0.0 criterion able to fire
+- `autoproduct attention` measures the OBSERVABLE FLOOR of weekly
+  maintenance attention from ledgers `.mas/` already writes — gate dwell
+  (escalate→final, the same measurement the rubber-stamp detector uses),
+  recorded product-gate decisions, sweep reviews — and prints it with the
+  artifacts it came from.
+- **The machine never sets `hours`.** A floor is not a total: reading a
+  review without touching a gate, thinking, and answering questions all
+  count toward attention and leave no timestamp. So `hours` and
+  `status: logged` stay human, `--by` is required (a number in this series
+  has an author), and the floor is recorded BESIDE the human's number rather
+  than instead of it.
+- Append-only, enforced: an existing week is never rewritten, the log's
+  header comment survives appends, and a malformed log errors rather than
+  starting a fresh one.
+- The streak reader implements the log's own rule — an untracked week breaks
+  a streak without counting either way, and exactly-at-budget is not over
+  budget. When four consecutive logged weeks exceed the budget the command
+  exits 3 and says Gate PL5 now needs a recorded human decision. It does not
+  make one.
+- Why this was engineering worth doing: the v3.0.0 blocker was never "wait
+  four weeks", it was that logging was a manual habit whose lapse silently
+  reset the clock the criterion depends on. The habit is now cheap; the
+  decision stays yours.
+- Suite: 961 -> 982 hermetic tests
+
 ## v0.45.0 — the deploy-side CLI wrappers complete the §17.2 table
 - terraform_validate, helm_lint, kubectl_dry_run, argocd_app_diff,
   flagger_inspect, railway_inspect join the L1 `deploy` partition. This is
