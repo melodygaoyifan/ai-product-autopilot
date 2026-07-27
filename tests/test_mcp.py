@@ -43,12 +43,28 @@ def repo(tmp_path):
 # --- partition table ----------------------------------------------------------
 
 
-def test_every_registry_tool_is_served_by_exactly_one_partition():
+def test_every_tool_is_served_by_exactly_one_partition():
+    from autoproduct.mcp.server import SERVER_RISK
+    from autoproduct.mcp.stage_tools import stage_tool_names
+
     served = [t for tools in SERVER_TOOLS.values() for t in tools]
-    assert sorted(served) == sorted(VOTER_TOOL_REGISTRY)
     assert len(served) == len(set(served)), "a tool may live in only one partition"
-    for tool in VOTER_TOOL_REGISTRY:
+    # Both surfaces are fully partitioned, and they do not overlap.
+    assert set(served) == set(VOTER_TOOL_REGISTRY) | set(stage_tool_names())
+    assert not set(VOTER_TOOL_REGISTRY) & set(stage_tool_names())
+    for tool in [*VOTER_TOOL_REGISTRY, *stage_tool_names()]:
         assert server_for(tool) in SERVER_TOOLS
+    # Every partition declares a risk tier.
+    assert set(SERVER_RISK) == set(SERVER_TOOLS)
+
+
+def test_risk_tiers_match_the_design_table():
+    """§17.2: read-only L0, deploy/maintenance L1, test execution L2."""
+    from autoproduct.mcp.server import SERVER_RISK
+
+    assert SERVER_RISK["read_only"] == SERVER_RISK["code_intel"] == 0
+    assert SERVER_RISK["deploy"] == SERVER_RISK["maintenance"] == 1
+    assert SERVER_RISK["test_exec"] == 2  # it executes repo code
 
 
 # --- protocol -----------------------------------------------------------------
@@ -161,8 +177,8 @@ def test_audit_ledger_records_permitted_and_refused_calls(repo):
 
 
 def test_unroutable_allowlist_entries_are_reported_not_silently_dropped(repo):
-    host = MCPHost(repo, ["read_file", "run_tests"], voter="test")
-    assert host.unroutable_tools == ["run_tests"]  # L2 partition not shipped yet
+    host = MCPHost(repo, ["read_file", "terraform_validate"], voter="test")
+    assert host.unroutable_tools == ["terraform_validate"]  # unbuilt integration
     assert host.mounted_servers == ["read_only"]
 
 
@@ -262,3 +278,103 @@ def test_mcp_server_module_is_runnable_as_a_subprocess_entry_point(repo):
     assert {t["name"] for t in message["result"]["tools"]} == set(
         SERVER_TOOLS["read_only"]
     )
+
+
+# --- L1/L2 partitions and risk-tier RBAC (v0.40.0) ----------------------------
+
+
+DEPLOY_DIFF = (
+    "diff --git a/migrations/0044_drop.sql b/migrations/0044_drop.sql\n"
+    "--- a/migrations/0044_drop.sql\n+++ b/migrations/0044_drop.sql\n"
+    "@@ -1,0 +1,1 @@\n+DROP TABLE legacy_orders;\n"
+)
+
+
+def test_risk_ceiling_blocks_mounting_a_higher_tier_partition(repo):
+    """A voter declaring risk_ceiling 0 cannot reach L1/L2 even if its
+    allowlist names one of their tools — refused where the connection would
+    be made, not in a prompt."""
+    host = MCPHost(repo, ["read_file", "migration_scan", "run_tests"],
+                   voter="security", risk_ceiling=0)
+    assert host.over_ceiling_tools == ["migration_scan", "run_tests"]
+    assert host.mounted_servers == ["read_only"]
+    with host:
+        with pytest.raises(MCPPermissionError, match="above the declared ceiling"):
+            host.call("migration_scan", {"diff_text": DEPLOY_DIFF})
+    refusal = read_audit(repo)[-1]
+    assert refusal["outcome"] == "refused"
+    assert "exceeds the caller's ceiling" in refusal["detail"]
+
+
+def test_l1_deploy_partition_serves_the_probes_in_a_subprocess(repo):
+    # run_tests is allowlisted here so the refusal below is about the risk
+    # tier, not about the allowlist.
+    with MCPHost(repo, ["migration_scan", "canary_scan", "run_tests"],
+                 voter="deploy_config", risk_ceiling=1) as host:
+        assert host.mounted_servers == ["deploy"]  # test_exec never mounted
+        assert host.over_ceiling_tools == ["run_tests"]
+        payload = json.loads(host.call("migration_scan", {"diff_text": DEPLOY_DIFF}))
+        assert payload["tool"] == "migration_scan"
+        assert any(f["severity"] == "critical" for f in payload["findings"])
+        # L2 stays out of reach at ceiling 1, even though it is allowlisted.
+        with pytest.raises(MCPPermissionError, match="above the declared ceiling"):
+            host.call("run_tests", {})
+
+
+def test_l1_maintenance_partition_reads_git_history(repo):
+    import subprocess
+    import sys as _sys
+
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm",
+         "billing: invoice_total over items"],
+        cwd=repo, check=True,
+    )
+    with MCPHost(repo, ["recent_commits", "correlate"], voter="rootcause",
+                 risk_ceiling=1) as host:
+        assert host.mounted_servers == ["maintenance"]
+        commits = json.loads(host.call("recent_commits", {"days": 30}))
+        assert commits and "invoice_total" in commits[0]["subject"]
+        suspects = json.loads(host.call(
+            "correlate", {"incident_text": "TypeError in invoice_total", "days": 30}
+        ))
+        assert suspects and suspects[0]["score"] > 0
+    assert _sys.executable  # sanity: the subprocess path was used
+
+
+def test_l2_test_exec_partition_requires_the_top_ceiling(repo, monkeypatch):
+    """run_tests executes repo code, so only a ceiling-2 caller may mount it."""
+    import autoproduct.testing as testing_mod
+
+    monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
+    (repo / "tests").mkdir(exist_ok=True)
+    (repo / "tests" / "test_ok.py").write_text("def test_ok():\n    assert True\n")
+    with MCPHost(repo, ["run_tests"], voter="test_gate", risk_ceiling=2) as host:
+        assert host.mounted_servers == ["test_exec"]
+        payload = json.loads(host.call("run_tests", {"diff_text": "", "mode": "fast"}))
+        assert "status" in payload
+    assert [r["server"] for r in read_audit(repo)] == ["test_exec"]
+
+
+def test_stage_tools_return_errors_as_data(repo):
+    from autoproduct.mcp.stage_tools import call_stage_tool, risk_of, stage_tool_names
+
+    assert risk_of("migration_scan") == 1 and risk_of("run_tests") == 2
+    assert risk_of("read_file") is None  # L0 lives in the ToolBox, not here
+    assert "error: unknown stage tool" in call_stage_tool("nope", repo, {})
+    assert "bad arguments" in call_stage_tool("migration_scan", repo, {"wrong": 1})
+    assert set(stage_tool_names()) == {
+        "migration_scan", "workflow_scan", "canary_scan",
+        "recent_commits", "correlate", "run_tests",
+    }
+
+
+def test_voter_allowlists_cannot_reach_stage_tools_through_the_toolbox(repo):
+    """MCPToolBox intersects with the L0 registry: a skill naming an L1 tool
+    gets it dropped at construction, not merely refused at call time."""
+    box = MCPToolBox(repo, ["read_file", "migration_scan"], voter="security")
+    assert box.allowed == {"read_file"}
+    assert box.call("migration_scan", {}).startswith("error: tool 'migration_scan'")
+    box.close()

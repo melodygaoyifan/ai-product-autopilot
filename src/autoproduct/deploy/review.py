@@ -54,6 +54,12 @@ class DeployResult(BaseModel):
     blocked_voters: list[str] = Field(default_factory=list)
     deploy_files: list[str] = Field(default_factory=list)
     artifacts_dir: str = ""
+    branch: str = Field(
+        default="",
+        description="the branch this review covers, resolved at run time; "
+        "empty means unresolvable, which `deploy-execute` treats as a refusal "
+        "rather than assuming a default (ADR-031)",
+    )
 
 
 def load_policy(repo_dir: str | Path) -> dict:

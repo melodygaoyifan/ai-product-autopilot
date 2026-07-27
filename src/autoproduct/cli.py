@@ -1859,7 +1859,7 @@ def deploy_execute_cmd(
         decision = automation.evaluate_deploy(
             repo_dir,
             verdict=str(final.get("verdict", "")),
-            branch=str(final.get("branch", "")) or "main",
+            branch=str(final.get("branch", "")),  # never defaulted (ADR-031)
             changed_files=list(final.get("deploy_files") or []),
         )
     except automation.PolicyError as exc:

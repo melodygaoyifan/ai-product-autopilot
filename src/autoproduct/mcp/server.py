@@ -7,10 +7,15 @@ partition table below is the server-side half of the triple check: a
 server refuses a tool it does not declare even if the caller asks nicely,
 so a host bug cannot widen a voter's reach.
 
-Only the L0 read-only surface is partitioned here. The L1/L2 partitions
-(deploy, maintenance, test execution) still run in-process and are named
-as open in the implementation map — shipping two real servers beats
-stubbing eight.
+Five partitions ship: the two L0 read-only ones (v0.37) and the L1/L2
+stage servers (v0.40) whose tools exist — deploy probes, maintenance
+correlation, and test execution. Each declares a risk tier, and the host
+refuses to mount one above the caller's ceiling.
+
+The §17.2 table's external-service tools (`terraform_validate`,
+`sentry_get_issue`, `datadog_query_metrics`, …) are unbuilt and stay named
+as open rather than stubbed: when they arrive they are new tools in an
+existing partition, which is configuration rather than architecture.
 """
 
 from __future__ import annotations
@@ -22,11 +27,28 @@ from typing import IO
 
 from autoproduct.mcp import protocol
 
-# server name → tools it serves (doc 11 §17.2, restricted to the tools
-# that exist today in VOTER_TOOL_REGISTRY).
+# server name → tools it serves (doc 11 §17.2). L0 partitions serve the
+# voter tool registry; L1/L2 partitions serve the stage tools in
+# mcp/stage_tools.py. External-service tools from the §17.2 table
+# (terraform_validate, sentry_get_issue, …) are unbuilt and stay named as
+# open rather than stubbed.
 SERVER_TOOLS: dict[str, tuple[str, ...]] = {
     "read_only": ("read_file", "grep", "list_files"),
     "code_intel": ("symbol_refs",),
+    "deploy": ("migration_scan", "workflow_scan", "canary_scan"),
+    "maintenance": ("recent_commits", "correlate"),
+    "test_exec": ("run_tests",),
+}
+
+# Risk tier per server (§17.2). The host refuses to mount a server above the
+# caller's declared ceiling, so a read-only voter cannot reach L1/L2 even if
+# a future skill names one of their tools.
+SERVER_RISK: dict[str, int] = {
+    "read_only": 0,
+    "code_intel": 0,
+    "deploy": 1,
+    "maintenance": 1,
+    "test_exec": 2,
 }
 
 TOOL_SCHEMAS: dict[str, dict] = {
@@ -69,6 +91,55 @@ TOOL_SCHEMAS: dict[str, dict] = {
             "required": ["symbol"],
         },
     },
+    "migration_scan": {
+        "description": "Scan a diff for destructive or unguarded migrations.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"}},
+            "required": ["diff_text"],
+        },
+    },
+    "workflow_scan": {
+        "description": "Scan a diff for unsafe CI workflow configuration.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"}},
+            "required": ["diff_text"],
+        },
+    },
+    "canary_scan": {
+        "description": "Scan a diff for canary/rollout policy problems.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"}},
+            "required": ["diff_text"],
+        },
+    },
+    "recent_commits": {
+        "description": "Recent commits with touched files, for correlation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer"},
+                           "limit": {"type": "integer"}},
+        },
+    },
+    "correlate": {
+        "description": "Rank recent commits by overlap with an incident text.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"incident_text": {"type": "string"},
+                           "days": {"type": "integer"}},
+            "required": ["incident_text"],
+        },
+    },
+    "run_tests": {
+        "description": "Run the repository's test gate (EXECUTES repo code).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"},
+                           "mode": {"type": "string"}},
+        },
+    },
 }
 
 
@@ -81,7 +152,7 @@ def server_for(tool: str) -> str | None:
 
 
 def _handle(
-    message: dict, *, server: str, tools: tuple[str, ...], box
+    message: dict, *, server: str, tools: tuple[str, ...], box, root: str | Path = "."
 ) -> dict | None:
     method = message.get("method")
     msg_id = message.get("id")
@@ -112,7 +183,13 @@ def _handle(
                 f"(it serves {list(tools)})",
             )
         try:
-            text = box.call(name, params.get("arguments") or {})
+            arguments = params.get("arguments") or {}
+            if box is not None:
+                text = box.call(name, arguments)
+            else:
+                from autoproduct.mcp.stage_tools import call_stage_tool
+
+                text = call_stage_tool(name, root, arguments)
         except Exception as exc:  # noqa: BLE001 — errors travel as protocol data
             return protocol.error(
                 msg_id, protocol.INTERNAL_ERROR, f"{type(exc).__name__}: {exc}"
@@ -135,13 +212,19 @@ def serve(
         raise SystemExit(
             f"unknown server {server!r}; known: {sorted(SERVER_TOOLS)}"
         )
-    from autoproduct.tools.voter_tools import ToolBox
+    from autoproduct.tools.voter_tools import VOTER_TOOL_REGISTRY, ToolBox
 
     tools = SERVER_TOOLS[server]
-    # The subprocess's own budget is unbounded: the *caller's* budget is the
-    # contract (enforced host-side, per voter invocation). Bounding it twice
-    # with different counters would silently truncate long investigations.
-    box = ToolBox(root, allowed=list(tools), budget=10**9)
+    # L0 partitions serve registry tools through the ToolBox (path scoping,
+    # size caps); L1/L2 partitions dispatch to stage_tools. The subprocess's
+    # own budget is unbounded: the *caller's* budget is the contract
+    # (enforced host-side, per invocation). Bounding it twice with different
+    # counters would silently truncate long investigations.
+    box = (
+        ToolBox(root, allowed=list(tools), budget=10**9)
+        if set(tools) <= VOTER_TOOL_REGISTRY
+        else None
+    )
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
     while True:
@@ -154,7 +237,7 @@ def serve(
             continue
         if message is None:
             return
-        response = _handle(message, server=server, tools=tools, box=box)
+        response = _handle(message, server=server, tools=tools, box=box, root=root)
         if response is not None:
             protocol.write_message(stdout, response)
         if message.get("method") == "shutdown":

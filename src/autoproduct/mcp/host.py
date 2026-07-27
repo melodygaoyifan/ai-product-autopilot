@@ -25,7 +25,7 @@ import pathlib
 import time
 
 from autoproduct.mcp.client import MCPClient, MCPClientError
-from autoproduct.mcp.server import SERVER_TOOLS, server_for
+from autoproduct.mcp.server import SERVER_RISK, SERVER_TOOLS, server_for
 
 AUDIT_FILE = "mcp-audit.jsonl"
 
@@ -45,19 +45,29 @@ class MCPHost:
         voter: str = "unknown",
         timeout_s: float = 30.0,
         audit_dir: str | pathlib.Path | None = None,
+        risk_ceiling: int = 0,
     ):
         self.root = pathlib.Path(repo_dir).resolve()
         self.voter = voter
         self.timeout_s = timeout_s
+        self.risk_ceiling = risk_ceiling
         self.audit_path = (
             pathlib.Path(audit_dir) if audit_dir else self.root / ".mas"
         ) / AUDIT_FILE
+        routable = [t for t in allowed_tools if server_for(t)]
+        # Risk-tier RBAC (§17.2): a tool whose partition sits above the
+        # caller's declared ceiling is refused HERE, where the connection
+        # would be made — not in a prompt the model could talk around.
+        self.over_ceiling_tools = sorted(
+            t for t in routable
+            if SERVER_RISK.get(server_for(t), 99) > risk_ceiling
+        )
         # Layer 2: which servers does this allowlist actually require?
-        self.allowed_tools = [t for t in allowed_tools if server_for(t)]
+        self.allowed_tools = [t for t in routable if t not in self.over_ceiling_tools]
         self.mounted_servers = sorted(
             {server_for(t) for t in self.allowed_tools} - {None}
         )
-        self.unroutable_tools = sorted(set(allowed_tools) - set(self.allowed_tools))
+        self.unroutable_tools = sorted(set(allowed_tools) - set(routable))
         self._clients: dict[str, MCPClient] = {}
 
     # --- lifecycle ------------------------------------------------------
@@ -95,6 +105,16 @@ class MCPHost:
     def call(self, tool: str, arguments: dict) -> str:
         started = time.monotonic()
         server = server_for(tool)
+        if tool in self.over_ceiling_tools:
+            self._audit(tool, server, arguments, "refused",
+                        time.monotonic() - started,
+                        detail=f"risk tier {SERVER_RISK.get(server)} exceeds the "
+                               f"caller's ceiling {self.risk_ceiling}")
+            raise MCPPermissionError(
+                f"voter {self.voter!r} may not call {tool!r}: its partition "
+                f"{server!r} is risk L{SERVER_RISK.get(server)}, above the "
+                f"declared ceiling L{self.risk_ceiling}"
+            )
         if tool not in self.allowed_tools or server not in self._clients:
             self._audit(tool, server, arguments, "refused",
                         time.monotonic() - started,

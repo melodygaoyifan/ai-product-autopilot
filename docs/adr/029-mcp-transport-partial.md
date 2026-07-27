@@ -57,11 +57,26 @@ Postmark server that BCC'd every sent email to its author are what
 happens when an agent system trusts someone else's tool process. Every
 server here is autoproduct's own code.
 
+## Update (v0.40.0)
+
+The L1/L2 partitions named as open above now ship for the tools that
+exist: `deploy` (the deterministic deploy probes), `maintenance`
+(recent_commits, correlate), and `test_exec` (run_tests). Each declares a
+risk tier and `MCPHost` refuses to mount one above the caller's
+`risk_ceiling`, which is the RBAC half of §17.2 rather than only the
+partitioning half.
+
+Still open, and still deliberately: the §17.2 table's external-service
+tools (`terraform_validate`, `sentry_get_issue`, `datadog_query_metrics`)
+are integrations nobody has built. When they arrive they are new tools in
+an existing partition — configuration, not architecture.
+
 ## Consequences
 
 - The isolation claim in doc 11 §17 is now true for the tools voters
   actually use during code review.
 - A path-traversal attempt in `read_file` is refused inside a child
   process; the harness never evaluates the path.
-- The map's oldest open item shrinks from "the MCP layer" to "the L1/L2
-  partitions", which is a smaller and more honest statement.
+- The map's oldest open item shrank from "the MCP layer" (v0.36) to "the
+  L1/L2 partitions" (v0.37) to "external-service integrations nobody has
+  built" (v0.40) — each step a smaller and more honest statement.

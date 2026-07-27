@@ -4,6 +4,28 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.40.0 — the L1/L2 MCP partitions + the deploy-branch fix
+- Three more partitions from doc 11 §17.2, for the tools that exist:
+  `deploy` (L1: migration/workflow/canary probes), `maintenance` (L1:
+  recent_commits, correlate), `test_exec` (L2: run_tests, which executes
+  repo code — §17.2's reason for isolating it hardest). Five real servers
+  now; the table's external-service tools (terraform, sentry, datadog)
+  stay unbuilt and named as open rather than stubbed.
+- Risk-tier RBAC at the transport: each partition declares L0/L1/L2 and
+  MCPHost refuses to mount one above the caller's `risk_ceiling`, so a
+  read-only voter cannot reach L1/L2 even if a future skill names one of
+  their tools — enforced where the connection is made, not in a prompt.
+  `MCPToolBox` also intersects with the L0 registry, so a voter allowlist
+  cannot grow into stage tools by accident.
+- Audit coverage now includes the tools that touch the most: deploy probes
+  and test execution were previously unaudited.
+- Fix (v0.39 follow-up): the deploy review now records the branch it
+  covers (PR head branch, or the checked-out branch for a local range;
+  empty on detached HEAD). `deploy-execute` and `automerge` treat an
+  unresolvable branch as a REFUSAL — the old `or "main"` fallback would
+  have let an armed policy act on work it was never armed for.
+- Suite: 856 -> 866 hermetic tests
+
 ## v0.39.0 — policy-armed merge and deploy execution (ADR-031)
 - `autoproduct automerge <review-id>` and `deploy-execute <id>`: the
   capabilities the README listed as out-of-scope now exist, DISARMED. A

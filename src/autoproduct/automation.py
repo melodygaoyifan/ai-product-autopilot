@@ -184,7 +184,14 @@ def evaluate_merge(
         reasons.append(f"verdict {verdict!r} is not in {sorted(MERGEABLE_VERDICTS)}")
     if escalated:
         reasons.append("the review escalated to a human — that decision stands")
-    if branch not in policy.branches:
+    if not branch:
+        # Same rule as deploy: an unknown branch is a refusal, never an
+        # assumption. `gh pr view` failing must not become "probably main".
+        reasons.append(
+            "the PR's branch could not be determined — refusing rather than "
+            "assuming a default"
+        )
+    elif branch not in policy.branches:
         reasons.append(f"branch {branch!r} is not in the armed list {policy.branches}")
     if policy.require_test_gate_pass and test_gate_status != "passed":
         reasons.append(f"test gate status is {test_gate_status!r}, not 'passed'")
@@ -231,7 +238,15 @@ def evaluate_deploy(
         )
     if verdict != "PROMOTE":
         reasons.append(f"deploy verdict is {verdict!r}, not 'PROMOTE'")
-    if branch not in policy.branches:
+    if not branch:
+        # An unresolvable branch (detached HEAD, no gh, no remote) must never
+        # fall back to a default: "assume main" is how an armed policy acts
+        # on work it was never armed for.
+        reasons.append(
+            "the review's branch could not be determined — refusing rather "
+            "than assuming a default"
+        )
+    elif branch not in policy.branches:
         reasons.append(f"branch {branch!r} is not in the armed list {policy.branches}")
     blocked = _path_blocked(changed_files, policy)
     if blocked:

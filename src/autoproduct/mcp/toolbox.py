@@ -48,13 +48,18 @@ class MCPToolBox:
         *,
         voter: str = "unknown",
         timeout_s: float = 30.0,
+        risk_ceiling: int = 0,
     ):
         self.root = pathlib.Path(repo_dir).resolve()
+        # Voter tools stay the L0 registry; L1/L2 stage tools are reachable
+        # through MCPHost directly (deploy/maintenance/test stages), never
+        # by widening a voter's allowlist.
         self.allowed = set(allowed) & VOTER_TOOL_REGISTRY
         self.budget = budget
         self.calls_made = 0
         self._host = MCPHost(
-            self.root, sorted(self.allowed), voter=voter, timeout_s=timeout_s
+            self.root, sorted(self.allowed), voter=voter, timeout_s=timeout_s,
+            risk_ceiling=risk_ceiling,
         )
         self._started = False
 
@@ -103,10 +108,13 @@ def build_toolbox(
     *,
     voter: str = "unknown",
     transport: str | None = None,
+    risk_ceiling: int = 0,
 ):
     """The one place that decides which transport a voter's tools run on."""
     if tool_transport(transport) == "mcp":
-        return MCPToolBox(repo_dir, allowed, budget, voter=voter)
+        return MCPToolBox(
+            repo_dir, allowed, budget, voter=voter, risk_ceiling=risk_ceiling
+        )
     from autoproduct.tools.voter_tools import ToolBox
 
     return ToolBox(repo_dir, allowed, budget)

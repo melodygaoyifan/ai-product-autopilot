@@ -93,7 +93,8 @@ class Voter:
                 toolbox = (
                     build_toolbox(repo_dir, self.spec.tools,
                                   budget=self.spec.tool_budget,
-                                  voter=self.spec.name)
+                                  voter=self.spec.name,
+                                  risk_ceiling=self.spec.risk_ceiling)
                     if self.spec.tools and repo_dir
                     else None
                 )

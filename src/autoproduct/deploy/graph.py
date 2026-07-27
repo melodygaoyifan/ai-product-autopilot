@@ -19,6 +19,7 @@ forever (§08.1.8).
 from __future__ import annotations
 
 import functools
+import subprocess
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -50,9 +51,27 @@ from autoproduct.state import Severity, VoterFinding, VoterOutput, VoterStatus
 from autoproduct.voters import load_voters
 
 
+def resolve_branch(target: str, repo_dir: str) -> str:
+    """The branch this review covers: a PR's head branch, or the checked-out
+    branch for a local range. Empty when it cannot be determined — callers
+    must refuse rather than assume (ADR-031 §mechanism)."""
+    from autoproduct.diff import _PR_URL
+    from autoproduct.github import pr_head_branch
+
+    if _PR_URL.match(target):
+        return pr_head_branch(target) or ""
+    proc = subprocess.run(  # noqa: S603 — fixed argv
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=repo_dir, capture_output=True, text=True, timeout=30,
+    )
+    branch = proc.stdout.strip() if proc.returncode == 0 else ""
+    return "" if branch in ("", "HEAD") else branch  # detached HEAD is unknown
+
+
 class DeployState(TypedDict, total=False):
     deploy_id: str
     target: str
+    branch: str
     repo_dir: str
     skills_dir: str
     provider_override: str | None
@@ -187,6 +206,7 @@ def finalize_node(state: DeployState, *, mirror: YamlMirror) -> dict[str, Any]:
             findings=kept,
             deploy_files=state["deploy_files"],
             artifacts_dir=str(mirror.dir),
+            branch=state.get("branch", ""),
         )
         mirror.write("final", result.model_dump(mode="json"))
         return {"result": result.model_dump(mode="json")}
@@ -216,6 +236,7 @@ def finalize_node(state: DeployState, *, mirror: YamlMirror) -> dict[str, Any]:
         blocked_voters=blocked,
         deploy_files=state["deploy_files"],
         artifacts_dir=str(mirror.dir),
+        branch=state.get("branch", ""),
     )
     mirror.write("final", result.model_dump(mode="json"))
     return {"result": result.model_dump(mode="json")}
@@ -262,8 +283,10 @@ def run_deploy_review(
         else fetch_diff(target, repo_dir=repo_dir)
     )
     app, deploy_id = build_deploy_graph(repo_dir=repo_dir)
+    branch = resolve_branch(target, repo_dir)
     meta = {
         "target": target,
+        "branch": branch,
         "repo_dir": repo_dir,
         "skills_dir": skills_dir,
         "provider_override": provider_override,
@@ -276,6 +299,7 @@ def run_deploy_review(
     initial: DeployState = {
         "deploy_id": deploy_id,
         "target": target,
+        "branch": branch,
         "repo_dir": repo_dir,
         "skills_dir": skills_dir,
         "provider_override": provider_override,

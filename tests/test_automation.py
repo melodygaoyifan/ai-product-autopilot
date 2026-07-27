@@ -8,6 +8,7 @@ regression-testing is that nothing merges unless a human said exactly when.
 from __future__ import annotations
 
 import datetime
+import pathlib
 
 import pytest
 import yaml
@@ -292,3 +293,69 @@ def test_merge_helper_refuses_non_pr_targets_and_admin_override():
     source = inspect.getsource(github.merge_pr)
     body = source[source.index('"""', source.index('"""') + 3):]  # skip the docstring
     assert '"--admin"' not in body and "'--admin'" not in body
+
+
+# --- branch resolution: never defaulted (the v0.39 follow-up fix) -------------
+
+
+@pytest.mark.parametrize("evaluate", ["merge", "deploy"])
+def test_unresolvable_branch_refuses_instead_of_assuming_main(tmp_path, evaluate):
+    """`main` was the old fallback when `gh pr view` failed or HEAD was
+    detached — an armed policy would then act on work it never named."""
+    _write(tmp_path, _armed(command=["make", "deploy"]),
+           AUTOMERGE_POLICY if evaluate == "merge" else DEPLOY_EXEC_POLICY)
+    _track_record(tmp_path, 9)
+    if evaluate == "merge":
+        decision = _merge(tmp_path, branch="")
+    else:
+        decision = evaluate_deploy(
+            tmp_path, verdict="PROMOTE", branch="", changed_files=[]
+        )
+    assert decision.allowed is False
+    assert any("could not be determined" in r for r in decision.reasons)
+    assert not any("is not in the armed list" in r for r in decision.reasons)
+
+
+def test_deploy_review_records_the_branch_it_covers(tmp_path, monkeypatch):
+    """The mirror must carry the branch, or deploy-execute has nothing to
+    check against the policy."""
+    import subprocess
+
+    import autoproduct.deploy.graph as deploy_graph
+    from autoproduct.deploy import run_deploy_review
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "release-42"], cwd=repo, check=True)
+    (repo / "helm").mkdir()
+    # A branch only exists once something is committed on it: before that,
+    # `rev-parse --abbrev-ref HEAD` fails and resolve_branch returns "".
+    (repo / "README").write_text("x")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"],
+        cwd=repo, check=True,
+    )
+    result = run_deploy_review(
+        "main...HEAD", repo_dir=str(repo),
+        skills_dir=str(pathlib.Path(__file__).parent.parent / "src" / "autoproduct"
+                       / "skills" / "deploy"),
+        provider_override="mock",
+        diff_text=(
+            "diff --git a/helm/values.yaml b/helm/values.yaml\n"
+            "--- a/helm/values.yaml\n+++ b/helm/values.yaml\n"
+            "@@ -1,1 +1,1 @@\n+replicaCount: 3\n"
+        ),
+    )
+    assert result.branch == "release-42"
+    final = sorted((repo / ".mas" / "deploy-reviews" / result.artifacts_dir.split("/")[-1])
+                   .glob("[0-9]*-final.yaml"))
+    data = yaml.safe_load(final[-1].read_text())
+    assert data["branch"] == "release-42"
+
+    # Detached HEAD is unknown, not "main".
+    monkeypatch.setattr(
+        deploy_graph.subprocess, "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 0, "HEAD\n", ""),
+    )
+    assert deploy_graph.resolve_branch("main...HEAD", str(repo)) == ""
