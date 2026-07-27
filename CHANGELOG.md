@@ -4,6 +4,31 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.52.0 — the Studio speaks English, and the README demo shows it
+- `autoproduct studio --lang en` renders the entire flow in English. Every
+  user-facing string moved to `studio_i18n.py` keyed by language, and the
+  FDR template gained an English twin asking the same six questions.
+- **What made this necessary:** the README's founder demo claimed an
+  English-or-Chinese product while the screenshot showed
+  `写下你的产品需求 / Describe your product` — the UI was bilingual
+  Chinese-first with no way to opt out. A demo that claims English and shows
+  Chinese is a false claim about the product, not a cosmetic gap.
+- `zh` (the default) keeps the original bilingual strings character for
+  character, and a test asserts an unset language renders byte-identically
+  to before. Existing users see no change; the flag is additive.
+- An unknown language falls back to the default rather than rendering blank
+  labels: a working UI in the wrong language beats a broken one in none.
+  Codes normalise, so `EN`, `en-US`, `en_GB` all work.
+- The README founder section is now English-first — web profile, an English
+  FDR shown inline as the actual input, and a REAL screenshot of the real UI
+  captured through Playwright at `docs/media/studio-en.png` (not a mockup;
+  the Chinese screenshot stays linked for 小程序 founders). A test pins the
+  README, the flag, and the image together so the demo cannot drift from the
+  product again.
+- Also honest now: the profile list in the README names all five profiles
+  rather than three, and glosses the WeChat terms in English.
+- Suite: 1060 -> 1068 hermetic tests
+
 ## v0.51.0 — a second kill-criterion axis, chosen by the human, evaluated by the machine
 - The launch PRD now carries TWO axes. The new one (O-L2, capability
   regression) fires if the product-bench build rate falls below 60% OR the

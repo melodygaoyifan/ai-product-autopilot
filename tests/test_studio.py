@@ -127,3 +127,83 @@ def test_interrupted_build_offers_per_task_retry_and_reset_escapes(studio):
     page = client.post("/reset", follow_redirects=True).text
     assert "搭建中断" not in page  # stale pid cleared — back to the editor
     assert not (root / ".mas" / "build.pid").exists()
+
+
+# --- language selection (v0.52.0) --------------------------------------------
+
+
+def _page(root, lang):
+    from autoproduct.studio import create_studio_app
+
+    client = TestClient(
+        create_studio_app(root, spawn=lambda r: 1, provider="mock", lang=lang)
+    )
+    return client.get("/").text
+
+
+def test_english_renders_with_no_chinese_anywhere(tmp_path):
+    """The point of the flag: an English-speaking founder should not have to
+    read `写下你的产品需求 / Describe your product`."""
+    import re
+
+    root = init_workspace(tmp_path / "en", "en", "web")
+    page = _page(root, "en")
+    assert not re.search(r"[一-鿿]", page), "English UI still has CJK"
+    assert "<title>Describe your product</title>" in page
+    assert "Check it &amp; make the plan" in page
+    assert "How to write a good FDR" in page
+    # The pre-filled template is English too, or the textarea betrays it.
+    assert "Fill this in using your own words" in page
+    assert "What does success look like?" in page
+
+
+def test_chinese_default_is_unchanged(tmp_path):
+    """The default must behave exactly as before — existing users see no
+    difference, which is why zh keeps the original bilingual strings."""
+    root = init_workspace(tmp_path / "zh", "zh", "web")
+    default_page = _page(root, "zh")
+    assert "写下你的产品需求 / Describe your product" in default_page
+    assert "检查并生成计划" in default_page
+    assert "不需要任何技术词汇" in default_page  # the Chinese template
+    # ...and an unset language is the Chinese default.
+    from autoproduct.studio import create_studio_app
+
+    unset = TestClient(create_studio_app(root, spawn=lambda r: 1,
+                                         provider="mock")).get("/").text
+    assert unset == default_page
+
+
+@pytest.mark.parametrize("given", ["EN", "en-US", "en_GB"])
+def test_language_codes_are_normalized(tmp_path, given):
+    root = init_workspace(tmp_path / f"n{given[:2]}", "n", "web")
+    assert "<title>Describe your product</title>" in _page(root, given)
+
+
+def test_an_unknown_language_falls_back_rather_than_blanking_the_ui(tmp_path):
+    """A missing translation must never render an empty page: fall back to
+    the default, which is a working UI in the wrong language rather than a
+    broken one in none."""
+    root = init_workspace(tmp_path / "xx", "xx", "web")
+    page = _page(root, "klingon")
+    assert "写下你的产品需求" in page
+
+
+def test_every_string_exists_in_both_languages():
+    from autoproduct.studio_i18n import LANGUAGES, STRINGS
+
+    for key, values in STRINGS.items():
+        assert set(values) == set(LANGUAGES), f"{key} is missing a language"
+        for lang, text in values.items():
+            assert text.strip(), f"{key}/{lang} is empty"
+
+
+def test_the_english_readme_demo_shows_the_english_screenshot():
+    """The README's founder demo and the shipped image must agree — a demo
+    claiming English while showing a Chinese UI is the bug this closes."""
+    import pathlib
+
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    readme = (repo / "README.md").read_text(encoding="utf-8")
+    assert "docs/media/studio-en.png" in readme
+    assert "--lang en" in readme
+    assert (repo / "docs" / "media" / "studio-en.png").exists()

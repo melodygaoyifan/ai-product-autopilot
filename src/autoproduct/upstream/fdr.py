@@ -54,6 +54,41 @@ TEMPLATE = """# 产品需求描述 / Product Requirements (FDR)
 （例：第一周有10个团长发起过团购。）
 """
 
+TEMPLATE_EN = """# Product Requirements (FDR)
+
+> Fill this in using your own words — no technical terms needed.
+
+## 1. Who is this for?
+
+(Who will use it? How do they solve this problem today?)
+(e.g. the two of us running a small studio; right now we track work in chat
+messages and lose track of what is finished.)
+
+## 2. What do users do with it?
+
+(List what a user does, in order. The more specific, the better.)
+(e.g. 1. Anyone adds a task with a title and who it is for. 2. Anyone marks
+a task done. 3. We look at the open tasks and the finished ones separately.)
+
+## 3. Must-have features
+
+(Without these it is not usable. One per line.)
+
+## 4. NOT needed for now
+
+(Things you thought of but do not want in the first version. Writing them
+here stops them being built by mistake. e.g. no logins yet.)
+
+## 5. Constraints or preferences
+
+(e.g. it only needs to work in a browser; it must run on our laptop. Write
+"none" if there are none.)
+
+## 6. What does success look like?
+
+(e.g. the two of us stop tracking work in chat messages.)
+"""
+
 GUIDE = """# 怎么写好一份 FDR / How to write a good FDR
 
 **好的 FDR 描述"用户做什么"，不描述"系统怎么实现"。**
@@ -109,13 +144,21 @@ questions: ["...", "..."]
 """
 
 
-def write_template(workspace: str | Path) -> Path:
+def template_for(lang: str = "zh") -> str:
+    """The blank FDR in the founder's language. The two templates ask the
+    same six questions — a translation, not a different form."""
+    from autoproduct.studio_i18n import normalize
+
+    return TEMPLATE_EN if normalize(lang) == "en" else TEMPLATE
+
+
+def write_template(workspace: str | Path, lang: str = "zh") -> Path:
     root = Path(workspace)
     root.mkdir(parents=True, exist_ok=True)
     (root / "FDR-GUIDE.md").write_text(GUIDE, encoding="utf-8")
     path = root / "FDR.md"
     if not path.exists():
-        path.write_text(TEMPLATE, encoding="utf-8")
+        path.write_text(template_for(lang), encoding="utf-8")
     return path
 
 

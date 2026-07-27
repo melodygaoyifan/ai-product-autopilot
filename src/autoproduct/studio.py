@@ -2,12 +2,16 @@
 
 `autoproduct studio --repo-dir <workspace>` serves a single-page flow on
 localhost: edit the FDR, get questions or the plain-language confirmation,
-click 开始搭建 instead of typing --yes, watch progress, read the build
-report. All state lives in the same workspace files the CLI writes — the
-Studio is a veneer, never a second source of truth.
+press the build button instead of typing --yes, watch progress, read the
+build report. All state lives in the same workspace files the CLI writes —
+the Studio is a veneer, never a second source of truth.
 
 Local-first: binds 127.0.0.1, no external assets, no accounts. The build
 runs as the same detached worker the CLI uses.
+
+Every user-facing string comes from `studio_i18n` so `--lang en` renders the
+whole flow in English. The default stays the original bilingual Chinese-first
+text, so nothing changes for existing users.
 """
 
 from __future__ import annotations
@@ -20,6 +24,8 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+
+from autoproduct.studio_i18n import DEFAULT_LANGUAGE, normalize, t
 
 _STYLE = """
 body{font-family:-apple-system,'PingFang SC',sans-serif;max-width:760px;
@@ -146,9 +152,16 @@ def _task_list_html(tasks: list[dict]) -> str:
 
 
 def create_studio_app(
-    repo_dir: str | Path, *, spawn=None, provider: str = "anthropic"
+    repo_dir: str | Path, *, spawn=None, provider: str = "anthropic",
+    lang: str = DEFAULT_LANGUAGE,
 ) -> FastAPI:
     root = Path(repo_dir).resolve()
+    lang = normalize(lang)
+
+    def _(key: str) -> str:
+        """This page's string in the chosen language (studio_i18n)."""
+        return t(lang, key)
+
     app = FastAPI(
         title="autoproduct studio", docs_url=None, redoc_url=None, openapi_url=None
     )
@@ -201,15 +214,15 @@ def create_studio_app(
                 f"<ul id=tasks style='list-style:none;padding-left:0'>"
                 f"{_task_list_html(tasks)}</ul>"
                 if tasks
-                else "<p class=muted id=tasks>正在做计划… / planning…</p>"
+                else f"<p class=muted id=tasks>{_('planning')}</p>"
             )
             # Live per-task progress (signal s3: "it looks frozen while it
             # works") — poll /status, update in place, one full reload when
             # the worker exits so the report page takes over.
             return _page(
-                "正在搭建 / Building…",
-                f"<div class=card><p>已完成 <b id=done>{done}</b> / "
-                f"<b id=total>{total}</b> 个模块 — 实时更新 / updates live.</p>"
+                _("title_building"),
+                f"<div class=card><p>{_('done_label')} <b id=done>{done}</b> / "
+                f"<b id=total>{total}</b> {_('updates_live')}</p>"
                 f"{checklist}</div>"
                 "<script>\n"
                 "const ICONS={built:'✅',pending:'⏳'};\n"
@@ -239,23 +252,23 @@ def create_studio_app(
             unbuilt = [t for t in tasks if t["state"] != "built"]
             retries = "".join(
                 f"<form method=post action=/retry style='display:inline'>"
-                f"<input type=hidden name=task_id value='{html.escape(t['id'])}'>"
-                f"<button class=secondary>继续 {html.escape(t['title'])}</button></form> "
-                for t in unbuilt
+                f"<input type=hidden name=task_id value='{html.escape(task['id'])}'>"
+                f"<button class=secondary>{_('btn_resume')} "
+                f"{html.escape(task['title'])}</button></form> "
+                for task in unbuilt
             )
             done_note = (
-                "<p class=ok>所有模块其实都做完了 — 在终端运行 "
-                "<code>autoproduct preview</code> 查看产品。</p>"
+                f"<p class=ok>{_('interrupted_all_done')}</p>"
                 if not unbuilt
-                else "<p>已完成的模块都保留着，逐个继续就行：</p>" + retries
+                else f"<p>{_('interrupted_resume')}</p>" + retries
             )
             return _page(
-                "搭建中断了 / Build was interrupted",
-                f"<div class=card><b class=warn>上次搭建没有做完就停了。"
+                _("title_interrupted"),
+                f"<div class=card><b class=warn>{_('interrupted_lead')}"
                 f"</b><ul style='list-style:none;padding-left:0'>"
                 f"{_task_list_html(tasks)}</ul>{done_note}</div>"
                 "<form method=post action=/reset style='margin-top:1rem'>"
-                "<button class=secondary>改需求，重新来 / Edit FDR &amp; start over"
+                f"<button class=secondary>{_('btn_edit_and_restart')}"
                 "</button></form>",
             )
         if report.exists():
@@ -264,18 +277,19 @@ def create_studio_app(
             if features_dir.is_dir():
                 for d in sorted(features_dir.iterdir()):
                     state = (
-                        "✅ 已完成" if (d / "REPORT.md").exists()
-                        else ("待确认" if (d / "CONFIRMATION.md").exists() else "…")
+                        _("state_done") if (d / "REPORT.md").exists()
+                        else (_("state_pending_confirm")
+                              if (d / "CONFIRMATION.md").exists() else "…")
                     )
                     feature_cards += f"<div class=card>{html.escape(d.name)} — {state}</div>"
             pending = _pending_feature(root)
             if pending:
                 return _page(
-                    "确认新功能 / Confirm the new feature",
+                    _("title_confirm_feature"),
                     f"<pre>{_md(pending / 'CONFIRMATION.md')}</pre>"
                     f"<form method=post action=/feature/build>"
                     f"<input type=hidden name=slug value='{html.escape(pending.name)}'>"
-                    "<button>开始添加这个功能 / Build this feature</button></form>",
+                    f"<button>{_('btn_build_feature')}</button></form>",
                 )
             shots_dir = root / "product" / "screenshots"
             gallery = ""
@@ -286,9 +300,9 @@ def create_studio_app(
                     for p in sorted(shots_dir.glob("*.png"))
                 )
                 if images:
-                    gallery = f"<h2>页面截图 / Screenshots</h2>{images}"
+                    gallery = f"<h2>{_('h_screenshots')}</h2>{images}"
             acceptance = (
-                "<p><a href='/acceptance'>📋 验收清单 / Acceptance walkthrough</a></p>"
+                f"<p><a href='/acceptance'>{_('link_acceptance')}</a></p>"
                 if (root / "product" / "ACCEPTANCE.md").exists()
                 else ""
             )
@@ -297,60 +311,64 @@ def create_studio_app(
             if failed:
                 rows = "".join(
                     f"<form method=post action=/retry style='display:inline'>"
-                    f"<input type=hidden name=task_id value='{html.escape(t)}'>"
-                    f"<button class=secondary>重试 {html.escape(t)}</button></form> "
-                    for t in failed
+                    f"<input type=hidden name=task_id value='{html.escape(failed_id)}'>"
+                    f"<button class=secondary>{_('btn_retry')} "
+                    f"{html.escape(failed_id)}</button></form> "
+                    for failed_id in failed
                 )
                 retry_block = (
-                    f"<div class=card><b class=warn>没做成的模块 / Failed modules"
-                    f"</b><p>可以先不管它们，产品其余部分能用；也可以单独重试：</p>{rows}</div>"
+                    f"<div class=card><b class=warn>{_('failed_modules')}"
+                    f"</b><p>{_('failed_hint')}</p>{rows}</div>"
                 )
+            no_features = f"<p class=muted>{_('first_version')}</p>"
             return _page(
-                "你的产品 / Your product",
+                _("title_product"),
                 f"<pre>{_md(report)}</pre>{acceptance}{gallery}{retry_block}"
-                f"<h2>功能 / Features</h2>{feature_cards or '<p class=muted>(初版)</p>'}"
-                "<h2>哪里不对？/ Something wrong?</h2>"
-                "<p class=muted>用你自己的话说 — 小修会直接修好，需求变化会走正规变更。</p>"
+                f"<h2>{_('h_features')}</h2>"
+                f"{feature_cards or no_features}"
+                f"<h2>{_('h_something_wrong')}</h2>"
+                f"<p class=muted>{_('correction_hint')}</p>"
                 "<form method=post action=/correct>"
                 "<textarea name=complaint style='min-height:80px' "
-                "placeholder='例：下单按钮的文字应该是「参加接龙」，不是「提交」。'></textarea>"
-                "<p><button>修正 / Correct it</button></p></form>"
-                "<h2>添加新功能 / Add a feature</h2>"
-                "<p class=muted>一次只写一个功能或改动 — 越小越准。One feature per "
-                "FDR — smaller is better.</p>"
+                f"placeholder='{_('correction_placeholder')}'></textarea>"
+                f"<p><button>{_('btn_correct')}</button></p></form>"
+                f"<h2>{_('h_add_feature')}</h2>"
+                f"<p class=muted>{_('feature_hint')}</p>"
                 "<form method=post action=/feature>"
-                "<textarea name=fdr placeholder='例：住户可以取消自己的订单，取消后汇总自动更新。'></textarea>"
-                "<p><button>检查这个功能 / Check this feature</button></p></form>"
+                f"<textarea name=fdr placeholder='{_('feature_placeholder')}'></textarea>"
+                f"<p><button>{_('btn_check_feature')}</button></p></form>"
                 "<form method=post action=/undo style='margin-top:1.5rem'>"
-                "<button class=secondary>⏪ 回到上一个版本 / Undo last change</button></form>",
+                f"<button class=secondary>{_('btn_undo')}</button></form>",
             )
         if confirmation.exists():
             return _page(
-                "确认计划 / Confirm the plan",
+                _("title_confirm_plan"),
                 f"<pre>{_md(confirmation)}</pre>"
-                "<form method=post action=/build><button>开始搭建 / Start building"
+                f"<form method=post action=/build><button>{_('btn_start_building')}"
                 "</button></form>"
                 "<form method=post action=/reset style='margin-top:.5rem'>"
-                "<button class=secondary>改需求 / Edit FDR</button></form>",
+                f"<button class=secondary>{_('btn_edit_fdr')}</button></form>",
             )
         guide = _md(root / "FDR-GUIDE.md")
         question_block = (
-            f"<div class=card><b class=warn>请先回答这些问题 / Please answer:"
+            f"<div class=card><b class=warn>{_('answer_first')}"
             f"</b><pre>{_md(questions)}</pre></div>"
             if questions.exists()
             else ""
         )
-        from autoproduct.upstream.fdr import TEMPLATE
+        from autoproduct.upstream.fdr import template_for
 
-        current = fdr.read_text(encoding="utf-8") if fdr.exists() else TEMPLATE
+        current = (
+            fdr.read_text(encoding="utf-8") if fdr.exists() else template_for(lang)
+        )
         return _page(
-            "写下你的产品需求 / Describe your product",
+            _("title_describe"),
             f"{question_block}"
             f"<form method=post action=/fdr>"
             f"<textarea name=fdr>{html.escape(current)}</textarea>"
-            f"<p><button>检查并生成计划 / Check &amp; make the plan</button></p>"
+            f"<p><button>{_('btn_check_and_plan')}</button></p>"
             f"</form>"
-            f"<details><summary class=muted>怎么写好？/ How to write a good FDR"
+            f"<details><summary class=muted>{_('guide_summary')}"
             f"</summary><pre>{guide}</pre></details>",
         )
 
@@ -374,9 +392,9 @@ def create_studio_app(
     @app.get("/acceptance", response_class=HTMLResponse)
     def acceptance():
         return _page(
-            "验收清单 / Acceptance walkthrough",
+            _("title_acceptance"),
             f"<pre>{_md(root / 'product' / 'ACCEPTANCE.md')}</pre>"
-            "<p><a href='/'>← 返回 / back</a></p>",
+            f"<p><a href='/'>{_('link_back')}</a></p>",
         )
 
     @app.get("/shots/{name}")
@@ -485,7 +503,10 @@ def create_studio_app(
     return app
 
 
-def serve_studio(repo_dir: str | Path, host: str = "127.0.0.1", port: int = 8433) -> None:
+def serve_studio(repo_dir: str | Path, host: str = "127.0.0.1", port: int = 8433,
+                 *, provider: str = "anthropic",
+                 lang: str = DEFAULT_LANGUAGE) -> None:
     import uvicorn
 
-    uvicorn.run(create_studio_app(repo_dir), host=host, port=port, log_level="warning")
+    uvicorn.run(create_studio_app(repo_dir, provider=provider, lang=lang),
+                host=host, port=port, log_level="warning")

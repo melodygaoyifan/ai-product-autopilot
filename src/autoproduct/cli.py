@@ -751,6 +751,10 @@ def studio(
     repo_dir: str = typer.Option(".", help="Workspace directory"),
     port: int = typer.Option(8433, help="Port"),
     profile: str = typer.Option(None, help="Profile (only needed for a new workspace)"),
+    lang: str = typer.Option(
+        "zh", help="UI language: zh (bilingual, default) | en (English only). "
+                   "Your FDR may be in either language regardless."
+    ),
 ):
     """Founder Studio: the browser UI for the FDR flow (localhost only)."""
     from autoproduct.studio import serve_studio
@@ -763,7 +767,7 @@ def studio(
             raise typer.Exit(code=2)
         init_workspace(root, root.name, profile)
     console.print(f"Studio: http://127.0.0.1:{port}  (workspace: {root})")
-    serve_studio(root, port=port)
+    serve_studio(root, port=port, lang=lang)
 
 
 @app.command()
