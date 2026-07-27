@@ -133,3 +133,41 @@ def test_external_tools_skip_when_missing(monkeypatch):
         report = runner(diff, ".")
         assert report.status == "skipped"
         assert "not installed" in report.detail
+
+
+def test_bandit_b310_skipped_on_test_files(monkeypatch, tmp_path):
+    """B310 (urllib.urlopen audit) on a test file flags the suite's own
+    localhost client — run 11: 30 of 44 review findings were this one
+    check. Production files keep the full audit; other MEDIUM findings
+    on test files still report."""
+    import json as _json
+    import shutil as _shutil
+
+    from autoproduct.tools import external
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app").mkdir()
+    (tmp_path / "tests" / "test_x.py").write_text("import urllib.request\n")
+    (tmp_path / "app" / "client.py").write_text("import urllib.request\n")
+    diff = parse_unified_diff(
+        _diff("tests/test_x.py", "import urllib.request")
+        + _diff("app/client.py", "import urllib.request")
+    )
+    results = {"results": [
+        {"filename": "tests/test_x.py", "line_number": 1, "test_id": "B310",
+         "test_name": "blacklist", "issue_severity": "MEDIUM",
+         "issue_text": "urlopen audit", "code": "urllib.request.urlopen(u)"},
+        {"filename": "app/client.py", "line_number": 1, "test_id": "B310",
+         "test_name": "blacklist", "issue_severity": "MEDIUM",
+         "issue_text": "urlopen audit", "code": "urllib.request.urlopen(u)"},
+        {"filename": "tests/test_x.py", "line_number": 1, "test_id": "B608",
+         "test_name": "hardcoded_sql", "issue_severity": "MEDIUM",
+         "issue_text": "sql", "code": "q"},
+    ]}
+    monkeypatch.setattr(_shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(external, "_run_json", lambda cmd, cwd: (_json.dumps(results), ""))
+    report = external.bandit(diff, str(tmp_path))
+    flagged = {(f.file_path, f.title.split(":")[0]) for f in report.findings}
+    assert ("app/client.py", "B310") in flagged      # production keeps the audit
+    assert ("tests/test_x.py", "B608") in flagged    # other MEDIUMs on tests stay
+    assert ("tests/test_x.py", "B310") not in flagged

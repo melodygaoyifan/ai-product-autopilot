@@ -98,6 +98,25 @@ probes:
 """
 
 
+def _route_literals(root: Path) -> list[str]:
+    import re
+
+    hits: set[str] = set()
+    for path in list(root.glob("app/**/*.py")) + list(root.glob("*.py")):
+        rel_parts = path.relative_to(root).parts
+        if path.name.startswith("test") or ".mas" in rel_parts:
+            continue
+        try:
+            src = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for match in re.finditer(r"[\"\']((?:/[A-Za-z0-9_<>{}.:-]+)+/?)[\"\']", src):
+            lit = match.group(1)
+            if len(lit) <= 80 and not lit.startswith(("/tmp", "/usr", "/var", "/etc", "/Users", "/home")):
+                hits.add(lit)
+    return sorted(hits)[:40]
+
+
 class GeneratedProbe(BaseModel):
     name: str
     script: str
@@ -118,14 +137,30 @@ def generate_probes(
 
     routes = sorted("/" + "/".join(r) for r in collect_routes(root))
     criteria = [c for _, c in built_criteria(root)]
+    route_note = ""
     if not routes:
-        return [], ["no observed backend routes — nothing to probe over HTTP"]
+        # Stdlib http.server products route by hand (do_GET/do_POST +
+        # path parsing) — invisible to collect_routes, which left case 03
+        # UNMEASURED for five bench runs. Path-shaped string literals from
+        # the app source are weaker evidence, but with the FDR (the actual
+        # contract) they are enough to generate probes from.
+        routes = _route_literals(root)
+        route_note = (
+            "static route collection found nothing (hand-rolled routing is "
+            "invisible to it); observed_routes are path string literals "
+            "scraped from the source — treat the fdr as the authoritative "
+            "contract for exact paths and methods"
+        )
+        entry = any((root / e).exists() for e in ("app/main.py", "main.py", "app.py"))
+        if not entry:
+            return [], ["no observed backend routes and no entry point — nothing to probe over HTTP"]
 
     raw = get_provider(provider).complete(
         model=model,
         system=_SYSTEM,
         user=yaml.safe_dump(
-            {"fdr": fdr[:1500], "criteria": criteria[:20], "observed_routes": routes},
+            {"fdr": fdr[:1500], "criteria": criteria[:20], "observed_routes": routes,
+             **({"route_note": route_note} if route_note else {})},
             sort_keys=False, allow_unicode=True,
         ),
         max_tokens=4096,
