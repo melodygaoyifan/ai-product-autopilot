@@ -4,6 +4,32 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.38.0 — multi-tenant server mode (ADR-030) + the ADR directory
+- One `serve` process may now front several isolated workspaces:
+  `.mas/tenants.yaml` maps a tenant id to a SHA-256 token hash and a
+  workspace root; `autoproduct tenant add|list` manages it and prints the
+  plaintext token exactly once.
+- Isolation is the mechanism, not the aspiration: workspaces must be
+  disjoint (a root contained in another fails at LOAD time), the token
+  picks the workspace and no client-supplied path or id ever does,
+  per-tenant GitHub secrets are `secret://ENV` references so one tenant's
+  secret cannot verify another's deliveries, read routes (/jobs, /reviews)
+  require the token in multi-tenant mode, and unknown/disabled/missing
+  tokens answer identically so responses never enumerate tenants.
+- Security fix found on the way: `review_id` was interpolated into a
+  filesystem path unvalidated. Now `[A-Za-z0-9_-]{1,64}` — in multi-tenant
+  mode that was a traversal into a neighbour's workspace.
+- Single-tenant mode is byte-for-byte unchanged: no registry, no
+  multi-tenancy, shared-secret path and open localhost reads as before.
+- docs/adr/: the implementation's own decision records, starting with the
+  three that REVERSE a recorded non-goal (029 MCP transport, 030
+  multi-tenant, 031 policy-armed automation). A scope reversal that lives
+  only in a commit message is indistinguishable from scope creep. Closes
+  the map's "ADR docs" open item.
+- Still out: SaaS — billing, plans, quotas, a shared database, a hosted
+  control plane, per-tenant key management. Tenants bring their own keys.
+- Suite: 795 -> 817 hermetic tests
+
 ## v0.37.0 — MCP as the internal tool transport (doc 11 §17), first real slice
 - autoproduct/mcp/: JSON-RPC 2.0 over stdio (newline-delimited), two real
   partitions from doc 11 §17.2 — read_only (read_file/grep/list_files) and

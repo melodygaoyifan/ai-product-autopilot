@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-795-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-817-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **795 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **817 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -234,7 +234,7 @@ including the runs that fail.
 | `scr` / `scr-approve` | the only legal way to change a built spec |
 | `review` · `resume` · `recover` · `replay` | review pipeline, HITL, crash recovery (reviews, deploy reviews, and incidents all resume from their checkpoints), audit trail |
 | `deploy-review` · `deploy-outcome` · `triage [--fix]` | Gates 5–6 |
-| `serve` · `worker` | webhook mode + queue workers (SQLite, one host) |
+| `serve` · `worker` · `tenant` | webhook mode + queue workers (SQLite, one host); `tenant add` fronts several isolated workspaces from one process ([ADR-030](docs/adr/030-multi-tenant-server.md)) |
 | `loop` | where the live product cycle stands against the v3.0.0 design gate ([runbook](docs/v3-live-loop.md)) — states, never decides |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
 
@@ -268,6 +268,9 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 - Single-machine operation; crash recovery resumes reviews, deploy
   reviews, and incidents from their checkpoints, but Celery/Redis
   multi-instance supervision remains the documented upgrade path.
+- Multi-tenant isolation is filesystem-and-routing level, not OS-level: a
+  Python-level RCE in the harness would cross tenants. If that is in your
+  threat model, run one process per tenant ([ADR-030](docs/adr/030-multi-tenant-server.md)).
 
 ## Roadmap
 
@@ -302,6 +305,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.35.0 ✅ | the last small open items: registration gates for the six review voters (8 fixtures each, run through the real seat; the vote node fails closed and refuses to review with no roster), per-project `policy:` thresholds in `project.yaml` (unknown keys are a loud error, ranges bounded, a weakened bar stamped into the verdict), and the ready-queue fix — `next_tasks` read a field that never existed, so the plan never advanced past task one |
 | v0.36.0 ✅ | the instrument for that gate: `autoproduct loop` reads the cycle's own artifacts and reports the three criteria — and refuses to call the gate met on a quiet cycle or a recorded 'continue', because the gate is about the loop's ability to *stop* ([runbook](docs/v3-live-loop.md)) |
 | v0.37.0 ✅ | MCP becomes the real internal tool transport (doc 11 §17): two subprocess-isolated partitions (`read_only`, `code_intel`) speaking JSON-RPC over stdio, the spec→host→server triple check where an unlisted tool is *unreachable* rather than refused, and the `mcp-audit` ledger recording every call with digested arguments — opt in with `AUTOPRODUCT_TOOL_TRANSPORT=mcp` |
+| v0.38.0 ✅ | multi-tenant server mode ([ADR-030](docs/adr/030-multi-tenant-server.md), a recorded reversal of a non-goal — the server half only, never SaaS): token→workspace resolution where workspaces must be provably disjoint, per-tenant `secret://` webhook secrets, tenant-scoped reads, and uniform 401s that never enumerate tenants; plus [docs/adr/](docs/adr/) recording every reversal |
 | next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history

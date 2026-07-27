@@ -1769,6 +1769,61 @@ def voter_gate_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("tenant")
+def tenant_cmd(
+    action: str = typer.Argument(..., help="list | add"),
+    tenant_id: str = typer.Argument(None, help="Tenant id (add)"),
+    workspace: str = typer.Option(None, help="That tenant's workspace root (add)"),
+    webhook_secret_ref: str = typer.Option(
+        "", help="secret://ENV_NAME holding this tenant's GitHub webhook secret"
+    ),
+    repo_dir: str = typer.Option(".", help="Where .mas/tenants.yaml lives"),
+):
+    """Multi-tenant server registry (ADR-030). A tenant is a token and a
+    workspace; workspaces must be disjoint and tokens are stored hashed."""
+    from autoproduct.tenants import TenantError, add_tenant, load_tenants
+
+    try:
+        tenants = load_tenants(repo_dir)
+    except TenantError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+    if action == "list":
+        if not tenants:
+            console.print("single-tenant mode (no .mas/tenants.yaml)")
+            return
+        table = Table(show_lines=False)
+        for col in ("id", "workspace", "enabled", "webhook secret"):
+            table.add_column(col)
+        for tenant in tenants:
+            table.add_row(
+                tenant.id, tenant.workspace,
+                "yes" if tenant.enabled else "no",
+                tenant.webhook_secret_ref or "[dim](none)[/dim]",
+            )
+        console.print(table)
+        return
+
+    if action != "add":
+        console.print("[red]action must be list | add[/red]")
+        raise typer.Exit(code=2)
+    if not tenant_id or not workspace:
+        console.print("[red]add needs a tenant id and --workspace[/red]")
+        raise typer.Exit(code=2)
+    try:
+        tenant, token = add_tenant(
+            repo_dir, tenant_id, workspace, webhook_secret_ref=webhook_secret_ref
+        )
+    except TenantError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    console.print(f"[green]added tenant {tenant.id}[/green] → {tenant.workspace}")
+    console.print(f"\n  token: [bold]{token}[/bold]\n")
+    console.print("[yellow]This token is shown once and stored only as a hash — "
+                  "save it now.[/yellow]")
+
+
 @app.command("loop")
 def loop_cmd(
     root: str = typer.Option("launch", help="Cycle artifact directory "

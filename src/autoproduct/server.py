@@ -21,6 +21,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -105,19 +106,92 @@ def _verify_signature(secret: str, body: bytes, signature_header: str | None) ->
     return hmac.compare_digest(signature_header.removeprefix("sha256="), expected)
 
 
+_REVIEW_ID = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
+
+
 def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
     app = FastAPI(title="autoproduct", docs_url=None, redoc_url=None)
     repo = str(Path(repo_dir).resolve())
 
+    from autoproduct import tenants as tenants_mod
+
+    # Multi-tenant mode is the presence of the registry, nothing more
+    # (ADR-030). Loading validates it; an invalid registry must fail at
+    # startup rather than serve half of it.
+    tenant_list = tenants_mod.load_tenants(repo)
+
+    def _bearer(request: Request) -> str:
+        auth = request.headers.get("Authorization", "")
+        return auth.removeprefix("Bearer ") if auth.startswith("Bearer ") else ""
+
+    def _workspace(request: Request) -> str:
+        """The one workspace this request may touch.
+
+        Single-tenant: the served repo, shared-secret authenticated as
+        before. Multi-tenant: resolved from the caller's token, never from
+        a client-supplied path or id.
+        """
+        if not tenant_list:
+            secret = os.environ.get("AUTOPRODUCT_WEBHOOK_SECRET")
+            if not secret:
+                raise HTTPException(503, "AUTOPRODUCT_WEBHOOK_SECRET is not configured")
+            if not hmac.compare_digest(_bearer(request), secret):
+                raise HTTPException(401, "missing or invalid bearer token")
+            return repo
+        tenant = tenants_mod.resolve_tenant(tenant_list, _bearer(request))
+        if tenant is None:
+            # One message for unknown, disabled, and absent tokens: the
+            # response never says which tenants exist.
+            raise HTTPException(401, "missing or invalid tenant token")
+        try:
+            return str(tenants_mod.tenant_workspace(tenant))
+        except tenants_mod.TenantError as exc:
+            raise HTTPException(503, str(exc)) from exc
+
+    def _read_workspace(request: Request) -> str:
+        """Workspace for a read route. Single-tenant keeps its existing
+        open-read posture (a localhost dashboard); multi-tenant requires the
+        token, because one tenant must never enumerate another's reviews."""
+        if not tenant_list:
+            return repo
+        return _workspace(request)
+
     @app.get("/healthz")
     def healthz():
-        return {"ok": True}
+        return {"ok": True, "tenants": len(tenant_list) or None}
 
     @app.post("/webhook/github", status_code=202)
-    async def github_webhook(request: Request):
-        secret = os.environ.get("AUTOPRODUCT_WEBHOOK_SECRET")
-        if not secret:
-            raise HTTPException(503, "AUTOPRODUCT_WEBHOOK_SECRET is not configured")
+    @app.post("/webhook/github/{tenant_id}", status_code=202)
+    async def github_webhook(request: Request, tenant_id: str | None = None):
+        # GitHub signs with HMAC, so the secret must be per-tenant and the
+        # tenant is named in the path (there is no bearer token on a GitHub
+        # delivery). The path only SELECTS which secret must verify — it
+        # grants nothing on its own.
+        if tenant_list:
+            if tenant_id is None:
+                raise HTTPException(
+                    404, "multi-tenant mode: post to /webhook/github/<tenant_id>"
+                )
+            tenant = next(
+                (t for t in tenant_list if t.id == tenant_id and t.enabled), None
+            )
+            secret = None
+            if tenant is not None:
+                try:
+                    secret = tenant.webhook_secret()
+                except Exception as exc:  # noqa: BLE001 — unset ref is fatal
+                    raise HTTPException(503, str(exc)) from exc
+            if secret is None:
+                # Same response for unknown tenant and unconfigured secret.
+                raise HTTPException(401, "invalid webhook signature")
+            workspace = str(tenants_mod.tenant_workspace(tenant))
+        else:
+            if tenant_id is not None:
+                raise HTTPException(404, "single-tenant mode: post to /webhook/github")
+            secret = os.environ.get("AUTOPRODUCT_WEBHOOK_SECRET")
+            if not secret:
+                raise HTTPException(503, "AUTOPRODUCT_WEBHOOK_SECRET is not configured")
+            workspace = repo
         body = await request.body()
         if not _verify_signature(
             secret, body, request.headers.get("X-Hub-Signature-256")
@@ -132,7 +206,7 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
         pr_url = payload.get("pull_request", {}).get("html_url")
         if not pr_url:
             raise HTTPException(422, "payload has no pull_request.html_url")
-        pid = spawn(["review", pr_url], repo)
+        pid = spawn(["review", pr_url], workspace)
         return {"queued": True, "target": pr_url, "worker_pid": pid}
 
     @app.get("/metrics")
@@ -168,15 +242,9 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
     async def monitoring_webhook(source: str, request: Request):
         if source not in ("sentry", "datadog", "pagerduty"):
             raise HTTPException(404, f"unknown signal source {source!r}")
-        secret = os.environ.get("AUTOPRODUCT_WEBHOOK_SECRET")
-        if not secret:
-            raise HTTPException(503, "AUTOPRODUCT_WEBHOOK_SECRET is not configured")
-        auth = request.headers.get("Authorization", "")
-        if not (auth.startswith("Bearer ")
-                and hmac.compare_digest(auth.removeprefix("Bearer "), secret)):
-            raise HTTPException(401, "missing or invalid bearer token")
+        workspace = _workspace(request)
         incident = _translate_signal(source, await request.json())
-        inbox = Path(repo) / ".mas" / "inbox"
+        inbox = Path(workspace) / ".mas" / "inbox"
         inbox.mkdir(parents=True, exist_ok=True)
         dedupe = incident.get("dedupe_key")
         if dedupe:
@@ -193,22 +261,15 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
     async def incidents(request: Request):
         # Same trust bar as the GitHub webhook (PR #16 self-review finding):
         # incident intake mutates state and spawns work — bearer-token
-        # authenticated with the shared secret.
-        secret = os.environ.get("AUTOPRODUCT_WEBHOOK_SECRET")
-        if not secret:
-            raise HTTPException(503, "AUTOPRODUCT_WEBHOOK_SECRET is not configured")
-        auth = request.headers.get("Authorization", "")
-        if not (
-            auth.startswith("Bearer ")
-            and hmac.compare_digest(auth.removeprefix("Bearer "), secret)
-        ):
-            raise HTTPException(401, "missing or invalid bearer token")
+        # authenticated, and in multi-tenant mode the token also picks the
+        # workspace.
+        workspace = _workspace(request)
         payload = await request.json()
         title = str(payload.get("title", "")).strip()
         if not title:
             raise HTTPException(422, "incident needs a title")
         incident_id = uuid.uuid4().hex[:12]
-        inbox = Path(repo) / ".mas" / "inbox"
+        inbox = Path(workspace) / ".mas" / "inbox"
         inbox.mkdir(parents=True, exist_ok=True)
         path = inbox / f"{incident_id}.yaml"
         path.write_text(
@@ -223,18 +284,21 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
             ),
             encoding="utf-8",
         )
-        pid = spawn(["triage", str(path)], repo)
+        pid = spawn(["triage", str(path)], workspace)
         return {"queued": True, "incident_id": incident_id, "worker_pid": pid}
 
     @app.get("/jobs")
-    def jobs():
-        return _reconcile_jobs(repo)
+    def jobs(request: Request):
+        # Read routes are tenant-scoped too: job argv carries PR URLs and
+        # workspace paths, so an unauthenticated listing would leak one
+        # tenant's work to another.
+        return _reconcile_jobs(_read_workspace(request))
 
     @app.get("/reviews")
-    def reviews(limit: int = 50):
+    def reviews(request: Request, limit: int = 50):
         # Sync handler (FastAPI threadpool) + bounded, newest-first listing
         # (PR #16 self-review: unbounded scan per request).
-        reviews_dir = Path(repo) / ".mas" / "reviews"
+        reviews_dir = Path(_read_workspace(request)) / ".mas" / "reviews"
         if not reviews_dir.is_dir():
             return []
         rows = []
@@ -260,11 +324,18 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
         return rows
 
     @app.get("/reviews/{review_id}")
-    def review_detail(review_id: str):
+    def review_detail(request: Request, review_id: str):
         from autoproduct.replay import load_replay, summarize_step
 
+        # review_id lands in a filesystem path: anything but an opaque id is
+        # a traversal attempt, and in multi-tenant mode it would be a
+        # traversal into another tenant's workspace.
+        if not _REVIEW_ID.match(review_id):
+            raise HTTPException(422, "review_id must match [A-Za-z0-9_-]{1,64}")
         try:
-            rep = load_replay(Path(repo) / ".mas" / "reviews", review_id)
+            rep = load_replay(
+                Path(_read_workspace(request)) / ".mas" / "reviews", review_id
+            )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         return {
