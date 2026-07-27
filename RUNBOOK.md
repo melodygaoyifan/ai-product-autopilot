@@ -89,6 +89,21 @@ Point a GitHub webhook (pull_request events, JSON, the same secret) at
 `GET /reviews` lists results. Multi-instance operation wants the Celery
 supervisor from the design docs — not included yet.
 
+## Crash recovery and checkpoint encryption
+
+All three graphs — code review, deploy review, maintenance — checkpoint
+every super-step to `.mas/checkpoints.db`. `autoproduct recover` (also
+run automatically at `serve` startup) continues any run that has a
+`meta.yaml` but no final mirror step from its last completed super-step;
+a review paused at Gate 3 stays `awaiting_human`.
+
+Set `AUTOPRODUCT_CHECKPOINT_KEY` (a raw passphrase or `secret://ENV_NAME`)
+to encrypt checkpoint rows at rest (AES via pycryptodome). A key that
+cannot be honored is a startup error, never a silent plaintext fallback;
+each run's `meta.yaml` records `checkpoint_encryption: aes|off`. The YAML
+mirrors stay plaintext on purpose — they are the human-readable audit
+trail (doc 09 §6).
+
 ## Safety boundaries (structural, not configurable)
 
 - No auto-merge, no production deploys, no L3/L4 tools for any voter.

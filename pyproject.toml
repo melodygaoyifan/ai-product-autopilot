@@ -34,5 +34,6 @@ build-backend = "uv_build"
 dev = [
     "httpx>=0.28.1",
     "mutmut>=3.6.0",
+    "pycryptodome>=3.20",
     "pytest>=9.1.1",
 ]

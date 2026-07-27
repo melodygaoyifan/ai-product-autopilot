@@ -4,6 +4,21 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.33.0 — gap plan D15 + D16 remainder: checkpointed deploy/maintenance, encrypted checkpoints
+- Deploy review and maintenance rebuilt as LangGraph graphs on the shared
+  `.mas/checkpoints.db` saver (thread ids `deploy:<id>` / `incident:<id>`):
+  a crash mid-vote or mid-root-cause resumes from the last completed
+  super-step via `autoproduct recover` (now covering all three graphs)
+  instead of re-paying the pipeline; mirror step names, verdict taxonomies,
+  lint-only degraded mode, and the recommend-only ceiling unchanged
+- Encrypted checkpointer serde (doc 09 §3.1): `AUTOPRODUCT_CHECKPOINT_KEY`
+  (raw or `secret://ENV`) encrypts checkpoint rows at rest via LangGraph's
+  EncryptedSerializer (AES, pycryptodome availability-gated); a key that
+  cannot be honored errors loudly — never a silent plaintext fallback;
+  encryption state stamped into every run's meta.yaml; the YAML mirror
+  stays deliberately plaintext (§09.6 audit asymmetry)
+- Suite: 688 → 694 on the D15 branch (727 after merging v0.32; ledger
+  PC-1 synced at the merge)
 ## v0.32.0 — gap plan D13: upstream critique rosters
 - Discover/plan/spec critics ported onto the shared stage engine as 14
   registered charter voters (discovery: desirability/feasibility/

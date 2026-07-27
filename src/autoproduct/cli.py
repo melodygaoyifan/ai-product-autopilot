@@ -881,15 +881,24 @@ def product_bench(
 
 @app.command()
 def recover(repo_dir: str = typer.Option(".", help="Repository the reviews ran in")):
-    """Continue reviews that crashed mid-run from their checkpoints."""
+    """Continue reviews, deploy reviews, and incidents that crashed mid-run
+    from their checkpoints (all three graphs share .mas/checkpoints.db)."""
+    from autoproduct.deploy import recover_deploy_reviews
+    from autoproduct.maintenance import recover_maintenance
     from autoproduct.orchestrator import recover_reviews
 
-    results = recover_reviews(repo_dir)
+    results = [
+        {"kind": "review", "id": r["review_id"], **{k: v for k, v in r.items()
+                                                    if k != "review_id"}}
+        for r in recover_reviews(repo_dir)
+    ]
+    results += recover_deploy_reviews(repo_dir)
+    results += recover_maintenance(repo_dir)
     if not results:
         console.print("nothing to recover")
         return
     for r in results:
-        console.print(f"  {r['review_id']}: {r['status']}"
+        console.print(f"  {r['kind']} {r['id']}: {r['status']}"
                       + (f" → {r.get('verdict')}" if r.get("verdict") else ""))
 
 
