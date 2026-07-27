@@ -125,7 +125,9 @@ class StageSpec:
 
 
 def _default_skills_root() -> pathlib.Path:
-    return pathlib.Path(__file__).resolve().parents[3] / "skills" / "product"
+    from autoproduct.paths import skills_root
+
+    return skills_root() / "product"
 
 
 def load_voter_charters(

@@ -25,23 +25,26 @@ from autoproduct.yamlx import extract_mapping
 
 VOTER_REGISTRY_FILE = "voter-registry.yaml"
 REGISTRATION_FLOOR = 0.875
+from autoproduct.paths import skills_root
+
 _REPO = pathlib.Path(__file__).resolve().parents[3]
+_SKILLS = skills_root()  # charters ship in the package; fixtures stay repo-side
 FIXTURES_ROOT = _REPO / "tests" / "integration" / "voters" / "fixtures" / "product"
 
 # Voter families beyond the product stages (plan phase B): each maps to a
 # skills subtree and a fixture subtree; the 8-fixture / 87.5% contract is
 # identical for all of them.
 FAMILY_SKILLS = {
-    "web": _REPO / "skills" / "profiles" / "web",
-    "miniprogram": _REPO / "skills" / "profiles" / "miniprogram",
-    "app": _REPO / "skills" / "profiles" / "app",
-    "data": _REPO / "skills" / "data",
+    "web": _SKILLS / "profiles" / "web",
+    "miniprogram": _SKILLS / "profiles" / "miniprogram",
+    "app": _SKILLS / "profiles" / "app",
+    "data": _SKILLS / "data",
     # Upstream critique rosters (doc 13 §25.1, plan phase D13): the
     # discover/plan/spec critics run through the same charter + fixture
     # registration contract as everything else.
-    "discovery": _REPO / "skills" / "upstream" / "discovery",
-    "planning": _REPO / "skills" / "upstream" / "planning",
-    "spec": _REPO / "skills" / "upstream" / "spec",
+    "discovery": _SKILLS / "upstream" / "discovery",
+    "planning": _SKILLS / "upstream" / "planning",
+    "spec": _SKILLS / "upstream" / "spec",
 }
 FAMILY_FIXTURES = {
     name: _REPO / "tests" / "integration" / "voters" / "fixtures" / name

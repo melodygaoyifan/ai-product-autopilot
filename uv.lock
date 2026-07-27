@@ -68,7 +68,7 @@ wheels = [
 
 [[package]]
 name = "autoproduct"
-version = "0.30.0"
+version = "0.33.1"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

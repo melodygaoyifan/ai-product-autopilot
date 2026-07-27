@@ -1,0 +1,36 @@
+# EXP-LAUNCH-2026-01 — first analysis-gate pass, 2026-07-26.
+# The pin was verified BEFORE anything below was read (§21.61.3):
+# verify_at_analysis(launch/experiment.yaml, sha256:a44b336a...) -> OK.
+run:
+  experiment_id: EXP-LAUNCH-2026-01
+  evaluated_at: "2026-07-26"
+  preregistration_verified: true
+  preregistration_hash: sha256:a44b336a029fefa3d85905c87e9283d74eb376736500223aa6599692314c044e
+  power_check:
+    required_n_per_arm: 1468   # required_n_two_proportions(0.05, 0.5, alpha=.05, power=.80)
+    required_n_total: 2936
+    available_traffic:
+      unique_visitors_14d: 1
+      evidence:
+        method: "gh api repos/melodygaoyifan/ai-product-autopilot/traffic/views"
+        locator: "https://api.github.com/repos/melodygaoyifan/ai-product-autopilot/traffic/views"
+        retrieved_at: "2026-07-26"
+      caveat: >-
+        clone traffic (169 uniques/14d) is NOT usable as exposure: the
+        spike coincides exactly with this repo's own CI activity on
+        2026-07-23 and is confounded with GitHub Actions checkouts.
+        Unique page views are the honest exposure denominator.
+    verdict: BLOCKED(INSUFFICIENT_POWER)
+    note: >-
+      the pre-registration predicted exactly this outcome and named the
+      fallback; inconclusive-enters-nothing — no arm ships as "winner".
+  qualitative_fallback:
+    plan_ref: "launch/experiment.yaml experiment.qualitative_fallback"
+    status: pending
+    key_configured_adopters_known: 0
+    asked: 0
+    answers: []
+    note: >-
+      H-L1's check needs the first 10 key-configured adopters; none are
+      identifiable yet (2 stars, 1 unique visitor). n=0 recorded, not
+      inferred.
