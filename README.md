@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-1043-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-1048-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **1043 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **1048 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -334,6 +334,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.47.0 ✅ | the bot fleet (doc 17 §45.2's last unbuilt check): defined by a session protocol rather than by a game, so its detectors are verified against real sessions of a real deterministic sim — and the first real run immediately found a dedupe bug that a stubbed stream would have hidden |
 | v0.48.0 ✅ | upstream resume (a crashed `create` skips tasks already built instead of re-paying them — task-granular, and said so plainly), grounding extended to the spec writer (which immediately showed the spec writer never saw CLAUDE.md or the module invariants it must not contradict), and the gap-closure plan closed out |
 | v0.49.0 ✅ | the use-case matrix: every profile builds, every edition narrows, every substrate rung activates exactly what its floors allow — which found that six of eight stages knew their infrastructure floor without enforcing it (an S0 team with no git could still run `build`), now fixed and pinned in both directions |
+| v0.50.0 ✅ | `loop` and `attention` joined: the gate report now names the real distance to firing and the exact command to run next, and reports a `not_tracked` week as the recorded decision it is rather than as logged or as a gap |
 | next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history

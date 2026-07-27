@@ -4,6 +4,24 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.50.0 — `loop` and `attention` now answer one question together
+- `autoproduct loop` reads the attention streak, so the v3.0.0 gate report
+  states the real distance to firing ("2/4 consecutive logged weeks over
+  4.0h; 2 more would fire it") and the real next action ("log last week:
+  `autoproduct attention --week 2026-W31 …`") instead of a static "the
+  criteria need data that does not exist yet". Two commands shipped in
+  separate releases were leaving the operator to join them by hand.
+- A `not_tracked` row is reported as itself: it is a RECORDED decision, not
+  a gap, so `loop` says the run "starts from the next week you log" rather
+  than claiming last week is logged (which the first cut did) or asking for
+  a rewrite of the record.
+- When the criterion has fired, the next action becomes the decision —
+  and the gate still does not close on it. Only a recorded human
+  kill-or-pivot does (invariant 14.20), which the existing tests keep true.
+- Absent log: the static wording, unchanged. Unreadable log: reported as
+  unreadable rather than as a streak of zero.
+- Suite: 1043 -> 1048 hermetic tests
+
 ## v0.49.0 — the use-case matrix, and the gap it found
 - New `tests/test_use_case_matrix.py` tests the canon's coverage CLAIMS as a
   matrix instead of trusting that each part works because its own unit test

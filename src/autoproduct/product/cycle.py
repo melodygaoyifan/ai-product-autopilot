@@ -62,6 +62,21 @@ class GateCriterion(BaseModel):
     detail: str
 
 
+class AttentionProgress(BaseModel):
+    """How far the blocking kill criterion is from firing, if its series is
+    the attention log (doc 25 §76.4). Absent when there is no log to read."""
+
+    tracked: bool = False
+    streak: int = 0
+    needed: int = 0
+    logged_weeks: int = 0
+    untracked_weeks: int = 0
+    fires: bool = False
+    detail: str = ""
+    next_week: str = ""  # a week with NO row at all — log it
+    last_week_untracked: bool = False  # a row exists, recorded as not tracked
+
+
 class CycleState(BaseModel):
     root: str
     entry_stage: str = "P0"
@@ -71,11 +86,47 @@ class CycleState(BaseModel):
     pl5_decision: str | None = None  # kill | pivot | continue | None
     pl5_requires_human_decision: bool = False
     criteria: list[GateCriterion] = Field(default_factory=list)
+    attention: AttentionProgress | None = None
     next_action: str = ""
 
     @property
     def design_gate_met(self) -> bool:
         return bool(self.criteria) and all(c.met for c in self.criteria)
+
+
+def read_attention(repo_dir: str | pathlib.Path) -> AttentionProgress:
+    """The streak state, joined into the cycle report.
+
+    `loop` is the instrument for the v3.0.0 gate and the gate's blocking
+    criterion is the attention series — so an operator should not have to run
+    two commands and join them mentally. Absent or unreadable log: tracked
+    False, and the gate detail falls back to the static wording.
+    """
+    import datetime
+
+    from autoproduct.attention import AttentionError, iso_week, load_log, streak_state
+
+    try:
+        rows = load_log(repo_dir)
+        state = streak_state(repo_dir)
+    except AttentionError:
+        return AttentionProgress(tracked=False,
+                                 detail="attention log unreadable — fix it "
+                                        "before trusting any streak")
+    if not rows:
+        return AttentionProgress(tracked=False)
+    last_week = iso_week(datetime.date.today() - datetime.timedelta(days=7))
+    by_week = {r.week: r for r in rows}
+    row = by_week.get(last_week)
+    return AttentionProgress(
+        tracked=True, streak=state.streak, needed=state.needed,
+        logged_weeks=state.logged_weeks, untracked_weeks=state.untracked_weeks,
+        fires=state.fires, detail=state.detail,
+        # A row that exists but says not_tracked is a RECORDED decision, not
+        # a gap to fill — so it is reported as itself rather than as "logged".
+        next_week="" if row is not None else last_week,
+        last_week_untracked=row is not None and row.status != "logged",
+    )
 
 
 def _found(root: pathlib.Path, names: tuple[str, ...]) -> list[str]:
@@ -148,6 +199,9 @@ def read_cycle(root: str | pathlib.Path) -> CycleState:
         if decision:
             pl5_decision = str(decision).lower()
 
+    # The blocking criterion's own series lives at the repo root, not in the
+    # cycle directory (launch/../metrics/attention-log.yaml).
+    attention = read_attention(base.parent if base.name else base)
     scoped = [s for s in stages if s.id in in_scope]
     missing_scoped = [s for s in scoped if not s.present]
     span = f"{entry_stage}-P5" if entry_stage != "P0" else "P0-P5"
@@ -175,7 +229,8 @@ def read_cycle(root: str | pathlib.Path) -> CycleState:
             id="V3-3",
             requirement="the PL5 record carries a human kill-or-pivot decision",
             met=pl5_decision in DECISIVE,
-            detail=_decision_detail(pl5_path, pl5_decision, requires_human, fired),
+            detail=_decision_detail(pl5_path, pl5_decision, requires_human, fired,
+                                    attention),
         ),
     ]
     return CycleState(
@@ -184,11 +239,14 @@ def read_cycle(root: str | pathlib.Path) -> CycleState:
         pl5_decision=pl5_decision,
         pl5_requires_human_decision=requires_human,
         criteria=criteria,
-        next_action=_next_action(scoped, criteria, requires_human, pl5_decision),
+        attention=attention if attention.tracked else None,
+        next_action=_next_action(scoped, criteria, requires_human, pl5_decision,
+                                 attention),
     )
 
 
-def _decision_detail(pl5_path, decision, requires_human, fired) -> str:
+def _decision_detail(pl5_path, decision, requires_human, fired,
+                     attention=None) -> str:
     if decision in DECISIVE:
         return f"recorded decision: {decision}"
     if decision == "continue":
@@ -204,14 +262,19 @@ def _decision_detail(pl5_path, decision, requires_human, fired) -> str:
             "DUE but unrecorded — record it in the evaluation "
             "(`human_decision: kill|pivot|continue`)"
         )
-    return (
+    quiet = (
         "no criterion fired, so no decision is due: 'continue' stays legal "
         "because nothing fired, not because anyone chose it — the gate is "
         "not met by a quiet cycle"
     )
+    if attention is not None and attention.tracked:
+        # Say how far away it actually is, rather than leaving the operator to
+        # run `autoproduct attention` and join the two reports by hand.
+        return f"{quiet}. {attention.detail}"
+    return quiet
 
 
-def _next_action(stages, criteria, requires_human, decision) -> str:
+def _next_action(stages, criteria, requires_human, decision, attention=None) -> str:
     missing = [s for s in stages if not s.present]
     if missing:
         first = missing[0]
@@ -227,6 +290,31 @@ def _next_action(stages, criteria, requires_human, decision) -> str:
         )
     if decision in DECISIVE:
         return "v3.0.0 design gate met — the loop closed on a real decision"
+    if attention is not None and attention.tracked:
+        if attention.fires:
+            return (
+                "the attention criterion HAS FIRED — record the human decision "
+                "in the PL5 evaluation (invariant 14.20)"
+            )
+        if attention.next_week:
+            remaining = max(0, attention.needed - attention.streak)
+            return (
+                f"log last week: `autoproduct attention --week "
+                f"{attention.next_week} --confirm-hours <yours> --by <you>`. "
+                f"{attention.streak}/{attention.needed} consecutive weeks over "
+                f"budget; {remaining} more would fire the criterion"
+            )
+        remaining = max(0, attention.needed - attention.streak)
+        if attention.last_week_untracked:
+            return (
+                "last week is RECORDED as not tracked, which breaks any streak "
+                f"rather than counting either way — the {attention.needed}-week "
+                "run starts from the next week you log"
+            )
+        return (
+            f"last week is logged; {remaining} more consecutive week(s) over "
+            "budget would fire the criterion — nothing to do until next week"
+        )
     return (
         "wait for the next PL5 evaluation window: the criteria need data "
         "that does not exist yet, and a criterion cannot be declared safe "

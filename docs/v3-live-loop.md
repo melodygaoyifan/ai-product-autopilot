@@ -64,7 +64,10 @@ this).
    until four consecutive logged weeks exist, or you reach loop 3 —
    whichever comes first. When the criterion fires, the command exits 3 and
    points here.
-2. Re-run the evaluation mechanically against `launch/prd.yaml`'s criteria.
+2. `autoproduct loop --root launch` reports the streak inline — how many
+   consecutive over-budget weeks exist, how many remain, and which week to
+   log next. Re-run the evaluation mechanically against
+   `launch/prd.yaml`'s criteria when it says the criterion has fired.
 3. If a criterion fires, `loop` exits **3** and says a decision is due.
    Record it in `launch/gate-pl5-evaluation.yaml`:
 
