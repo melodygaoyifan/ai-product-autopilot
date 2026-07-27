@@ -104,6 +104,56 @@ each run's `meta.yaml` records `checkpoint_encryption: aes|off`. The YAML
 mirrors stay plaintext on purpose — they are the human-readable audit
 trail (doc 09 §6).
 
+## Releasing to PyPI
+
+The distribution is `ai-venture-studio`; the commands it installs are `avs`
+(documented) and `autoproduct` (alias, so older scripts keep working).
+
+Publishing is done by CI through **Trusted Publishing** — there is no API
+token in the repo, in a secret, or on anyone's laptop. A one-time setup at
+<https://pypi.org/manage/account/publishing/> registers this repository and
+`publish.yml` as the publisher; after that a release is:
+
+```
+# 1. bump the version and land it
+#    pyproject.toml: version = "0.55.0"   (must match the CHANGELOG entry)
+git commit -am "release: v0.55.0" && git push
+
+# 2. tag it — this is what triggers the publish
+git tag v0.55.0 && git push origin v0.55.0
+```
+
+The workflow runs the full suite on the tagged commit, checks the tag against
+`pyproject.toml` (a mistyped tag fails instead of publishing a wrong number),
+runs `twine check`, and only then uploads. The `pypi` environment can require
+a manual approval if you want a human click before every release.
+
+**A published version cannot be replaced, only yanked.** That is why the gate
+is the whole suite rather than a smoke test, and why the version/tag check
+exists.
+
+One-off local publish (if you ever need it without CI): build, verify, then
+upload with a token supplied by the environment — never pasted into a shell
+that records history.
+
+```
+uv build && uvx twine check dist/*
+UV_PUBLISH_TOKEN=pypi-... uv publish     # prefer: read it from a password manager
+```
+
+### The old distribution
+
+`autoproduct` remains on PyPI at its last released version. PyPI has no
+rename, so it stays there; `pip install autoproduct` keeps working and keeps
+resolving to the old code. Two honest options, both deliberate rather than
+accidental:
+
+- **Leave it frozen** (current state) and point new users at the new name.
+- **Publish one final `autoproduct` release** whose only change is a
+  deprecation notice in the description pointing at `ai-venture-studio`.
+  That requires temporarily setting `name = "autoproduct"` in a release
+  branch, so it is a considered act, not a side effect.
+
 ## Safety boundaries (structural, not configurable)
 
 - No auto-merge, no production deploys, no L3/L4 tools for any voter.

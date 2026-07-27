@@ -5,6 +5,18 @@ per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
 ## v0.54.0 — package and CLI renamed: `ai_venture_studio`, command `avs`
+- Release plumbing: `version` in pyproject was 0.33.1 while the CHANGELOG had
+  reached v0.54.0 — the two now agree, because publishing a number that
+  disagrees with its own release notes is worse than not publishing.
+- `.github/workflows/publish.yml`: tag-triggered PyPI release via Trusted
+  Publishing (OIDC, no API token anywhere). It runs the full suite on the
+  tagged commit, refuses to publish when the tag and pyproject version
+  disagree, runs `twine check`, and only then uploads — because a published
+  version cannot be replaced, only yanked.
+- Artifacts for 0.54.0 are built and verified locally: `twine check` PASSED on
+  both, and a clean-venv install of the wheel runs `avs`, the `autoproduct`
+  alias, and a real command. The UPLOAD is not done: it needs a credential
+  only the account owner holds (see RUNBOOK → Releasing to PyPI).
 - Import package `autoproduct` → **`ai_venture_studio`** (874 references
   across 268 files), distribution `autoproduct` → **`ai-venture-studio`**,
   and the CLI command is now **`avs`**. `autoproduct` stays as a console-script

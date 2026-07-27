@@ -1,0 +1,64 @@
+# Publish to PyPI via Trusted Publishing (OIDC) — no API token anywhere.
+#
+# Why this and not a token in a secret: a long-lived PyPI token in repo
+# secrets is a credential that can be exfiltrated by any workflow change and
+# never expires until someone remembers to rotate it. Trusted Publishing
+# mints a short-lived, audience-scoped credential per run, so there is no
+# secret to leak, and the publisher is pinned to this repo + this workflow.
+#
+# ONE-TIME SETUP (only the PyPI account owner can do this):
+#   https://pypi.org/manage/account/publishing/ → add a pending publisher
+#     PyPI project name: ai-venture-studio
+#     Owner:             melodygaoyifan
+#     Repository:        ai-venture-studio
+#     Workflow name:     publish.yml
+#     Environment:       pypi
+#
+# THEN, to release: bump `version` in pyproject.toml, land it on main, and
+#   git tag v0.54.0 && git push origin v0.54.0
+#
+# The gate is deliberate: the suite must pass on the tagged commit before
+# anything is uploaded, because a PyPI version cannot be replaced — only
+# yanked. The tag must also match the version in pyproject.toml, so a
+# mistyped tag fails loudly instead of publishing the wrong number.
+name: publish
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: |
+          git config --global user.email ci@example.invalid
+          git config --global user.name avs-ci
+      - run: uv sync
+      # The same gate as ci.yml: hermetic suite plus the ADR-U29 self-lint.
+      - run: uv run pytest -q
+      - name: tag must match pyproject version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(uv run python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "tag=$tag pyproject=$pkg"
+          test "$tag" = "$pkg" || {
+            echo "::error::tag $GITHUB_REF_NAME does not match pyproject version $pkg"
+            exit 1
+          }
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: pypi          # lets you require a manual approval here
+    permissions:
+      id-token: write          # the OIDC token Trusted Publishing exchanges
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - name: check artifacts the way PyPI will
+        run: uvx twine check dist/*
+      - name: publish
+        run: uv publish        # no token: OIDC, scoped to this workflow
