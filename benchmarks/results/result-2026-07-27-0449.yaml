@@ -1,0 +1,169 @@
+cases:
+- name: 01-groupbuy-api
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 2
+  clean_reviews: 0
+  outcomes:
+  - task_id: t1
+    title: Create and read groupbuys with persistence
+    status: error
+    review: null
+    detail: implementer returned no files (failed attempt preserved at .mas/failed-builds/groupbuy-create-and-fetch-api;
+      workspace reset)
+  - task_id: t2
+    title: Place orders against a groupbuy
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t3
+    title: Groupbuy summary aggregation
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t4
+    title: Real-organizer usability observation run
+    status: spec_blocked
+    review: null
+    detail: '3 EARS lint issue(s): does not match any EARS pattern (The/When/While/If-then/Where
+      ... shall ...); does not match any EARS pattern (The/When/While/If-then/Where
+      ... shall ...); does not match any EAR'
+  preserved_workspace: .mas/product-bench/workspaces/01-groupbuy-api
+  probes:
+  - name: create-and-read
+    passed: true
+    detail: create/read ok
+  - name: order-summary-math
+    passed: true
+    detail: summary math ok
+  - name: unknown-id-is-client-error
+    passed: true
+    detail: 404 ok
+  duration_s: 3104.2
+- name: 02-shortener-api
+  autopilot_status: completed
+  tasks_total: 3
+  tasks_built: 3
+  clean_reviews: 3
+  outcomes:
+  - task_id: t1
+    title: Link storage and shorten endpoint
+    status: built
+    review: APPROVE_WITH_NOTES
+    detail: (after fix iteration)
+  - task_id: t2
+    title: Redirect endpoint with click tracking
+    status: built
+    review: APPROVE
+    detail: ''
+  - task_id: t3
+    title: Stats endpoint
+    status: built
+    review: APPROVE
+    detail: ''
+  preserved_workspace: ''
+  probes:
+  - name: shorten-and-redirect
+    passed: true
+    detail: redirect ok
+  - name: click-counting
+    passed: true
+    detail: click count ok
+  duration_s: 1719.8
+- name: 03-groupbuy-auto
+  autopilot_status: failed
+  tasks_total: 4
+  tasks_built: 3
+  clean_reviews: 1
+  outcomes:
+  - task_id: t1
+    title: 创建团购端点与持久化基础
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t2
+    title: 查看单个团购端点
+    status: built
+    review: APPROVE
+    detail: ''
+  - task_id: t3
+    title: 住户下单端点
+    status: build_failed
+    review: null
+    detail: build gate still failing after max iterations; nothing committed (failed
+      attempt preserved at .mas/failed-builds/api-post-groups-group-id-orders; workspace
+      reset)
+  - task_id: t4
+    title: 团购汇总端点
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  preserved_workspace: .mas/product-bench/workspaces/03-groupbuy-auto
+  probes:
+  - name: probe-generation
+    passed: false
+    detail: probegen produced no probes after a retry — case behavior UNMEASURED,
+      scored as a failure
+  duration_s: 2543.9
+- name: 04-direction-workbench
+  autopilot_status: failed
+  tasks_total: 7
+  tasks_built: 5
+  clean_reviews: 1
+  outcomes:
+  - task_id: t1
+    title: 候选创建与持久化
+    status: built
+    review: APPROVE
+    detail: (after fix iteration)
+  - task_id: t2
+    title: 打分提交与规则校验
+    status: error
+    review: null
+    detail: implementer returned no files (failed attempt preserved at .mas/failed-builds/submit-round-scores-post-api-candidates-id-score;
+      workspace reset)
+  - task_id: t3
+    title: 单个候选详情读取
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t4
+    title: 按轮排序候选列表
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  - task_id: t5
+    title: 淘汰候选记录理由
+    status: error
+    review: null
+    detail: implementer returned no files (failed attempt preserved at .mas/failed-builds/eliminate-candidate-with-reason-post-api-candida;
+      workspace reset)
+  - task_id: t6
+    title: 淘汰区留档列表
+    status: built
+    review: REQUEST_CHANGES
+    detail: (after fix iteration)
+  - task_id: t7
+    title: 两轮逐项对比
+    status: built
+    review: REQUEST_CHANGES
+    detail: ''
+  preserved_workspace: .mas/product-bench/workspaces/04-direction-workbench
+  probes:
+  - name: score-veto-qualify-sort
+    passed: true
+    detail: score/veto/sort ok
+  - name: score-validation-and-evidence-downgrade
+    passed: true
+    detail: validation ok
+  - name: eliminate-and-two-round-compare
+    passed: true
+    detail: eliminate/compare ok
+  duration_s: 4424.0
+build_rate: 0.7410714285714286
+probe_pass_rate: 0.75
+clean_review_rate: 0.3833333333333333
+rates:
+  build_rate: 0.741
+  probe_pass_rate: 0.75
+  clean_review_rate: 0.383
