@@ -92,6 +92,8 @@ def test_web_profile_carries_scope_law_and_boot_contract():
     assert "PORT" in profile["stack_hint"]
     assert "never crash on user input" in text
     assert "human-readable message" in text
+    assert "Where the product fetches or redirects" in text
+    assert "never as a separate task" in text
 
 
 def test_implementer_receives_the_literal_source_contract(tmp_path, monkeypatch):
