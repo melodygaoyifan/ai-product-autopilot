@@ -29,7 +29,7 @@ human-, pilot-, or external-shaped — each is named, none is silent.
 
 **Cross-cutting deltas** (from the 2026-07-26 full audit): only the
 code-review stage is a checkpointed graph — deploy, maintenance, and the
-upstream stages are straight-line Python, which trades away mid-stage
+**v0.48**: upstream gained TASK-granular resume (outcomes persist as tasks complete; a re-run skips what is built on disk) — not super-step-granular like the review graph, which trades away sub-task
 resume for those stages; and the MCP/harness enforcement layer of docs
 10–11 is realized in-process rather than as partitioned servers. Both are
 recorded architecture mappings, not silent omissions.

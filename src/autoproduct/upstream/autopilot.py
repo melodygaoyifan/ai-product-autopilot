@@ -135,8 +135,23 @@ def run_autopilot(
     approve_plan(root)
     auto_approvals.append("Gate U2 (scope lock): auto — dag_check passed")
 
-    outcomes: list[TaskOutcome] = []
-    ordered = _topo_order(load_plan(root).tasks)[:max_tasks]
+    # Task-level resume (plan item 15, upstream half). The expensive unit
+    # here is a TASK — spec + build + review, minutes and real money each —
+    # so outcomes are persisted as they complete and a re-run skips what is
+    # already built rather than re-paying it. This is task-granular, not
+    # super-step-granular like the review graph: a task interrupted halfway
+    # restarts that task, and the ones before it stay done.
+    outcomes: list[TaskOutcome] = _resume_outcomes(root)
+    resumed = {o.task_id for o in outcomes if o.status == "built"}
+    if resumed:
+        auto_approvals.append(
+            f"resumed: {len(resumed)} task(s) already built "
+            f"({', '.join(sorted(resumed))}) — not rebuilt"
+        )
+    ordered = [
+        t for t in _topo_order(load_plan(root).tasks)[:max_tasks]
+        if t.id not in resumed
+    ]
     if parallel:
         auto_approvals.append("parallel lanes: wave scheduling (one task per lane per wave)")
         for wave in schedule_waves(ordered):
@@ -189,6 +204,9 @@ def run_autopilot(
                 status=built.status, review_verdict=verdict, detail=detail,
             )
         )
+        # Persist immediately: a crash after this point must not lose the
+        # task that just cost minutes to build.
+        _write_outcomes(root, outcomes)
 
     report = provider_impl.complete(
         model=model,
@@ -242,6 +260,45 @@ def estimate_hint(root: Path, item_count: int) -> str:
         f" / Roughly {n}–{n + 3} modules at {per_task_min}–{per_task_min * 3} min "
         "each; individual modules may fail and can be retried alone."
     )
+
+
+def _write_outcomes(root: Path, outcomes) -> None:
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "outcomes.yaml").write_text(
+        yaml.safe_dump([o.model_dump() for o in outcomes], sort_keys=False,
+                       allow_unicode=True),
+        encoding="utf-8",
+    )
+
+
+def _resume_outcomes(root: Path) -> list[TaskOutcome]:
+    """Prior outcomes, trusted only where the workspace agrees.
+
+    An outcome claiming `built` is honored only if the spec for that task is
+    actually built on disk (`built_task_ids`) — a stale outcomes.yaml must
+    never let a run skip work that is not there. Anything else is dropped so
+    the task is attempted again.
+    """
+    path = root / "product" / "outcomes.yaml"
+    if not path.exists():
+        return []
+    try:
+        rows = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    except yaml.YAMLError:
+        return []  # an unreadable record is no record; redo the work
+    from autoproduct.upstream.plan import built_task_ids
+
+    on_disk = built_task_ids(root)
+    kept = []
+    for row in rows if isinstance(rows, list) else []:
+        try:
+            outcome = TaskOutcome.model_validate(row)
+        except Exception:  # noqa: BLE001 — a bad row is not a built task
+            continue
+        if outcome.status == "built" and outcome.task_id not in on_disk:
+            continue  # claimed built, is not: redo it
+        kept.append(outcome)
+    return kept
 
 
 def _post_build_artifacts(

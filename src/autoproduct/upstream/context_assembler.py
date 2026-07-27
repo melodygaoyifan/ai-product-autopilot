@@ -147,12 +147,16 @@ def make_probe(text: str) -> str:
     return max(meaningful, key=len)[:PROBE_CHARS]
 
 
-def _candidate(root: pathlib.Path, path: pathlib.Path, kind: EntryKind):
+def _candidate(
+    root: pathlib.Path, path: pathlib.Path, kind: EntryKind,
+    required_kinds: set[str] | None = None,
+):
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
-    required = kind in _REQUIRED_KINDS and path.name not in _DERIVED_VIEWS
+    kinds = required_kinds if required_kinds is not None else _REQUIRED_KINDS
+    required = kind in kinds and path.name not in _DERIVED_VIEWS
     return ManifestEntry(
         path=str(path.relative_to(root)),
         kind=kind,
@@ -164,7 +168,9 @@ def _candidate(root: pathlib.Path, path: pathlib.Path, kind: EntryKind):
 
 
 def collect_candidates(
-    repo_dir: str | pathlib.Path, slug: str, *, files_expected: list[str] | None = None
+    repo_dir: str | pathlib.Path, slug: str, *,
+    files_expected: list[str] | None = None,
+    required_kinds: set[str] | None = None,
 ) -> list[ManifestEntry]:
     """Everything this task could legitimately need, unranked."""
     root = pathlib.Path(repo_dir).resolve()
@@ -172,7 +178,7 @@ def collect_candidates(
 
     def add(path: pathlib.Path, kind: EntryKind) -> None:
         if path.is_file():
-            entry = _candidate(root, path, kind)
+            entry = _candidate(root, path, kind, required_kinds)
             if entry is not None and not any(e.path == entry.path for e in found):
                 found.append(entry)
 
@@ -203,10 +209,20 @@ def assemble(
     task_id: str | None = None,
     files_expected: list[str] | None = None,
     cap_tokens: int = DEFAULT_CAP_TOKENS,
+    required_kinds: set[str] | None = None,
 ) -> ContextManifest:
     """Build the manifest, or refuse (ContextOverflow) when required context
-    does not fit — never by silently dropping the contract."""
-    candidates = collect_candidates(repo_dir, slug, files_expected=files_expected)
+    does not fit — never by silently dropping the contract.
+
+    `required_kinds` overrides what counts as required. The SPEC stage needs
+    this: the spec is what it is about to write, so it cannot be required
+    reading — but the constraints and module invariants it must not violate
+    still are.
+    """
+    candidates = collect_candidates(
+        repo_dir, slug, files_expected=files_expected,
+        required_kinds=required_kinds,
+    )
     ranked = sorted(candidates, key=lambda e: (_RANK[e.kind], e.path))
     required = [e for e in ranked if e.required]
     optional = [e for e in ranked if not e.required]

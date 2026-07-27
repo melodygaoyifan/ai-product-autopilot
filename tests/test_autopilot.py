@@ -77,3 +77,58 @@ def test_full_autopilot_builds_every_task(tmp_path):
         ["git", "log", "--oneline"], cwd=root, capture_output=True, text=True
     ).stdout
     assert log.count("feat(") == 3
+
+
+def test_a_crashed_run_resumes_instead_of_re_paying_built_tasks(tmp_path, monkeypatch):
+    """Plan item 15's upstream half, as one end-to-end example.
+
+    A task is the expensive unit here — spec + build + review, minutes and
+    real money each — so a run interrupted at task 2 must not rebuild task 1.
+    """
+    import autoproduct.upstream.autopilot as autopilot_mod
+
+    root = _workspace(tmp_path, GOOD_FDR)
+    built_calls: list[str] = []
+    real_build = autopilot_mod.run_build
+
+    def counting_build(repo, slug, **kwargs):
+        built_calls.append(slug)
+        # Die partway through the second task, after the first is on disk.
+        if len(built_calls) == 2:
+            raise RuntimeError("simulated crash mid-build")
+        return real_build(repo, slug, **kwargs)
+
+    monkeypatch.setattr(autopilot_mod, "run_build", counting_build)
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        run_autopilot(root, root / "FDR.md", provider="mock", yes=True)
+
+    # The completed task was persisted as it finished, not at the end.
+    import yaml
+
+    outcomes = yaml.safe_load((root / "product" / "outcomes.yaml").read_text())
+    assert [o["status"] for o in outcomes] == ["built"]
+    first_slug = built_calls[0]
+
+    # Resume: the built task is skipped, the crashed one is attempted again.
+    monkeypatch.setattr(autopilot_mod, "run_build", real_build)
+    result = run_autopilot(root, root / "FDR.md", provider="mock", yes=True)
+    assert result.status in ("completed", "failed")
+    assert any("resumed:" in note for note in result.auto_approvals)
+    rebuilt = [o for o in result.outcomes if o.task_id == outcomes[0]["task_id"]]
+    assert rebuilt and rebuilt[0].status == "built"
+    assert first_slug not in built_calls[2:], "a built task must not be rebuilt"
+
+
+def test_a_stale_outcome_claiming_built_is_not_trusted(tmp_path):
+    """outcomes.yaml is a record, not an authority: if the spec is not built
+    on disk, the task is redone rather than skipped."""
+    import yaml
+
+    from autoproduct.upstream.autopilot import _resume_outcomes
+
+    root = _workspace(tmp_path, GOOD_FDR)
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "outcomes.yaml").write_text(yaml.safe_dump([
+        {"task_id": "t1", "title": "ghost", "status": "built", "detail": ""},
+    ]), encoding="utf-8")
+    assert _resume_outcomes(root) == []  # nothing on disk backs the claim

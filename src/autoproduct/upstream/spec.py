@@ -29,6 +29,10 @@ SPECWRITER_MARKER = "spec writer for a greenfield product system"
 MAX_REVISIONS = 2
 
 
+class GroundingError(RuntimeError):
+    """Required context never reached the spec writer (§13.25.2, §11.18.3)."""
+
+
 class TestSkeleton(BaseModel):
     path: str
     purpose: str
@@ -121,6 +125,47 @@ def contract_hash(spec: "Spec") -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _hard_constraints(repo_dir: str | Path) -> str:
+    """CLAUDE.md verbatim — the constraints every spec is bound by."""
+    path = Path(repo_dir) / "CLAUDE.md"
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def _module_invariants(repo_dir: str | Path) -> str:
+    from autoproduct.upstream.build import _module_spec_context
+
+    return _module_spec_context(Path(repo_dir))
+
+
+def _spec_grounding_gate(repo_dir: str | Path, request: str, prompt: str) -> None:
+    """Refuse to write a spec blind to its hard constraints (§13.25.2).
+
+    Raises GroundingError rather than returning a blocked Spec: there is no
+    artifact yet to attach block_reasons to, and a spec authored without its
+    constraints is not a weak spec, it is one nobody can trust.
+    """
+    from autoproduct.upstream.context_assembler import (
+        assemble,
+        verify_prompt_grounding,
+    )
+
+    slug = _slugify(str(request))
+    manifest = assemble(
+        repo_dir, slug, task_id=slug,
+        # Pre-spec: constraints and module invariants are required; the spec
+        # being written is not.
+        required_kinds={"constraints", "module_spec"},
+    )
+    violations = verify_prompt_grounding(manifest, prompt)
+    if violations:
+        detail = "; ".join(f"{v.path} ({v.rule})" for v in violations[:4])
+        raise GroundingError(
+            f"spec generation refused: required context missing from the "
+            f"writer's prompt — {detail}. A spec authored blind to its own "
+            "hard constraints is not a weak spec, it is an untrustworthy one."
+        )
+
+
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:48] or "feature"
 
@@ -160,6 +205,13 @@ def run_spec_stage(
     design_path = Path(repo_dir) / "product" / "design.md"
     if design_path.exists():
         design_memory = design_path.read_text(encoding="utf-8")[-4000:]
+    # CLAUDE.md and the module invariants belong in the SPEC writer's prompt
+    # too, not only the implementer's: a criterion that contradicts a module
+    # invariant becomes a build that cannot satisfy both, and Code Review
+    # then flags SPEC_DRIFT_UNDOCUMENTED against work nobody could have got
+    # right. The grounding gate below is what surfaced this.
+    hard_constraints = _hard_constraints(repo_dir)
+    module_block = _module_invariants(repo_dir)
     context = yaml.safe_dump(
         {
             "project": project.name,
@@ -169,6 +221,14 @@ def run_spec_stage(
             "stack_hint": profile.get("stack_hint", ""),
         },
         sort_keys=False, allow_unicode=True,
+    ) + (
+        f"\nproject_hard_constraints: |\n"
+        + "".join(f"  {line}\n" for line in hard_constraints.splitlines())
+        if hard_constraints.strip() else ""
+    ) + (
+        f"\nmodule_invariants: |\n"
+        + "".join(f"  {line}\n" for line in module_block.splitlines())
+        if module_block.strip() else ""
     ) + (
         f"\nexisting_architecture: |\n  (extend this — do not re-derive)\n{design_memory}"
         if design_memory
@@ -180,6 +240,11 @@ def run_spec_stage(
         if source_contract.strip()
         else ""
     )
+
+    # Grounding (§13.25.2): the constraints and invariants this spec must not
+    # violate have to actually BE in the prompt. The spec itself is not
+    # required reading here — it is what we are about to write.
+    _spec_grounding_gate(repo_dir, request, context)
 
     feedback = ""
     spec_data: dict = {}

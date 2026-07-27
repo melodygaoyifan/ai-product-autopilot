@@ -41,11 +41,25 @@ Ordered by leverage ÷ size. Each phase is independently shippable; the
     the single-panel prompt (doc 13 §25).
 14. ✅ v0.31 — GEPA proposer loop, budget-gated by the v0.27 gepa.yaml schema
     (holdout fixtures, one agent per cycle, weekly rollout cap).
-15. (in progress, parallel session) Checkpointed graphs for deploy/maintenance (SqliteSaver reuse), then
-    upstream — restores mid-stage resume those stages' docs promise.
+15. ✅ v0.33 (deploy/maintenance) + ✅ v0.48 (upstream) — Checkpointed graphs
+    for deploy/maintenance on the shared SqliteSaver, then upstream resume.
+    Upstream is TASK-granular rather than super-step-granular: a task is the
+    expensive unit there (spec + build + review), outcomes persist as they
+    complete, and a re-run skips what is built on disk. Stated plainly
+    because it is not the same guarantee as the review graph's.
 16. ✅ v0.31 — Secrets layer + encrypted checkpointer serde (doc 09 §3.1).
 
+## Status: every phase closed (v0.28 → v0.48)
+
+Phases A–D are done. Two of the "recorded non-goals" below were later
+reversed deliberately, each with an ADR that bounds it (see docs/adr/):
+MCP partitioning became real subprocess servers (ADR-029), and the
+externals this plan assumed absent were built as availability-gated
+wrappers (v0.43–v0.45) — twelve integrations, none yet run against a live
+account, which the implementation map records per tool.
+
 ## Recorded non-goals (stay in the map's Open column)
-MCP server partitioning (in-process by ADR'd mapping) · pilot/live-shaped
-items (wedge pilot, SSO/IdP, VPC, ERP lane, live experiments/kills) ·
-externals on hosts that lack them (k6, netem, device farms, registries).
+External MCP servers (ADR-029 keeps them out on supply-chain grounds) ·
+pilot/live-shaped items (wedge pilot, SSO/IdP, VPC, ERP lane, live
+experiments/kills) · engine adapters for the bot-session protocol · the
+first live call per external tool.

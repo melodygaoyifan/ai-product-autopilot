@@ -426,3 +426,47 @@ def test_probe_survives_a_yaml_rewrap(workspace):
     prompt = yaml.safe_dump({"criteria": [long_criterion]}, width=200)
     assert entry.probe in normalize(prompt)
     assert "specs/item-store/spec.yaml" in grounding_receipts(manifest, prompt)
+
+
+# --- grounding at the SPEC writer too (v0.48.0) -------------------------------
+
+
+def test_spec_writer_sees_its_hard_constraints_and_invariants(tmp_path):
+    """A criterion that contradicts a module invariant becomes a build that
+    cannot satisfy both — so the spec writer must see them, and the gate is
+    what proved it wasn't."""
+    from autoproduct.upstream import init_workspace
+    from autoproduct.upstream.spec import run_spec_stage
+
+    root = init_workspace(tmp_path / "w", "w", "web")
+    (root / "CLAUDE.md").write_text(
+        "- every persisted id is stable across restarts and never reused\n",
+        encoding="utf-8",
+    )
+    (root / ".mas" / "specs").mkdir(parents=True, exist_ok=True)
+    (root / ".mas" / "specs" / "store.spec.yaml").write_text(
+        yaml.safe_dump({"module": "store", "paths": ["feature_*.py"],
+                        "invariants": ["item ids are stable and never reused"]}),
+        encoding="utf-8",
+    )
+    spec = run_spec_stage(root, "an item store API", provider="mock")
+    assert spec.status == "proposed"
+
+
+def test_spec_generation_is_refused_when_constraints_miss_the_prompt(
+    tmp_path, monkeypatch
+):
+    import autoproduct.upstream.spec as spec_mod
+    from autoproduct.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "w", "w", "web")
+    (root / "CLAUDE.md").write_text(
+        "- every persisted id is stable across restarts and never reused\n",
+        encoding="utf-8",
+    )
+    # The bug: prompt construction drops the hard constraints that are
+    # sitting right there on disk.
+    monkeypatch.setattr(spec_mod, "_hard_constraints", lambda repo: "")
+    monkeypatch.setattr(spec_mod, "_module_invariants", lambda repo: "")
+    with pytest.raises(spec_mod.GroundingError, match="untrustworthy"):
+        spec_mod.run_spec_stage(root, "an item store API", provider="mock")

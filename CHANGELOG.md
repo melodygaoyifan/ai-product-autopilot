@@ -4,6 +4,30 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.48.0 — upstream resume, grounding at the spec writer, and the plan closed out
+- **Upstream resume (gap-plan item 15's second half).** A task is the
+  expensive unit upstream — spec + build + review, minutes and real money
+  each — so autopilot now persists each outcome AS it completes and a re-run
+  skips tasks already built on disk. Honestly labelled: this is
+  task-granular, not super-step-granular like the review graph. A task
+  interrupted halfway restarts that task; the ones before it stay done.
+- `outcomes.yaml` is treated as a record, not an authority: an outcome
+  claiming `built` is honored only when `built_task_ids` agrees the spec is
+  actually built. A stale record can never make a run skip work that is not
+  there.
+- **Grounding now gates the SPEC writer too**, not just the build writer —
+  the v0.42 asymmetry was arbitrary. Same finding as last time, one stage
+  earlier: the spec writer never saw CLAUDE.md or the module invariants, so
+  it could author a criterion contradicting an invariant, producing a build
+  that cannot satisfy both and a SPEC_DRIFT flag against work nobody could
+  have got right. Both now reach the prompt verbatim, and a spec authored
+  blind to them raises rather than returning a weak spec.
+- docs/gap-closure-plan.md reflects reality: every phase closed, item 15
+  marked with both halves and their differing guarantees, and the
+  "recorded non-goals" list corrected where later ADRs reversed it.
+- Suite: 1008 -> 1012 hermetic tests (one end-to-end resume example, not a
+  battery)
+
 ## v0.47.0 — the bot fleet: the game profile's last unbuilt check
 - `autoproduct botfleet` runs N parallel bot sessions and triages what they
   hit: crashes, softlocks, unreachable-state regressions, out-of-bounds
