@@ -4,6 +4,34 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.41.0 — the ContextAssembler and research-session taint isolation
+- upstream/context_assembler.py (§13.25.2, §13.29.3, §13.35.5): builds a
+  task's Context Manifest deterministically under a token cap — spec slice
+  first, code neighborhoods last, every entry content-hashed. Three
+  mechanisms that only work together:
+  * grounding receipts — `verify_sources_read` checks a writer's
+    `sources_read` against the manifest; unread required context, a hash
+    mismatch, or a claimed read of something unlisted are CONTRACT
+    violations (§11.18.3), not quality notes;
+  * drift detection — re-hashing catches a human editing a frozen artifact
+    mid-flight, and `run_build` now refuses to build an unratified fork,
+    naming the retro-SCR path instead of fighting the human (Gate U3
+    pins a contract hash at approval; specs approved before v0.41 have no
+    receipt and are treated as clean);
+  * overflow as a planning defect — a task whose REQUIRED context exceeds
+    the cap returns TASK_BLOCKED_CONTEXT_OVERFLOW with a split proposal
+    rather than quietly compressing the contract.
+- harness/taint_guard.py (§13.31.2, ADR-U03): the session-level enforcement
+  the taint classes always assumed. `wrap_research` marks fetched content as
+  data (and neutralizes a nested closing tag, so hostile content cannot
+  close the wrapper and speak as the host); a run that consumes research is
+  tainted one-way and loses L1+ tools for the rest of its life. Enforcement
+  sits at the MCP transport where v0.40's risk tiers live, so the denial
+  does not depend on anything the model says: L0 reading still works, L1/L2
+  and unclassified tools are refused, and the refusal lands in the audit
+  ledger. Taint arrives from tool OUTPUT, not declaration.
+- Suite: 866 -> 886 hermetic tests
+
 ## v0.40.0 — the L1/L2 MCP partitions + the deploy-branch fix
 - Three more partitions from doc 11 §17.2, for the tools that exist:
   `deploy` (L1: migration/workflow/canary probes), `maintenance` (L1:

@@ -53,6 +53,12 @@ class Spec(BaseModel):
     )
     revisions: int = 0
     built: bool = False
+    approved_hash: str = Field(
+        default="",
+        description="§13.35.5: hash of the contract slice at Gate U3 approval. "
+        "A later mismatch means someone edited a frozen spec outside the SCR "
+        "channel, and the build refuses the unratified fork.",
+    )
 
 
 _WRITER_SYSTEM = f"""You are the {SPECWRITER_MARKER}. Produce a buildable
@@ -93,6 +99,27 @@ test_skeletons:
     purpose: ...
     covers: [0, 1]
 """
+
+def contract_hash(spec: "Spec") -> str:
+    """Hash of what Gate U3 actually approved: the contract a human read.
+
+    Deliberately excludes bookkeeping (status, built, revisions, critic
+    notes) — those move for legitimate reasons and would make every build
+    look like a fork.
+    """
+    import hashlib
+
+    payload = yaml.safe_dump(
+        {
+            "title": spec.title,
+            "design": spec.design,
+            "criteria": list(spec.criteria),
+            "test_skeletons": [s.model_dump() for s in spec.test_skeletons],
+        },
+        sort_keys=True, allow_unicode=True,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:48] or "feature"
@@ -353,5 +380,8 @@ def approve_spec(repo_dir: str | Path, slug: str) -> Spec:
             f"(lint: {len(spec.lint_issues)}); fix and regenerate before approving"
         )
     spec.status = "approved"
+    # Pin what this approval covered (§13.35.5). Editing the spec afterwards
+    # is legal — it just stops being approved until an SCR ratifies it.
+    spec.approved_hash = contract_hash(spec)
     _save(repo_dir, spec)
     return spec

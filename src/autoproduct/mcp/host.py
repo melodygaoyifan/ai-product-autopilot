@@ -46,11 +46,17 @@ class MCPHost:
         timeout_s: float = 30.0,
         audit_dir: str | pathlib.Path | None = None,
         risk_ceiling: int = 0,
+        taint: "TaintGuard | None" = None,
     ):
         self.root = pathlib.Path(repo_dir).resolve()
         self.voter = voter
         self.timeout_s = timeout_s
         self.risk_ceiling = risk_ceiling
+        # §13.31.2 / ADR-U03: a run that consumed research keeps its declared
+        # ceiling on paper but loses L1+ in practice. Mounting is decided
+        # from the DECLARED ceiling so the surface does not silently change
+        # mid-run; the per-call authorize() is what refuses.
+        self.taint = taint
         self.audit_path = (
             pathlib.Path(audit_dir) if audit_dir else self.root / ".mas"
         ) / AUDIT_FILE
@@ -105,6 +111,16 @@ class MCPHost:
     def call(self, tool: str, arguments: dict) -> str:
         started = time.monotonic()
         server = server_for(tool)
+        if self.taint is not None and self.taint.tainted:
+            from autoproduct.harness.taint_guard import ToolDenied
+
+            try:
+                self.taint.authorize(tool, SERVER_RISK.get(server))
+            except ToolDenied as exc:
+                self._audit(tool, server, arguments, "refused",
+                            time.monotonic() - started,
+                            detail=f"tainted session: {exc}"[:200])
+                raise
         if tool in self.over_ceiling_tools:
             self._audit(tool, server, arguments, "refused",
                         time.monotonic() - started,
@@ -131,6 +147,10 @@ class MCPHost:
             # Transport failure is data for the voter, which then degrades to
             # BLOCKED_TOOL_FAILURE rather than guessing.
             return f"error: {exc}"
+        if self.taint is not None:
+            # Taint on evidence: research-wrapped content in ANY tool result
+            # taints the run, so the next L1+ reach is denied.
+            self.taint.observe_tool_result(text, source_id=f"{server}.{tool}")
         self._audit(tool, server, arguments, "ok", time.monotonic() - started,
                     detail=f"{len(text)} chars")
         return text

@@ -520,6 +520,23 @@ def run_build(
     )
 
 
+def _approval_drift(repo: Path, slug: str, spec: Spec) -> str:
+    """§13.35.5 detector: has the approved contract moved since Gate U3?
+
+    Empty string when clean. Specs approved before v0.41 carry no hash and
+    are treated as clean — a missing receipt is not evidence of drift, and
+    silently blocking every pre-existing spec would be its own bug.
+    """
+    from autoproduct.upstream.spec import contract_hash
+
+    if not spec.approved_hash:
+        return ""
+    current = contract_hash(spec)
+    if current == spec.approved_hash:
+        return ""
+    return f"contract hash {spec.approved_hash[:12]} → {current[:12]}"
+
+
 def _run_build_inner(
     repo: Path,
     slug: str,
@@ -548,6 +565,20 @@ def _run_build_inner(
             status="error",
             detail=f"spec status is {spec.status!r} — Gate U3 requires "
             f"`autoproduct spec-approve {slug}` first",
+        )
+
+    # §13.35.5: the approval covered a specific bundle. If the spec moved
+    # since it was approved, a human edited a frozen artifact mid-flight;
+    # the run blocks and a retro-SCR ratifies or reverts. It does not fight
+    # the human, and it does not build the fork either.
+    drift = _approval_drift(repo, slug, spec)
+    if drift:
+        return BuildResult(
+            slug=slug, status="error",
+            detail=f"spec changed outside SCR since Gate U3 approval ({drift}) "
+            f"— ratify with `autoproduct scr {slug} \"<reason>\"` + "
+            "`scr-approve`, or revert the edit; refusing to build an "
+            "unratified fork",
         )
 
     provider_impl = get_provider(provider)
