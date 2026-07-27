@@ -67,6 +67,24 @@ class VoterFinding(BaseModel):
     verified: bool = False
 
 
+class RosterReport(BaseModel):
+    """What a charter-voter critique pass produces, stage-agnostic."""
+
+    stage: str
+    voter_findings: list[VoterFinding] = Field(default_factory=list)
+    excluded_voters: list[str] = Field(default_factory=list)  # failed gate
+    unregistered_voters: list[str] = Field(default_factory=list)  # no gate run
+    leader_summary: str = ""
+
+    def as_issues(self) -> list[dict]:
+        """The upstream stages' critic_issues dict shape (lens = voter)."""
+        return [
+            {"severity": f.severity, "lens": f.voter, "problem": f.problem,
+             "evidence": f.evidence}
+            for f in self.voter_findings
+        ]
+
+
 class StageReport(BaseModel):
     stage: str
     status: str  # ok | gate_blocked | needs_revision
@@ -131,6 +149,99 @@ def load_voter_charters(
     return voters
 
 
+def run_critique_roster(
+    stage_name: str,
+    skills_subdir: str,
+    context_text: str,
+    workspace: str,
+    *,
+    provider_impl,
+    voter_model: str = "claude-sonnet-5",
+    leader_model: str = "claude-opus-4-8",
+    skills_root: pathlib.Path | None = None,
+    det_findings: list[dict] | None = None,
+) -> RosterReport:
+    """Charter voters (no cross-visibility) → per-finding verify → leader.
+
+    The one critique machine every generative stage shares (doc 13 §25.3):
+    P-stages call it through run_product_stage; the upstream stages call
+    it directly with skills_root pointing at skills/upstream/ — the
+    single-panel critic prompts retired in v0.32 lived exactly here.
+    """
+    voter_findings: list[VoterFinding] = []
+    excluded: list[str] = []
+    unregistered: list[str] = []
+    from autoproduct.product.voter_gate import registry_status
+
+    mas_dir = pathlib.Path(workspace) / ".mas"
+    for voter_name, system in load_voter_charters(skills_subdir, skills_root):
+        status = registry_status(mas_dir, stage_name, voter_name)
+        if status == "failed":
+            # §11.19: no agent registers without passing its fixture gate —
+            # a voter with a FAILED gate run does not vote, full stop.
+            excluded.append(voter_name)
+            continue
+        if status == "unregistered":
+            unregistered.append(voter_name)  # loads, but the report says so
+        raw = provider_impl.complete(
+            model=voter_model, system=system, user=context_text, max_tokens=2048
+        )
+        try:
+            found = extract_mapping(raw, ("findings",)).get("findings") or []
+        except ValueError:
+            continue  # a voter that cannot emit the contract contributes nothing
+        for entry in found[:5]:
+            if not isinstance(entry, dict) or not entry.get("problem"):
+                continue
+            finding = VoterFinding(
+                voter=voter_name,
+                severity=str(entry.get("severity", "minor")),
+                problem=str(entry["problem"]),
+                evidence=str(entry.get("evidence", "")),
+            )
+            raw_verdict = provider_impl.complete(
+                model=voter_model,
+                system=_VERIFIER_SYSTEM,
+                user=yaml.safe_dump(
+                    {"finding": finding.model_dump(exclude={"verified"}),
+                     "artifact": context_text},
+                    sort_keys=False, allow_unicode=True,
+                ),
+                max_tokens=512,
+            )
+            try:
+                verdict = extract_mapping(raw_verdict, ("verdict",))
+            except ValueError:
+                verdict = {}
+            finding.verified = verdict.get("verdict") == "verified"
+            if finding.verified:
+                voter_findings.append(finding)
+
+    raw_summary = provider_impl.complete(
+        model=leader_model,
+        system=_LEADER_SYSTEM,
+        user=yaml.safe_dump(
+            {"stage": stage_name,
+             "verified_findings": [f.model_dump() for f in voter_findings],
+             "det_findings": det_findings or []},
+            sort_keys=False, allow_unicode=True,
+        ),
+        max_tokens=1024,
+    )
+    try:
+        leader_summary = str(extract_mapping(raw_summary, ("summary",))["summary"])
+    except (ValueError, KeyError):
+        leader_summary = f"{len(voter_findings)} verified finding(s); see report."
+
+    return RosterReport(
+        stage=stage_name,
+        voter_findings=voter_findings,
+        excluded_voters=excluded,
+        unregistered_voters=unregistered,
+        leader_summary=leader_summary,
+    )
+
+
 def run_product_stage(
     spec: StageSpec,
     user_input: str,
@@ -192,70 +303,18 @@ def run_product_stage(
         if spec.voter_context
         else artifact_text
     )
-    voter_findings: list[VoterFinding] = []
-    excluded: list[str] = []
-    unregistered: list[str] = []
-    from autoproduct.product.voter_gate import registry_status
-
-    mas_dir = pathlib.Path(workspace) / ".mas"
-    for voter_name, system in load_voter_charters(spec.skills_subdir, skills_root):
-        status = registry_status(mas_dir, spec.name, voter_name)
-        if status == "failed":
-            # §11.19: no agent registers without passing its fixture gate —
-            # a voter with a FAILED gate run does not vote, full stop.
-            excluded.append(voter_name)
-            continue
-        if status == "unregistered":
-            unregistered.append(voter_name)  # loads, but the report says so
-        raw = provider_impl.complete(
-            model=voter_model, system=system, user=context_text, max_tokens=2048
-        )
-        try:
-            found = extract_mapping(raw, ("findings",)).get("findings") or []
-        except ValueError:
-            continue  # a voter that cannot emit the contract contributes nothing
-        for entry in found[:5]:
-            if not isinstance(entry, dict) or not entry.get("problem"):
-                continue
-            finding = VoterFinding(
-                voter=voter_name,
-                severity=str(entry.get("severity", "minor")),
-                problem=str(entry["problem"]),
-                evidence=str(entry.get("evidence", "")),
-            )
-            raw_verdict = provider_impl.complete(
-                model=voter_model,
-                system=_VERIFIER_SYSTEM,
-                user=yaml.safe_dump(
-                    {"finding": finding.model_dump(exclude={"verified"}),
-                     "artifact": context_text},
-                    sort_keys=False, allow_unicode=True,
-                ),
-                max_tokens=512,
-            )
-            try:
-                verdict = extract_mapping(raw_verdict, ("verdict",))
-            except ValueError:
-                verdict = {}
-            finding.verified = verdict.get("verdict") == "verified"
-            if finding.verified:
-                voter_findings.append(finding)
-
-    raw_summary = provider_impl.complete(
-        model=writer_model,
-        system=_LEADER_SYSTEM,
-        user=yaml.safe_dump(
-            {"stage": spec.name,
-             "verified_findings": [f.model_dump() for f in voter_findings],
-             "det_findings": det_findings},
-            sort_keys=False, allow_unicode=True,
-        ),
-        max_tokens=1024,
+    roster = run_critique_roster(
+        spec.name,
+        spec.skills_subdir,
+        context_text,
+        workspace,
+        provider_impl=provider_impl,
+        voter_model=voter_model,
+        leader_model=writer_model,
+        skills_root=skills_root,
+        det_findings=det_findings,
     )
-    try:
-        leader_summary = str(extract_mapping(raw_summary, ("summary",))["summary"])
-    except (ValueError, KeyError):
-        leader_summary = f"{len(voter_findings)} verified finding(s); see report."
+    voter_findings = roster.voter_findings
 
     gate = spec.gate(artifact)
     majors = [f for f in voter_findings if f.severity == "major"]
@@ -271,9 +330,9 @@ def run_product_stage(
         revisions=revision,
         det_findings=det_findings,
         voter_findings=voter_findings,
-        excluded_voters=excluded,
-        unregistered_voters=unregistered,
-        leader_summary=leader_summary,
+        excluded_voters=roster.excluded_voters,
+        unregistered_voters=roster.unregistered_voters,
+        leader_summary=roster.leader_summary,
         gate=gate,
         artifacts=spec.persist(artifact, workspace),
     )

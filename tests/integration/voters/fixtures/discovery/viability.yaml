@@ -1,0 +1,80 @@
+voter: viability
+fixtures:
+  - label: engagement-only-metrics
+    kind: positive
+    should_find: true
+    must_mention: ["revenue"]
+    artifact: |
+      problem: "Commuters want short daily puzzles."
+      scope_now: ["daily puzzle", "streak counter", "push reminders"]
+      success_metrics: ["DAU", "streak length", "session count"]
+      note: nothing states who pays or that free-forever is intended.
+  - label: cost-exceeds-price
+    kind: positive
+    should_find: true
+    must_mention: ["cost"]
+    artifact: |
+      problem: "Students want unlimited AI essay feedback."
+      scope_now: ["unlimited GPT-class review passes per essay"]
+      pricing_note: "$3/month unlimited plan; each review costs ~$0.40
+        and users average 20 reviews/month"
+      success_metrics: ["subscriber count"]
+  - label: viral-handwave-distribution
+    kind: positive
+    should_find: true
+    must_mention: ["distribution"]
+    artifact: |
+      problem: "Local bands can't sell merch online easily."
+      scope_now: ["band storefront builder"]
+      distribution: "word of mouth will spread it between bands"
+      success_metrics: ["storefronts created"]
+  - label: no-payer-named
+    kind: positive
+    should_find: true
+    must_mention: ["pay"]
+    artifact: |
+      problem: "Volunteer coordinators juggle spreadsheets."
+      target_user: "nonprofit volunteer coordinators"
+      scope_now: ["shift scheduling", "SMS reminders (paid vendor)"]
+      success_metrics: ["shifts scheduled", "SMS delivered"]
+      note: SMS costs real money per message; no revenue or grant line.
+  - label: clean-priced-b2b
+    kind: negative
+    should_find: false
+    artifact: |
+      problem: "Clinics pay staff to call appointment reminders
+        (evidence: 6 discovery interviews)."
+      scope_now: ["automated reminder calls at $49/clinic/month"]
+      unit_note: "per-clinic serve cost ~$4/month at vendor list price"
+      distribution: "direct outreach to the 200 clinics in the region"
+      success_metrics: ["paying clinics", "no-show rate delta"]
+  - label: clean-declared-free-tool
+    kind: negative
+    should_find: false
+    artifact: |
+      problem: "Our own team re-formats changelogs by hand."
+      intent: "internal/free tool; explicitly no revenue intent; serve
+        cost is static hosting (~$0)"
+      scope_now: ["changelog formatter CLI"]
+      success_metrics: ["weekly internal uses"]
+  - label: boundary-freemium-stated
+    kind: boundary
+    should_find: false
+    artifact: |
+      problem: "Photographers want watermark-free client galleries."
+      scope_now: ["gallery upload", "free tier: 1 gallery; paid: $12/mo"]
+      unit_note: "storage cost per free user ~ $0.08/month"
+      distribution: "photography forum partnerships (2 named)"
+      success_metrics: ["free-to-paid conversion"]
+  - label: boundary-paid-vendor-free-product
+    kind: boundary
+    should_find: true
+    must_mention: ["cost"]
+    artifact: |
+      problem: "Runners want route air-quality alerts."
+      scope_now: ["free alerts via premium air-quality API
+        (metered per call)"]
+      distribution: "running club newsletters"
+      success_metrics: ["alert subscribers"]
+      note: metered vendor cost scales with the free user base; no
+        revenue line exists.

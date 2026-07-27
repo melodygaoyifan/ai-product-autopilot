@@ -23,7 +23,6 @@ from autoproduct.upstream.workspace import load_project
 from autoproduct.yamlx import extract_mapping
 
 BRIEFWRITER_MARKER = "product brief writer in a greenfield discovery stage"
-BRIEF_CRITIC_MARKER = "brief critic panel"
 
 EVIDENCE_CLASSES = {"measured", "sourced", "assumed"}
 # Unparseable writer output consumes a revision like any critic round, and
@@ -81,20 +80,6 @@ scope_never: [...]
 success_metrics: [...]
 """
 
-_CRITIC_SYSTEM = f"""You are the {BRIEF_CRITIC_MARKER}: judge the brief from
-four angles — desirability (would the target user care), feasibility (can a
-small team build scope_now), viability (does the metric imply a working
-product), scope discipline (is scope_now really minimal). Flag majors only
-where the brief would mislead the human decision at Gate U1.
-
-Respond with ONLY YAML:
-issues:
-  - severity: major|minor
-    lens: desirability|feasibility|viability|scope
-    problem: one sentence
-"""
-
-
 def run_discovery(
     repo_dir: str | Path,
     idea: str,
@@ -150,19 +135,25 @@ def run_discovery(
             feedback = f"schema violation: {exc}"
             brief = None
             continue
-        raw_critique = provider_impl.complete(
-            model=critic_model,
-            system=_CRITIC_SYSTEM,
-            user=yaml.safe_dump(brief.model_dump(exclude={"critic_issues"}), sort_keys=False, allow_unicode=True),
-            max_tokens=1024,
+        # Charter roster (doc 13 §25.1): Desirability, Feasibility,
+        # Viability, ScopeDiscipline — each a registered voter with its own
+        # fixture gate, findings verified before they count. The single
+        # "brief critic panel" prompt retired here (plan phase D13).
+        from autoproduct.product.stage_engine import run_critique_roster
+        from autoproduct.product.voter_gate import family_roots
+
+        skills_root, _ = family_roots("discovery")
+        roster = run_critique_roster(
+            "discovery", "discovery",
+            yaml.safe_dump(brief.model_dump(exclude={"critic_issues"}),
+                           sort_keys=False, allow_unicode=True),
+            str(repo_dir),
+            provider_impl=provider_impl,
+            voter_model=critic_model,
+            leader_model=writer_model,
+            skills_root=skills_root,
         )
-        try:
-            critics = [
-                i for i in (extract_mapping(raw_critique, ("issues",)).get("issues") or [])
-                if isinstance(i, dict)
-            ][:10]
-        except ValueError:
-            critics = []
+        critics = roster.as_issues()[:10]
         majors = [c for c in critics if c.get("severity") == "major"]
         if not majors:
             break

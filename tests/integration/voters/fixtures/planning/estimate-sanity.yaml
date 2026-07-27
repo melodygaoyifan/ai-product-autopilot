@@ -1,0 +1,83 @@
+voter: estimate-sanity
+fixtures:
+  - label: auth-system-one-hour
+    kind: positive
+    should_find: true
+    must_mention: ["estimate"]
+    artifact: |
+      budget_hours: 60
+      tasks:
+        - {id: t1, title: "Full auth: signup, login, reset, sessions,
+           OAuth with two providers", estimate_hours: 1}
+        - {id: t2, title: "Landing page", estimate_hours: 4}
+  - label: copy-change-sixteen-hours
+    kind: positive
+    should_find: true
+    must_mention: ["estimate"]
+    artifact: |
+      budget_hours: 40
+      tasks:
+        - {id: t1, title: "Change the CTA button text", estimate_hours: 16}
+        - {id: t2, title: "Orders API", estimate_hours: 6}
+  - label: uniform-non-estimate
+    kind: positive
+    should_find: true
+    must_mention: ["uniform"]
+    artifact: |
+      budget_hours: 60
+      tasks:
+        - {id: t1, title: "Database schema", estimate_hours: 4}
+        - {id: t2, title: "Full checkout flow", estimate_hours: 4}
+        - {id: t3, title: "Fix typo in footer", estimate_hours: 4}
+        - {id: t4, title: "Payment provider integration", estimate_hours: 4}
+        - {id: t5, title: "Admin dashboard", estimate_hours: 4}
+  - label: zero-slack-total
+    kind: positive
+    should_find: true
+    must_mention: ["budget"]
+    artifact: |
+      budget_hours: 40
+      tasks:
+        - {id: t1, title: "API", estimate_hours: 16}
+        - {id: t2, title: "Web UI", estimate_hours: 16}
+        - {id: t3, title: "Deploy pipeline", estimate_hours: 8}
+      note: 40/40 consumed; integration and rework have zero room.
+  - label: clean-varied-plausible
+    kind: negative
+    should_find: false
+    artifact: |
+      budget_hours: 60
+      tasks:
+        - {id: t1, title: "Reading list CRUD", estimate_hours: 6}
+        - {id: t2, title: "Public share URL", estimate_hours: 3}
+        - {id: t3, title: "CSV import", estimate_hours: 8}
+      note: 17 of 60 budgeted; slack is explicit.
+  - label: clean-big-task-big-estimate
+    kind: negative
+    should_find: false
+    artifact: |
+      budget_hours: 80
+      tasks:
+        - {id: t1, title: "PDF quiz parsing engine with layout detection",
+           estimate_hours: 24}
+        - {id: t2, title: "Preview screen", estimate_hours: 6}
+  - label: boundary-two-same-estimates
+    kind: boundary
+    should_find: false
+    artifact: |
+      budget_hours: 40
+      tasks:
+        - {id: t1, title: "Orders list view", estimate_hours: 4}
+        - {id: t2, title: "Invoices list view", estimate_hours: 4}
+      note: two genuinely similar views; identical estimates are honest.
+  - label: boundary-optimistic-integration
+    kind: boundary
+    should_find: true
+    must_mention: ["estimate"]
+    artifact: |
+      budget_hours: 60
+      tasks:
+        - {id: t1, title: "Bank-data vendor integration incl. OAuth,
+           webhooks, retry handling, sandbox certification",
+           estimate_hours: 3}
+        - {id: t2, title: "Transaction list UI", estimate_hours: 6}

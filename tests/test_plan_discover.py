@@ -18,6 +18,33 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+class _RosterAwareStub:
+    """Sequenced writer responses; the charter roster (voters, verifier,
+    leader) answers by marker so stage tests don't have to count roster
+    calls — the v0.32 roster port made that sequence charter-dependent."""
+
+    def __init__(self, responses, seen=None):
+        self._responses = responses
+        self.seen = seen if seen is not None else []
+
+    def complete(self, **kwargs):
+        from autoproduct.product.stage_engine import (
+            PRODUCT_LEADER_MARKER,
+            PRODUCT_VERIFIER_MARKER,
+            PRODUCT_VOTER_MARKER,
+        )
+
+        self.seen.append(kwargs)
+        system = kwargs.get("system", "")
+        if PRODUCT_VOTER_MARKER in system:
+            return "findings: []"
+        if PRODUCT_VERIFIER_MARKER in system:
+            return "verdict: refuted\nreason: stub"
+        if PRODUCT_LEADER_MARKER in system:
+            return "summary: stub leader"
+        return next(self._responses)
+
+
 def _task(tid, deps=(), lane="api"):
     return Task(id=tid, title=tid, depends_on=list(deps), lane=lane, estimate_hours=2)
 
@@ -88,13 +115,10 @@ def test_brief_writer_survives_a_bad_parse_streak(tmp_path, monkeypatch):
         'scope_now: ["a"]\nscope_later: []\nscope_never: []\n'
         'success_metrics: ["m"]\n'
     )
-    responses = iter(["not: [valid", "still {bad", "nope: [", valid, "issues: []"])
+    responses = iter(["not: [valid", "still {bad", "nope: [", valid])
 
-    class Stub:
-        def complete(self, **_kwargs):
-            return next(responses)
-
-    monkeypatch.setattr(discover, "get_provider", lambda name: Stub())
+    monkeypatch.setattr(
+        discover, "get_provider", lambda name: _RosterAwareStub(responses))
     root = init_workspace(tmp_path / "p", "p", "web")
     brief = discover.run_discovery(root, "an idea", provider="stub")
     assert brief.revisions == 3
@@ -113,16 +137,11 @@ def test_spec_writer_receives_the_literal_source_contract(tmp_path, monkeypatch)
         'title: "t"\ndesign: |\n  d\ncriteria:\n  - "When a request arrives, '
         'the system shall respond."\ntest_skeletons:\n  - path: tests/test_a.py\n'
         '    purpose: "p"\n    covers: [0]\n',
-        "issues: []",
-        "issues: []",
     ])
 
-    class Stub:
-        def complete(self, **kwargs):
-            seen.append(kwargs)
-            return next(responses)
-
-    monkeypatch.setattr(spec_mod, "get_provider", lambda name: Stub())
+    monkeypatch.setattr(
+        spec_mod, "get_provider",
+        lambda name: _RosterAwareStub(responses, seen))
     root = init_workspace(tmp_path / "p", "p", "web")
     spec_mod.run_spec_stage(root, "a task description", provider="stub",
                             source_contract=contract)
@@ -135,9 +154,10 @@ def test_spec_writer_receives_the_literal_source_contract(tmp_path, monkeypatch)
         'title: "t2"\ndesign: |\n  d\ncriteria:\n  - "When a request arrives, '
         'the system shall respond."\ntest_skeletons:\n  - path: tests/test_b.py\n'
         '    purpose: "p"\n    covers: [0]\n',
-        "issues: []",
-        "issues: []",
     ])
+    monkeypatch.setattr(
+        spec_mod, "get_provider",
+        lambda name: _RosterAwareStub(responses, seen))
     (root / "FDR.md").write_text(contract, encoding="utf-8")
     spec_mod.run_spec_stage(root, "another task", provider="stub")
     assert '"day5"' in seen[0]["user"]
@@ -158,13 +178,10 @@ def test_blocked_spec_records_why(tmp_path, monkeypatch):
         '  - "When a bad request arrives, the system shall reject it."\n'
         'test_skeletons:\n  - path: tests/test_a.py\n    purpose: "p"\n    covers: [0]\n'
     )
-    responses = itertools.cycle([writer, "issues: []", "issues: []"])
+    responses = itertools.cycle([writer])
 
-    class Stub:
-        def complete(self, **_kwargs):
-            return next(responses)
-
-    monkeypatch.setattr(spec_mod, "get_provider", lambda name: Stub())
+    monkeypatch.setattr(
+        spec_mod, "get_provider", lambda name: _RosterAwareStub(responses))
     root = init_workspace(tmp_path / "p", "p", "web")
     spec = spec_mod.run_spec_stage(root, "a task", provider="stub")
     assert spec.status == "blocked"

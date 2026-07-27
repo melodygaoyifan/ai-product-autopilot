@@ -36,6 +36,12 @@ FAMILY_SKILLS = {
     "miniprogram": _REPO / "skills" / "profiles" / "miniprogram",
     "app": _REPO / "skills" / "profiles" / "app",
     "data": _REPO / "skills" / "data",
+    # Upstream critique rosters (doc 13 §25.1, plan phase D13): the
+    # discover/plan/spec critics run through the same charter + fixture
+    # registration contract as everything else.
+    "discovery": _REPO / "skills" / "upstream" / "discovery",
+    "planning": _REPO / "skills" / "upstream" / "planning",
+    "spec": _REPO / "skills" / "upstream" / "spec",
 }
 FAMILY_FIXTURES = {
     name: _REPO / "tests" / "integration" / "voters" / "fixtures" / name

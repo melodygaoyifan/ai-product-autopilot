@@ -25,8 +25,6 @@ from autoproduct.upstream.workspace import Project, load_project
 from autoproduct.yamlx import extract_mapping
 
 SPECWRITER_MARKER = "spec writer for a greenfield product system"
-TESTABILITY_CRITIC_MARKER = "testability critic for product specs"
-AMBIGUITY_CRITIC_MARKER = "ambiguity critic for product specs"
 
 MAX_REVISIONS = 2
 
@@ -96,22 +94,6 @@ test_skeletons:
     covers: [0, 1]
 """
 
-_CRITIC_TEMPLATES = {
-    "testability": (
-        TESTABILITY_CRITIC_MARKER,
-        "For each criterion: could a test objectively fail it? Flag criteria "
-        "no test could falsify, and test skeletons whose purpose doesn't "
-        "actually exercise the criteria they claim to cover.",
-    ),
-    "ambiguity": (
-        AMBIGUITY_CRITIC_MARKER,
-        "Flag criteria a second developer could implement differently while "
-        "believing they complied: undefined terms, unstated limits, missing "
-        "error behavior.",
-    ),
-}
-
-
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:48] or "feature"
 
@@ -123,30 +105,6 @@ def _coverage_gaps(spec_data: dict) -> list[int]:
         for i in skeleton.get("covers", [])
     }
     return [i for i in range(len(spec_data.get("criteria", []))) if i not in covered]
-
-
-def _critique(provider, model: str, kind: str, spec_data: dict) -> list[dict]:
-    marker, brief = _CRITIC_TEMPLATES[kind]
-    system = (
-        f"You are the {marker}. {brief}\n\nRespond with ONLY YAML:\n"
-        "issues:\n  - severity: major|minor\n    anchor: criterion index or test path\n"
-        "    problem: one sentence\n"
-    )
-    raw = provider.complete(
-        model=model,
-        system=system,
-        user=yaml.safe_dump(
-            {"criteria": spec_data.get("criteria", []),
-             "test_skeletons": spec_data.get("test_skeletons", [])},
-            sort_keys=False, allow_unicode=True,
-        ),
-        max_tokens=1024,
-    )
-    try:
-        data = extract_mapping(raw, ("issues",))
-    except ValueError:
-        return []
-    return [i for i in (data.get("issues") or []) if isinstance(i, dict)][:10]
 
 
 def run_spec_stage(
@@ -221,8 +179,32 @@ def run_spec_stage(
             continue
         lint = ears.lint_criteria([str(c) for c in spec_data.get("criteria", [])])
         gaps = _coverage_gaps(spec_data)
-        critics = _critique(provider_impl, critic_model, "testability", spec_data)
-        critics += _critique(provider_impl, critic_model, "ambiguity", spec_data)
+        # Charter roster (doc 13 §25.1): Testability, Consistency,
+        # Completeness, Ambiguity, InterfaceImpact — the two ad-hoc critic
+        # prompts retired here (plan phase D13). The roster sees the same
+        # slice the old critics did, plus the contract InterfaceImpact
+        # judges fidelity against.
+        from autoproduct.product.stage_engine import run_critique_roster
+        from autoproduct.product.voter_gate import family_roots
+
+        skills_root, _ = family_roots("spec")
+        roster = run_critique_roster(
+            "spec", "spec",
+            yaml.safe_dump(
+                {"criteria": spec_data.get("criteria", []),
+                 "test_skeletons": spec_data.get("test_skeletons", []),
+                 "design": str(spec_data.get("design", "")),
+                 "source_contract": source_contract[:3000]},
+                sort_keys=False, allow_unicode=True,
+            ),
+            str(repo_dir),
+            provider_impl=provider_impl,
+            voter_model=critic_model,
+            leader_model=writer_model,
+            skills_root=skills_root,
+            det_findings=[i.model_dump() for i in lint],
+        )
+        critics = roster.as_issues()[:10]
         majors = [c for c in critics if c.get("severity") == "major"]
         if not lint and not gaps and not majors:
             break

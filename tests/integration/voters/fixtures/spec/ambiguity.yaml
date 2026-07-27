@@ -1,0 +1,72 @@
+voter: ambiguity
+fixtures:
+  - label: recent-undefined
+    kind: positive
+    should_find: true
+    must_mention: ["recent"]
+    artifact: |
+      criteria:
+        - "When the home page loads, it shall show the user's recent
+           documents."
+  - label: large-upload-unstated
+    kind: positive
+    should_find: true
+    must_mention: ["large"]
+    artifact: |
+      criteria:
+        - "When a large upload arrives, the system shall reject it."
+      note: neither the size threshold nor the rejection status is stated.
+  - label: dangling-referent
+    kind: positive
+    should_find: true
+    must_mention: ["reading"]
+    artifact: |
+      criteria:
+        - "When an admin deactivates a user with active sessions, the
+           system shall delete it immediately."
+      note: "it" could be the user account or the sessions; both readings
+        are defensible.
+  - label: unstated-timezone
+    kind: positive
+    should_find: true
+    must_mention: ["timezone"]
+    artifact: |
+      criteria:
+        - "When a report is requested for a day, it shall include all
+           orders placed that day."
+      note: whose day — UTC, server local, or the requesting user's?
+  - label: clean-bounded-terms
+    kind: negative
+    should_find: false
+    artifact: |
+      criteria:
+        - "When the home page loads, it shall show the 10 most recently
+           opened documents (by opened_at, UTC, descending)."
+        - "When an upload exceeds 50MB, the system shall return 413."
+  - label: clean-single-reading
+    kind: negative
+    should_find: false
+    artifact: |
+      criteria:
+        - "When an admin deactivates a user, the user's sessions shall be
+           revoked within 60 seconds and the account marked 'inactive'."
+  - label: boundary-term-defined-in-design
+    kind: boundary
+    should_find: false
+    artifact: |
+      design: |
+        Definitions: "stale" = not synced for more than 24h (UTC clock).
+      criteria:
+        - "When a stale record is displayed, it shall carry a staleness
+           badge."
+      note: the load-bearing term is bound by the design's definition.
+  - label: boundary-subtle-ordering
+    kind: boundary
+    should_find: true
+    must_mention: ["order"]
+    artifact: |
+      criteria:
+        - "When the leaderboard is shown, users with equal scores shall
+           be listed together."
+      note: "together" leaves the tie-break order undefined; two
+        implementations would diverge.

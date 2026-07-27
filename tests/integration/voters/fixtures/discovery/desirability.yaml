@@ -1,0 +1,97 @@
+voter: desirability
+fixtures:
+  - label: assumed-evidence-treated-as-established
+    kind: positive
+    should_find: true
+    must_mention: ["assum"]
+    artifact: |
+      problem: "Freelancers lose hours every week to invoice chasing."
+      hypotheses:
+        - statement: "Freelancers will pay for automated invoice reminders"
+          evidence: "assumed"
+      success_metrics: ["paying users"]
+      note: the problem statement asserts the loss as fact; the only
+        hypothesis marks its evidence assumed and nothing labels it so.
+  - label: invented-persona
+    kind: positive
+    should_find: true
+    must_mention: ["persona"]
+    artifact: |
+      problem: "As 'Sarah, 34, busy marketing mom', I can never find recipes."
+      target_user: "Sarah"
+      hypotheses:
+        - statement: "Sarah wants one-tap meal plans"
+          evidence: "persona narrative above"
+  - label: output-metrics-only
+    kind: positive
+    should_find: true
+    must_mention: ["metric"]
+    artifact: |
+      problem: "Students forget vocabulary between lessons."
+      target_user: "language students"
+      hypotheses:
+        - statement: "Spaced repetition retains vocabulary"
+          evidence: "user_reported: 12 forum threads"
+      success_metrics: ["20 features shipped", "3 releases per month"]
+  - label: demand-asserted-no-source
+    kind: positive
+    should_find: true
+    must_mention: ["demand"]
+    artifact: |
+      problem: "Everyone wants a faster way to split restaurant bills;
+        demand is huge."
+      target_user: "diners"
+      hypotheses:
+        - statement: "Groups abandon bill-split apps at signup"
+          evidence: "assumed"
+      success_metrics: ["weekly active groups"]
+  - label: clean-labeled-assumptions
+    kind: negative
+    should_find: false
+    artifact: |
+      problem: "Support tickets show 40 requests/month for CSV export
+        (evidence: ticket tag export-csv)."
+      target_user: "ops leads on the paid plan"
+      hypotheses:
+        - statement: "ASSUMPTION to test: ops leads would use scheduled
+            exports weekly; cheapest test falsifies if <20% click the
+            fake-door link"
+          evidence: "assumed, labeled, cheapest test named"
+      success_metrics: ["weekly export users / weekly active ops leads"]
+  - label: clean-user-reported
+    kind: negative
+    should_find: false
+    artifact: |
+      problem: "Beta users filed 9 issues asking for offline mode
+        (evidence: issues #101-#109)."
+      target_user: "field technicians"
+      hypotheses:
+        - statement: "Technicians will sync-and-go each morning"
+          evidence: "user_reported: 9 issues, 3 interviews"
+      success_metrics: ["offline sessions per technician-week"]
+  - label: boundary-labeled-assumption-quiet
+    kind: boundary
+    should_find: false
+    artifact: |
+      problem: "We believe (unvalidated) that teachers re-type quiz
+        questions; this brief exists to test that."
+      target_user: "high-school teachers"
+      hypotheses:
+        - statement: "ASSUMPTION: teachers re-type >30min/week; falsified
+            if diary study shows <10min"
+          evidence: "assumed, labeled"
+      success_metrics: ["quiz-import completion rate"]
+  - label: boundary-subtle-vanity-metric
+    kind: boundary
+    should_find: true
+    must_mention: ["metric"]
+    artifact: |
+      problem: "Podcasters say editing takes longer than recording
+        (evidence: 14 replies to our call-for-problems post)."
+      target_user: "solo podcasters"
+      hypotheses:
+        - statement: "Podcasters will accept auto-cut silence"
+          evidence: "user_reported"
+      success_metrics: ["total minutes of audio processed"]
+      note: minutes processed measures our machine running, not the
+        podcaster finishing faster.

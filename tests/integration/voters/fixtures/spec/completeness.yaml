@@ -1,0 +1,78 @@
+voter: completeness
+fixtures:
+  - label: happy-path-only-create
+    kind: positive
+    should_find: true
+    must_mention: ["duplicate"]
+    artifact: |
+      criteria:
+        - "When a user registers with an email, the system shall create
+           an account and return 201."
+      note: nothing states duplicate-email, invalid-email, or missing
+        fields behavior.
+  - label: no-empty-state
+    kind: positive
+    should_find: true
+    must_mention: ["empty"]
+    artifact: |
+      criteria:
+        - "When the reading list page loads, it shall show the user's
+           items ordered by date added."
+      note: behavior before any item exists is stated nowhere.
+  - label: created-never-deletable
+    kind: positive
+    should_find: true
+    must_mention: ["delete"]
+    artifact: |
+      criteria:
+        - "When a gallery is created, it shall get a share URL."
+        - "When a gallery is renamed, the URL shall stay stable."
+      note: no criterion allows removing a gallery or revoking a URL.
+  - label: limit-in-design-unbound
+    kind: positive
+    should_find: true
+    must_mention: ["limit"]
+    artifact: |
+      design: |
+        Uploads capped at 50MB per file.
+      criteria:
+        - "When a file is uploaded, the system shall store it and return
+           its id."
+      note: no criterion states what happens at or above the 50MB cap.
+  - label: clean-failure-twins
+    kind: negative
+    should_find: false
+    artifact: |
+      criteria:
+        - "When a valid CSV is imported, rows shall be inserted."
+        - "When a CSV with a malformed row is imported, the file shall be
+           rejected naming the first bad line."
+        - "When an empty CSV is imported, the system shall return
+           'nothing to import'."
+  - label: clean-lifecycle-closed
+    kind: negative
+    should_find: false
+    artifact: |
+      criteria:
+        - "When a note is created, it shall appear in the list."
+        - "When a note is deleted, it shall disappear and GET shall 404."
+        - "When the list is empty, the page shall show 'no notes yet'."
+  - label: boundary-scoped-out-explicitly
+    kind: boundary
+    should_find: false
+    artifact: |
+      criteria:
+        - "When a task is created, it shall be listed."
+        - "When a delete is attempted in v1, the system shall return 501
+           (deletion is deferred to v2 by decision D-4)."
+      note: the gap is closed by an explicit stated behavior.
+  - label: boundary-subtle-concurrent-gap
+    kind: boundary
+    should_find: true
+    must_mention: ["concurrent"]
+    artifact: |
+      criteria:
+        - "When a seat is booked, it shall be marked taken."
+        - "When a taken seat is requested, the system shall return 409."
+      note: two bookings arriving at once for the same free seat is the
+        whole business risk and no criterion decides it.

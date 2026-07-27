@@ -1,0 +1,84 @@
+voter: parallelization-safety
+fixtures:
+  - label: overlapping-globs-no-edge
+    kind: positive
+    should_find: true
+    must_mention: ["conflict"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Order endpoints", depends_on: [], lane: api,
+           files_expected: ["api/routes.py"]}
+        - {id: t2, title: "User endpoints", depends_on: [], lane: auth,
+           files_expected: ["api/routes.py"]}
+  - label: same-lane-treated-parallel
+    kind: positive
+    should_find: true
+    must_mention: ["lane"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Cart API", depends_on: [], lane: api,
+           files_expected: ["api/cart.py"]}
+        - {id: t2, title: "Checkout API", depends_on: [], lane: api,
+           files_expected: ["api/checkout.py"]}
+      note: one api lane; the plan schedules both concurrently in it.
+  - label: shared-schema-two-writers
+    kind: positive
+    should_find: true
+    must_mention: ["schema"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Add orders tables", depends_on: [], lane: api,
+           files_expected: ["db/schema.sql"]}
+        - {id: t2, title: "Add analytics tables", depends_on: [], lane: data,
+           files_expected: ["db/schema.sql"]}
+  - label: config-file-collision
+    kind: positive
+    should_find: true
+    must_mention: ["conflict"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Wire payment env vars", depends_on: [],
+           lane: api, files_expected: ["settings.py"]}
+        - {id: t2, title: "Wire email env vars", depends_on: [],
+           lane: web, files_expected: ["settings.py"]}
+  - label: clean-disjoint-lanes
+    kind: negative
+    should_find: false
+    artifact: |
+      tasks:
+        - {id: t1, title: "Menu page", depends_on: [], lane: web,
+           files_expected: ["web/menu.html"]}
+        - {id: t2, title: "Orders API", depends_on: [], lane: api,
+           files_expected: ["api/orders.py"]}
+        - {id: t3, title: "Kitchen screen", depends_on: [t2], lane: web,
+           files_expected: ["web/kitchen.html"]}
+  - label: clean-ordered-shared-file
+    kind: negative
+    should_find: false
+    artifact: |
+      tasks:
+        - {id: t1, title: "Base models", depends_on: [], lane: api,
+           files_expected: ["models.py"]}
+        - {id: t2, title: "Model extensions", depends_on: [t1], lane: api,
+           files_expected: ["models.py"]}
+      note: same file, but the edge serializes the writes.
+  - label: boundary-glob-near-miss
+    kind: boundary
+    should_find: false
+    artifact: |
+      tasks:
+        - {id: t1, title: "Order views", depends_on: [], lane: web,
+           files_expected: ["web/orders/*.js"]}
+        - {id: t2, title: "Invoice views", depends_on: [], lane: web2,
+           files_expected: ["web/invoices/*.js"]}
+      note: sibling directories; the globs do not intersect.
+  - label: boundary-glob-superset
+    kind: boundary
+    should_find: true
+    must_mention: ["overlap"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Refactor all web views", depends_on: [],
+           lane: web, files_expected: ["web/*.js"]}
+        - {id: t2, title: "New invoice view", depends_on: [], lane: web2,
+           files_expected: ["web/invoices.js"]}

@@ -1,0 +1,82 @@
+voter: interface-impact
+fixtures:
+  - label: renamed-contract-field
+    kind: positive
+    should_find: true
+    must_mention: ["name"]
+    artifact: |
+      source_contract: |
+        POST /api/candidates {"name": string} -> {"id"}
+      criteria:
+        - "When POST /api/candidates receives {\"direction\": string},
+           the system shall return the new id."
+  - label: enum-retyped
+    kind: positive
+    should_find: true
+    must_mention: ["day5"]
+    artifact: |
+      source_contract: |
+        round is the string "day5" or "day12"
+      criteria:
+        - "When a round is created, the round field shall accept the
+           integers 1 or 2."
+  - label: dropped-required-field
+    kind: positive
+    should_find: true
+    must_mention: ["required"]
+    artifact: |
+      source_contract: |
+        POST /api/orders requires {"sku", "qty", "customer_id"}
+      criteria:
+        - "When POST /api/orders receives {\"sku\", \"qty\"}, the system
+           shall create the order."
+  - label: endpoint-path-changed
+    kind: positive
+    should_find: true
+    must_mention: ["path"]
+    artifact: |
+      source_contract: |
+        Existing mobile clients call GET /v1/feed
+      criteria:
+        - "When GET /api/v2/feed is called, the system shall return the
+           feed; /v1/feed is removed."
+  - label: clean-verbatim-contract
+    kind: negative
+    should_find: false
+    artifact: |
+      source_contract: |
+        POST /api/candidates {"name": string} -> {"id"}; round is "day5"
+        or "day12"
+      criteria:
+        - "When POST /api/candidates receives {\"name\": string}, the
+           system shall return {\"id\"}."
+        - "When a round is created, round shall be \"day5\" or \"day12\"."
+  - label: clean-no-external-contract
+    kind: negative
+    should_find: false
+    artifact: |
+      source_contract: ""
+      criteria:
+        - "When a note is created via POST /api/notes {\"body\"}, the
+           system shall return 201 with {\"id\"}."
+      note: greenfield interface; there is no outside contract to honor.
+  - label: boundary-additive-extension
+    kind: boundary
+    should_find: false
+    artifact: |
+      source_contract: |
+        GET /api/items returns [{"id", "title"}]
+      criteria:
+        - "When GET /api/items is called, each item shall carry
+           {\"id\", \"title\", \"created_at\"} — existing fields unchanged,
+           one field added."
+  - label: boundary-optional-made-required
+    kind: boundary
+    should_find: true
+    must_mention: ["optional"]
+    artifact: |
+      source_contract: |
+        POST /api/signup {"email", "referrer"?} — referrer optional
+      criteria:
+        - "When POST /api/signup lacks referrer, the system shall
+           return 422."

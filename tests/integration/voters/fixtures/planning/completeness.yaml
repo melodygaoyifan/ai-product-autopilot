@@ -1,0 +1,80 @@
+voter: completeness
+fixtures:
+  - label: uncovered-scope-item
+    kind: positive
+    should_find: true
+    must_mention: ["cover"]
+    artifact: |
+      scope_now: ["quiz import from PDF", "quiz preview", "export to LMS"]
+      tasks:
+        - {id: t1, title: "PDF import parser", depends_on: []}
+        - {id: t2, title: "Preview screen", depends_on: [t1]}
+      note: no task maps to "export to LMS".
+  - label: orphan-task
+    kind: positive
+    should_find: true
+    must_mention: ["scope"]
+    artifact: |
+      scope_now: ["invoice reminder emails"]
+      tasks:
+        - {id: t1, title: "Reminder scheduler", depends_on: []}
+        - {id: t2, title: "Reminder email templates", depends_on: []}
+        - {id: t3, title: "Dark-mode theme system", depends_on: []}
+  - label: half-covered-item
+    kind: positive
+    should_find: true
+    must_mention: ["cover"]
+    artifact: |
+      scope_now: ["upload one episode and auto-cut silence"]
+      tasks:
+        - {id: t1, title: "Episode upload endpoint", depends_on: []}
+      note: nothing implements the silence cutting half.
+  - label: two-orphans-one-gap
+    kind: positive
+    should_find: true
+    must_mention: ["scope"]
+    artifact: |
+      scope_now: ["member CRM", "class booking"]
+      tasks:
+        - {id: t1, title: "Member table CRUD", depends_on: []}
+        - {id: t2, title: "Marketing email blasts", depends_on: [t1]}
+        - {id: t3, title: "Referral rewards", depends_on: [t1]}
+  - label: clean-bijection
+    kind: negative
+    should_find: false
+    artifact: |
+      scope_now: ["CSV export of orders", "export permission gate"]
+      tasks:
+        - {id: t1, title: "Orders CSV serializer", depends_on: []}
+        - {id: t2, title: "Export endpoint with permission check",
+           depends_on: [t1]}
+  - label: clean-with-enabler-task
+    kind: negative
+    should_find: false
+    artifact: |
+      scope_now: ["pick voting", "meeting scheduler"]
+      tasks:
+        - {id: t1, title: "Club data model (used by voting and scheduling)",
+           depends_on: []}
+        - {id: t2, title: "Pick voting flow", depends_on: [t1]}
+        - {id: t3, title: "Meeting scheduler", depends_on: [t1]}
+  - label: boundary-enabler-not-orphan
+    kind: boundary
+    should_find: false
+    artifact: |
+      scope_now: ["gallery upload", "client share link"]
+      tasks:
+        - {id: t1, title: "Auth (required: share links are per-client)",
+           depends_on: []}
+        - {id: t2, title: "Gallery upload", depends_on: [t1]}
+        - {id: t3, title: "Share link generation", depends_on: [t1]}
+  - label: boundary-subtle-gap
+    kind: boundary
+    should_find: true
+    must_mention: ["cover"]
+    artifact: |
+      scope_now: ["alert subscription", "daily alert email"]
+      tasks:
+        - {id: t1, title: "Subscription form", depends_on: []}
+        - {id: t2, title: "Air-quality fetch job", depends_on: []}
+      note: data is fetched but no task sends the daily email.

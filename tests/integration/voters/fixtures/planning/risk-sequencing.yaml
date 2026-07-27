@@ -1,0 +1,86 @@
+voter: risk-sequencing
+fixtures:
+  - label: core-integration-last
+    kind: positive
+    should_find: true
+    must_mention: ["risk"]
+    artifact: |
+      hypotheses: ["the bank-data vendor can deliver transactions for
+        our users' banks at all"]
+      tasks:
+        - {id: t1, title: "Logo and landing page", depends_on: []}
+        - {id: t2, title: "Settings screens", depends_on: [t1]}
+        - {id: t3, title: "Onboarding polish", depends_on: [t2]}
+        - {id: t4, title: "Bank-data vendor integration", depends_on: [t3]}
+  - label: unproven-algorithm-scheduled-last
+    kind: positive
+    should_find: true
+    must_mention: ["late"]
+    artifact: |
+      hypotheses: ["silence detection can find cut points podcasters accept"]
+      tasks:
+        - {id: t1, title: "Account system", depends_on: []}
+        - {id: t2, title: "Billing", depends_on: [t1]}
+        - {id: t3, title: "Silence-detection algorithm", depends_on: [t2]}
+  - label: first-tasks-validate-nothing
+    kind: positive
+    should_find: true
+    must_mention: ["hypothes"]
+    artifact: |
+      hypotheses: ["clinics will let software place reminder calls"]
+      tasks:
+        - {id: t1, title: "Admin theme setup", depends_on: []}
+        - {id: t2, title: "Staff directory CRUD", depends_on: [t1]}
+        - {id: t3, title: "Call-placement pilot with one clinic",
+           depends_on: [t2]}
+  - label: cheap-polish-before-make-or-break
+    kind: positive
+    should_find: true
+    must_mention: ["risk"]
+    artifact: |
+      hypotheses: ["PDF quiz layouts are parseable at >90% accuracy"]
+      tasks:
+        - {id: t1, title: "Quiz preview styling", depends_on: []}
+        - {id: t2, title: "Teacher settings", depends_on: []}
+        - {id: t3, title: "PDF parsing spike", depends_on: [t1, t2]}
+  - label: clean-risk-first
+    kind: negative
+    should_find: false
+    artifact: |
+      hypotheses: ["the LMS export format is stable enough to target"]
+      tasks:
+        - {id: t1, title: "LMS export spike against real LMS sandbox",
+           depends_on: []}
+        - {id: t2, title: "Quiz import", depends_on: []}
+        - {id: t3, title: "Preview UI", depends_on: [t2]}
+  - label: clean-no-stated-risk
+    kind: negative
+    should_find: false
+    artifact: |
+      hypotheses: []
+      note: conventional CRUD; the brief marked no hypothesis risky.
+      tasks:
+        - {id: t1, title: "Reading list CRUD", depends_on: []}
+        - {id: t2, title: "Public share URL", depends_on: [t1]}
+  - label: boundary-risk-second-with-reason
+    kind: boundary
+    should_find: false
+    artifact: |
+      hypotheses: ["vendor SMS deliverability in our region is >95%"]
+      tasks:
+        - {id: t1, title: "Vendor account + sandbox keys (one day,
+           blocks the spike)", depends_on: []}
+        - {id: t2, title: "SMS deliverability spike", depends_on: [t1]}
+        - {id: t3, title: "Shift scheduling UI", depends_on: []}
+  - label: boundary-hidden-risk-buried
+    kind: boundary
+    should_find: true
+    must_mention: ["risk"]
+    artifact: |
+      hypotheses: ["watermarking survives social-platform re-encoding"]
+      tasks:
+        - {id: t1, title: "Gallery CRUD", depends_on: []}
+        - {id: t2, title: "Client accounts", depends_on: [t1]}
+        - {id: t3, title: "Watermark pipeline + re-encode survival check",
+           depends_on: [t2]}
+      note: the survival check needs nothing from accounts or CRUD.

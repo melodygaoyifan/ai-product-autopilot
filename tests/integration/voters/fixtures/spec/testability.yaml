@@ -1,0 +1,85 @@
+voter: testability
+fixtures:
+  - label: shall-be-fast
+    kind: positive
+    should_find: true
+    must_mention: ["fast"]
+    artifact: |
+      criteria:
+        - "When a search is submitted, the system shall be fast."
+        - "When an item is created, the system shall return its id."
+      test_skeletons:
+        - {path: tests/test_items.py, purpose: "create returns id", covers: [1]}
+  - label: intuitive-ui
+    kind: positive
+    should_find: true
+    must_mention: ["test"]
+    artifact: |
+      criteria:
+        - "When a new user arrives, the interface shall feel intuitive."
+      test_skeletons:
+        - {path: tests/test_ui.py, purpose: "renders home", covers: [0]}
+  - label: graceful-error-handling
+    kind: positive
+    should_find: true
+    must_mention: ["graceful"]
+    artifact: |
+      criteria:
+        - "When an upload fails, the system shall handle the error
+           gracefully."
+      test_skeletons:
+        - {path: tests/test_upload.py, purpose: "upload failure path",
+           covers: [0]}
+  - label: skeleton-purpose-mismatch
+    kind: positive
+    should_find: true
+    must_mention: ["cover"]
+    artifact: |
+      criteria:
+        - "When a duplicate email registers, the system shall return 409."
+      test_skeletons:
+        - {path: tests/test_signup.py, purpose: "homepage renders a
+           welcome banner", covers: [0]}
+  - label: clean-thresholded
+    kind: negative
+    should_find: false
+    artifact: |
+      criteria:
+        - "When /search is queried with 10k items indexed, the system
+           shall respond in under 200ms at p95."
+        - "When an item is deleted, subsequent GETs shall return 404."
+      test_skeletons:
+        - {path: tests/test_perf.py, purpose: "p95 latency under load",
+           covers: [0]}
+        - {path: tests/test_items.py, purpose: "delete then 404", covers: [1]}
+  - label: clean-observable-behavior
+    kind: negative
+    should_find: false
+    artifact: |
+      criteria:
+        - "When a CSV with a malformed row is imported, the system shall
+           reject the file and name the first bad line number."
+      test_skeletons:
+        - {path: tests/test_import.py, purpose: "malformed row names the
+           line", covers: [0]}
+  - label: boundary-quantified-quality-word
+    kind: boundary
+    should_find: false
+    artifact: |
+      criteria:
+        - "When the dashboard loads, initial render shall complete within
+           1.5s on the reference dataset (fixtures/ref.json)."
+      test_skeletons:
+        - {path: tests/test_dash.py, purpose: "render budget on ref data",
+           covers: [0]}
+  - label: boundary-hidden-unobservable
+    kind: boundary
+    should_find: true
+    must_mention: ["observ"]
+    artifact: |
+      criteria:
+        - "When a reminder is sent, the user shall feel more confident
+           about their schedule."
+      test_skeletons:
+        - {path: tests/test_reminders.py, purpose: "reminder sent",
+           covers: [0]}

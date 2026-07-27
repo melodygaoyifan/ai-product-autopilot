@@ -1,0 +1,86 @@
+voter: dependency-realism
+fixtures:
+  - label: consumes-api-without-edge
+    kind: positive
+    should_find: true
+    must_mention: ["depend"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Orders API", depends_on: [],
+           files_expected: ["api/orders.py"]}
+        - {id: t2, title: "Orders dashboard consuming /api/orders",
+           depends_on: [], files_expected: ["web/dashboard.js"]}
+  - label: shared-file-no-edge
+    kind: positive
+    should_find: true
+    must_mention: ["edge"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "User model", depends_on: [],
+           files_expected: ["models.py"]}
+        - {id: t2, title: "Session handling", depends_on: [],
+           files_expected: ["models.py", "auth.py"]}
+  - label: false-edge-serializes
+    kind: positive
+    should_find: true
+    must_mention: ["false"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Landing page copy", depends_on: [],
+           files_expected: ["site/index.html"]}
+        - {id: t2, title: "Database schema", depends_on: [t1],
+           files_expected: ["db/schema.sql"]}
+      note: no artifact flows from copywriting to the schema.
+  - label: schema-consumer-unlinked
+    kind: positive
+    should_find: true
+    must_mention: ["depend"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Define events schema", depends_on: [],
+           files_expected: ["db/events.sql"]}
+        - {id: t2, title: "Nightly aggregation over events table",
+           depends_on: [], files_expected: ["jobs/aggregate.py"]}
+  - label: clean-linear-chain
+    kind: negative
+    should_find: false
+    artifact: |
+      tasks:
+        - {id: t1, title: "CSV serializer", depends_on: [],
+           files_expected: ["export/csv.py"]}
+        - {id: t2, title: "Export endpoint", depends_on: [t1],
+           files_expected: ["api/export.py"]}
+        - {id: t3, title: "Export button in UI", depends_on: [t2],
+           files_expected: ["web/orders.js"]}
+  - label: clean-true-parallel
+    kind: negative
+    should_find: false
+    artifact: |
+      tasks:
+        - {id: t1, title: "Menu page", depends_on: [],
+           files_expected: ["web/menu.html"]}
+        - {id: t2, title: "Kitchen order screen", depends_on: [],
+           files_expected: ["web/kitchen.html"]}
+        - {id: t3, title: "Checkout wiring both", depends_on: [t1, t2],
+           files_expected: ["api/checkout.py"]}
+  - label: boundary-handoff-via-fixture
+    kind: boundary
+    should_find: false
+    artifact: |
+      tasks:
+        - {id: t1, title: "API against the frozen v1 OpenAPI file",
+           depends_on: [], files_expected: ["api/impl.py"]}
+        - {id: t2, title: "Client against the same frozen OpenAPI file",
+           depends_on: [], files_expected: ["client/sdk.py"]}
+      note: both build against contracts/openapi-v1.yaml, committed and
+        frozen before planning; no edge needed.
+  - label: boundary-subtle-consumer
+    kind: boundary
+    should_find: true
+    must_mention: ["depend"]
+    artifact: |
+      tasks:
+        - {id: t1, title: "Feature flags module", depends_on: [],
+           files_expected: ["flags.py"]}
+        - {id: t2, title: "Checkout (gated by flag checkout_v2)",
+           depends_on: [], files_expected: ["api/checkout.py"]}

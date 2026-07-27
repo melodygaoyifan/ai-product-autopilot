@@ -23,7 +23,6 @@ from autoproduct.upstream.workspace import load_project
 from autoproduct.yamlx import extract_mapping
 
 PLANNER_MARKER = "task planner in a greenfield product system"
-PLAN_CRITIC_MARKER = "plan critic panel"
 
 MAX_REVISIONS = 2
 
@@ -212,20 +211,6 @@ tasks:
     files_expected: ["app/orders*.py"]   # globs this task will touch
 """
 
-_CRITIC_SYSTEM = f"""You are the {PLAN_CRITIC_MARKER}: judge completeness
-(does the DAG cover all of scope_now; is anything in it NOT in scope_now)
-and dependency realism (missing edges that will bite mid-build; false edges
-that serialize needlessly). Majors only where the plan would mislead
-Gate U2.
-
-Respond with ONLY YAML:
-issues:
-  - severity: major|minor
-    lens: completeness|dependencies
-    problem: one sentence
-"""
-
-
 def run_planning(
     repo_dir: str | Path,
     *,
@@ -285,21 +270,27 @@ def run_planning(
             dag_check(tasks) + lane_check(tasks)
             + budget_check(tasks, budget) + review_train_check(tasks)
         )
-        raw_critique = provider_impl.complete(
-            model=critic_model,
-            system=_CRITIC_SYSTEM,
-            user=f"<brief>\n{brief_yaml}</brief>\n\n<tasks>\n"
-            + yaml.safe_dump([t.model_dump() for t in tasks], sort_keys=False, allow_unicode=True)
+        # Charter roster (doc 13 §25.1): Completeness, DependencyRealism,
+        # RiskSequencing, ParallelizationSafety, EstimateSanity — the
+        # single "plan critic panel" prompt retired here (plan phase D13).
+        from autoproduct.product.stage_engine import run_critique_roster
+        from autoproduct.product.voter_gate import family_roots
+
+        skills_root, _ = family_roots("planning")
+        roster = run_critique_roster(
+            "planning", "planning",
+            f"<brief>\n{brief_yaml}</brief>\n\n<tasks>\n"
+            + yaml.safe_dump([t.model_dump() for t in tasks],
+                             sort_keys=False, allow_unicode=True)
             + "</tasks>",
-            max_tokens=1024,
+            str(repo_dir),
+            provider_impl=provider_impl,
+            voter_model=critic_model,
+            leader_model=planner_model,
+            skills_root=skills_root,
+            det_findings=[{"rule": "dag", "message": m} for m in dag_issues],
         )
-        try:
-            critics = [
-                i for i in (extract_mapping(raw_critique, ("issues",)).get("issues") or [])
-                if isinstance(i, dict)
-            ][:10]
-        except ValueError:
-            critics = []
+        critics = roster.as_issues()[:10]
         majors = [c for c in critics if c.get("severity") == "major"]
         if not dag_issues and not majors:
             break

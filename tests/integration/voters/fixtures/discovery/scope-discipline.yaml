@@ -1,0 +1,77 @@
+voter: scope-discipline
+fixtures:
+  - label: smuggled-scope-item
+    kind: positive
+    should_find: true
+    must_mention: ["scope"]
+    artifact: |
+      problem: "Freelancers chase unpaid invoices."
+      scope_now: ["invoice reminder emails", "overdue dashboard",
+                  "AI logo generator for the freelancer's brand"]
+      scope_never: ["accounting integrations"]
+  - label: empty-scope-never
+    kind: positive
+    should_find: true
+    must_mention: ["never"]
+    artifact: |
+      problem: "Teachers re-type quiz questions."
+      scope_now: ["quiz import from PDF"]
+      scope_later: ["question bank sharing"]
+      scope_never: []
+  - label: roadmap-sized-scope-now
+    kind: positive
+    should_find: true
+    must_mention: ["scope_now"]
+    artifact: |
+      problem: "Small gyms manage members with paper."
+      scope_now: ["member CRM", "class booking", "payment processing",
+                  "trainer payroll", "native iOS app", "native Android app",
+                  "email campaigns", "analytics suite"]
+      scope_later: []
+  - label: item-in-two-lists
+    kind: positive
+    should_find: true
+    must_mention: ["both"]
+    artifact: |
+      problem: "Book clubs lose track of picks."
+      scope_now: ["pick voting", "meeting scheduler"]
+      scope_later: ["meeting scheduler", "reading progress"]
+      scope_never: ["social feed"]
+  - label: clean-tight-slice
+    kind: negative
+    should_find: false
+    artifact: |
+      problem: "Podcasters trim silence by hand."
+      scope_now: ["upload one episode", "auto-cut silence", "download result"]
+      scope_later: ["batch processing", "loudness normalization"]
+      scope_never: ["hosting", "distribution", "a social network"]
+  - label: clean-with-enabler
+    kind: negative
+    should_find: false
+    artifact: |
+      problem: "Ops leads export data by copy-paste."
+      scope_now: ["CSV export of the orders table", "login (required to
+        authorize the export)"]
+      scope_later: ["scheduled exports"]
+      scope_never: ["BI dashboards", "third-party connectors"]
+  - label: boundary-large-but-coherent
+    kind: boundary
+    should_find: false
+    artifact: |
+      problem: "A restaurant needs online ordering during renovation."
+      scope_now: ["menu page", "cart", "checkout via existing Stripe",
+                  "kitchen order screen"]
+      scope_later: ["delivery integration"]
+      scope_never: ["reservations", "loyalty points", "multi-restaurant"]
+      note: four items, but each is on the single order path.
+  - label: boundary-subtle-smuggle
+    kind: boundary
+    should_find: true
+    must_mention: ["scope"]
+    artifact: |
+      problem: "Runners want route air-quality alerts."
+      scope_now: ["alert subscription", "daily alert email",
+                  "runner community leaderboard"]
+      scope_never: ["route planning"]
+      note: the leaderboard serves retention dreams, not the stated
+        alerting problem.

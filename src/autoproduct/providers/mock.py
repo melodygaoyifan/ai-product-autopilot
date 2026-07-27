@@ -158,8 +158,8 @@ class MockProvider(Provider):
             return self._prd_writer()
         if EVIDENCE_WRITER_MARKER in system:
             return self._evidence_writer(user)
-        from autoproduct.upstream.discover import BRIEF_CRITIC_MARKER, BRIEFWRITER_MARKER
-        from autoproduct.upstream.plan import PLAN_CRITIC_MARKER, PLANNER_MARKER
+        from autoproduct.upstream.discover import BRIEFWRITER_MARKER
+        from autoproduct.upstream.plan import PLANNER_MARKER
 
         if BRIEFWRITER_MARKER in system:
             return yaml.safe_dump(
@@ -182,8 +182,6 @@ class MockProvider(Provider):
                 },
                 sort_keys=False,
             )
-        if BRIEF_CRITIC_MARKER in system:
-            return yaml.safe_dump({"issues": []})
         if PLANNER_MARKER in system:
             if "parallel plan" in user:
                 return yaml.safe_dump(
@@ -210,25 +208,11 @@ class MockProvider(Provider):
                  "depends_on": ["t2"], "lane": "api", "estimate_hours": 3},
             ]
             return yaml.safe_dump({"tasks": tasks}, sort_keys=False)
-        if PLAN_CRITIC_MARKER in system:
-            return yaml.safe_dump({"issues": []})
         from autoproduct.upstream.build import IMPLEMENTER_MARKER
-        from autoproduct.upstream.spec import (
-            AMBIGUITY_CRITIC_MARKER,
-            SPECWRITER_MARKER,
-            TESTABILITY_CRITIC_MARKER,
-        )
+        from autoproduct.upstream.spec import SPECWRITER_MARKER
 
         if SPECWRITER_MARKER in system:
             return self._spec(user)
-        if TESTABILITY_CRITIC_MARKER in system or AMBIGUITY_CRITIC_MARKER in system:
-            has_vague = "be fast" in user
-            issues = (
-                [{"severity": "major", "anchor": 0, "problem": "'fast' is untestable"}]
-                if has_vague
-                else []
-            )
-            return yaml.safe_dump({"issues": issues})
         if IMPLEMENTER_MARKER in system:
             return self._implement(user)
         from autoproduct.maintenance.skills_registry import SKILL_DRAFT_MARKER

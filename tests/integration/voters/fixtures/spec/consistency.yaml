@@ -1,0 +1,74 @@
+voter: consistency
+fixtures:
+  - label: persist-vs-stateless
+    kind: positive
+    should_find: true
+    must_mention: ["contradict"]
+    artifact: |
+      criteria:
+        - "When a draft is edited, the system shall persist every
+           keystroke to the server."
+        - "When operating, the server shall remain stateless and store
+           no user content."
+  - label: field-renamed-across-criteria
+    kind: positive
+    should_find: true
+    must_mention: ["status"]
+    artifact: |
+      criteria:
+        - "When an order completes, its status field shall be 'done'."
+        - "When listing orders, each row shall show the state field."
+      design: "orders carry a single lifecycle column."
+  - label: design-contradicts-criterion
+    kind: positive
+    should_find: true
+    must_mention: ["design"]
+    artifact: |
+      design: |
+        SQLite, single file, no external services.
+      criteria:
+        - "When a photo is uploaded, the system shall store it in S3."
+  - label: enum-values-disagree
+    kind: positive
+    should_find: true
+    must_mention: ["value"]
+    artifact: |
+      criteria:
+        - "When a round is created, round shall be 'day5' or 'day12'."
+        - "When filtering rounds, the round parameter shall accept 1 or 2."
+  - label: clean-consistent-lifecycle
+    kind: negative
+    should_find: false
+    artifact: |
+      design: "Postgres-backed order lifecycle."
+      criteria:
+        - "When an order is placed, its status shall be 'pending'."
+        - "When payment settles, its status shall change to 'paid'."
+        - "When listing orders, each row shall show status."
+  - label: clean-design-supports
+    kind: negative
+    should_find: false
+    artifact: |
+      design: |
+        Local filesystem storage under uploads/, nginx serves /media.
+      criteria:
+        - "When a photo is uploaded, it shall be written under uploads/."
+        - "When a photo is requested, it shall be served from /media."
+  - label: boundary-synonym-in-prose
+    kind: boundary
+    should_find: false
+    artifact: |
+      criteria:
+        - "When an order completes, the status field shall be 'done';
+           completed orders (status='done') shall appear in the archive."
+      note: "completed" is prose describing the same declared field, not
+        a second field.
+  - label: boundary-subtle-unit-clash
+    kind: boundary
+    should_find: true
+    must_mention: ["contradict"]
+    artifact: |
+      criteria:
+        - "When a session is idle for 30 minutes, it shall expire."
+        - "When a session expires, the audit log shall record
+           'timeout after 30s idle'."

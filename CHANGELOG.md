@@ -4,6 +4,19 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.32.0 — gap plan D13: upstream critique rosters
+- Discover/plan/spec critics ported onto the shared stage engine as 14
+  registered charter voters (discovery: desirability/feasibility/
+  viability/scope-discipline; planning: completeness/dependency-realism/
+  risk-sequencing/parallelization-safety/estimate-sanity; spec:
+  testability/consistency/completeness/ambiguity/interface-impact — doc
+  13 §25.1), each behind the 8-fixture registration gate; the three
+  single-panel critic prompts retired
+- `run_critique_roster` extracted from the P-stage engine: charter voters
+  with no cross-visibility → per-finding fresh verify → leader; failed
+  gate runs exclude the voter, unregistered voters are reported
+- Suite: 688 → 721 hermetic tests (ledger PC-1 synced)
+
 ## v0.31.0 — gap plan D14 + D16: GEPA proposer, secrets layer
 - GEPA proposer (`gepa.py`): budget-gated by the v0.27 `gepa.yaml` schema
   (refuses at zero weekly rollouts or unlisted targets), deterministic

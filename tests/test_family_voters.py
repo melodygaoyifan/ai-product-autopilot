@@ -13,7 +13,11 @@ from autoproduct.product.voter_gate import (
     load_voter_fixtures,
 )
 
-EXPECTED = {"web": 3, "miniprogram": 1, "app": 1, "data": 3}
+EXPECTED = {
+    "web": 3, "miniprogram": 1, "app": 1, "data": 3,
+    # Upstream critique rosters (doc 13 §25.1, plan phase D13).
+    "discovery": 4, "planning": 5, "spec": 5,
+}
 
 
 def _all_family_voters():

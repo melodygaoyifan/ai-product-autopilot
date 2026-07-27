@@ -1,0 +1,71 @@
+voter: feasibility
+fixtures:
+  - label: realtime-on-static-hosting
+    kind: positive
+    should_find: true
+    must_mention: ["constraint"]
+    artifact: |
+      constraints: ["static hosting only, no server-side compute"]
+      scope_now: ["live multiplayer whiteboard with sub-second sync"]
+      hypotheses:
+        - statement: "teams co-edit during standups"
+          evidence: "user_reported"
+  - label: native-api-in-web-profile
+    kind: positive
+    should_find: true
+    must_mention: ["web"]
+    artifact: |
+      profile: web
+      constraints: ["browser-only distribution"]
+      scope_now: ["background Bluetooth sensor pairing", "landing page"]
+  - label: unnamed-external-dependency
+    kind: positive
+    should_find: true
+    must_mention: ["depend"]
+    artifact: |
+      constraints: ["two-week build budget"]
+      scope_now: ["import each user's bank transactions automatically",
+                  "categorize spending"]
+      note: no bank-data provider is named anywhere in the brief.
+  - label: unobtainable-validation-data
+    kind: positive
+    should_find: true
+    must_mention: ["data"]
+    artifact: |
+      constraints: ["no user accounts in v1", "no analytics vendor"]
+      scope_now: ["per-user churn prediction dashboard"]
+      hypotheses:
+        - statement: "churn is predictable from week-1 behavior"
+          evidence: "requires per-user longitudinal data"
+  - label: clean-scoped-web-crud
+    kind: negative
+    should_find: false
+    artifact: |
+      profile: web
+      constraints: ["single developer", "four-week budget"]
+      scope_now: ["CRUD for reading lists", "shareable public list URL"]
+      hypotheses:
+        - statement: "readers share lists monthly"
+          evidence: "user_reported"
+  - label: clean-named-external
+    kind: negative
+    should_find: false
+    artifact: |
+      constraints: ["Stripe is the payment provider (account exists)"]
+      scope_now: ["one-price checkout via Stripe Checkout redirect",
+                  "purchase confirmation email via existing SMTP"]
+  - label: boundary-heavy-but-feasible
+    kind: boundary
+    should_find: false
+    artifact: |
+      constraints: ["one backend dev", "eight weeks", "Postgres available"]
+      scope_now: ["nightly batch import of a 2GB public CSV dataset",
+                  "search over imported rows"]
+      note: heavy but conventional; nothing the constraints rule out.
+  - label: boundary-quietly-needs-gpu
+    kind: boundary
+    should_find: true
+    must_mention: ["constraint"]
+    artifact: |
+      constraints: ["deploys to a $5/month shared VPS, no external APIs"]
+      scope_now: ["on-the-fly HD video transcoding for every upload"]
