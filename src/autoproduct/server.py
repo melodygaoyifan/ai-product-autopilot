@@ -135,6 +135,60 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
         pid = spawn(["review", pr_url], repo)
         return {"queued": True, "target": pr_url, "worker_pid": pid}
 
+    @app.get("/metrics")
+    async def metrics():
+        # Prometheus text; aggregate-only by construction (same fields as
+        # the opt-in telemetry payload — doc 09 §10, plan phase C).
+        from fastapi.responses import PlainTextResponse
+
+        from autoproduct.observability import prometheus_metrics
+
+        return PlainTextResponse(prometheus_metrics(repo))
+
+    def _translate_signal(source: str, payload: dict) -> dict:
+        """Named monitoring webhooks → the /incidents shape (doc 09 §12).
+        Each source's fields are mapped, and a dedupe_key is derived so a
+        re-fired alert updates instead of multiplying."""
+        if source == "sentry":
+            event = payload.get("event") or payload
+            return {"title": str(event.get("title") or payload.get("message", "sentry event"))[:200],
+                    "kind": "error", "source": "sentry",
+                    "dedupe_key": str(payload.get("id") or event.get("event_id") or "")}
+        if source == "datadog":
+            return {"title": str(payload.get("title", "datadog monitor"))[:200],
+                    "kind": str(payload.get("alert_type", "alert")),
+                    "source": "datadog",
+                    "dedupe_key": str(payload.get("alert_id") or payload.get("id") or "")}
+        return {"title": str(payload.get("incident", {}).get("title")
+                             or payload.get("summary", "pagerduty incident"))[:200],
+                "kind": "incident", "source": "pagerduty",
+                "dedupe_key": str(payload.get("incident", {}).get("id") or "")}
+
+    @app.post("/webhooks/{source}", status_code=202)
+    async def monitoring_webhook(source: str, request: Request):
+        if source not in ("sentry", "datadog", "pagerduty"):
+            raise HTTPException(404, f"unknown signal source {source!r}")
+        secret = os.environ.get("AUTOPRODUCT_WEBHOOK_SECRET")
+        if not secret:
+            raise HTTPException(503, "AUTOPRODUCT_WEBHOOK_SECRET is not configured")
+        auth = request.headers.get("Authorization", "")
+        if not (auth.startswith("Bearer ")
+                and hmac.compare_digest(auth.removeprefix("Bearer "), secret)):
+            raise HTTPException(401, "missing or invalid bearer token")
+        incident = _translate_signal(source, await request.json())
+        inbox = Path(repo) / ".mas" / "inbox"
+        inbox.mkdir(parents=True, exist_ok=True)
+        dedupe = incident.get("dedupe_key")
+        if dedupe:
+            marker = inbox / f".seen-{source}-{dedupe}"
+            if marker.exists():
+                return {"status": "deduplicated", "dedupe_key": dedupe}
+            marker.write_text("")
+        incident_id = uuid.uuid4().hex[:12]
+        (inbox / f"{incident_id}.yaml").write_text(
+            yaml.safe_dump({"id": incident_id, **incident}, sort_keys=False))
+        return {"status": "accepted", "id": incident_id}
+
     @app.post("/incidents", status_code=202)
     async def incidents(request: Request):
         # Same trust bar as the GitHub webhook (PR #16 self-review finding):

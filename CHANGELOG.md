@@ -4,6 +4,13 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.30.0 — audit gap closures, phase C
+- Cost/observability ledger: config-priced estimates, unpriced-call
+  visibility, monthly cap check, tool-audit + evidence-ledger writers,
+  Prometheus /metrics
+- Module-spec invariant layer with SPEC_DRIFT_UNDOCUMENTED
+- Named signal webhooks (sentry/datadog/pagerduty) with dedupe window
+
 ## v0.29.0 — audit gap closures, phase B
 - Voter families: voter-gate now serves web/miniprogram/app/data alongside
   the product stages (same skills+fixtures contract)

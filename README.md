@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-669-brightgreen)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-673-brightgreen)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **669 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **673 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -284,6 +284,7 @@ Claude-written code; without it those seats visibly fall back
 | v0.27 ✅ | audit gap closures, round two: GitHub Actions CI (the suite — including the self-linting README — now runs on every push, making "fails CI" literal), the §41.1 structured profile schema (add-only, composable), doc-16's cascade policy with the model-family heterogeneity floor + serial merge-queue admission (sweep never starves features) + the `gepa.yaml` budget schema (proposer-off by default), and the debt tools (radon/jscpd/vulture, availability-gated, feeding Sweep's queues) |
 | v0.28 ✅ | gap-closure plan + phase A ([the plan](docs/gap-closure-plan.md) is a committed artifact; phases B–D queued): web det-tool runners (axe/Lighthouse/size-limit, gated), the data NFR grammar + lineage impact check, the full typed upstream verdict vocabulary, Gate P1 platform preflight (stale checklists and evidence-free checkboxes both fail; a named human submits), data-classification tags with downgrade refusal, and CHANGELOG.md |
 | v0.29 ✅ | plan phase B: five profile voter charters (web DesignFidelity/A11ySemantics/PerformanceDelta, 小程序 PlatformFit, app DeviceReality) and 8-fixture registration gates for them AND the three data voters — `voter-gate web\|miniprogram\|app\|data` now serves every family under the same 87.5% contract |
+| v0.30 ✅ | plan phase C: the cost/observability ledger (prices are config never constants, unpriced calls counted never zeroed, the monthly cap warns and a human decides; per-review tool-audit + evidence-ledger receipts; `/metrics` in Prometheus text, aggregate-only), the module-spec invariant layer (`.mas/specs/*.spec.yaml` — `SPEC_DRIFT_UNDOCUMENTED` on unexpected change patterns, forbidden side effects scanned in diffs), and named signal webhooks (`/webhooks/sentry\|datadog\|pagerduty` → the incident inbox, bearer-authed, deduped) |
 | next 🔜 | the v3.0.0 design gate: one live loop ending in a real recorded kill-or-pivot at Gate PL5 |
 
 ## Star history
