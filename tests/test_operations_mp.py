@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import pytest
 
-from autoproduct.lanes.miniprogram import (
+from ai_venture_studio.lanes.miniprogram import (
     MAIN_PACKAGE_BUDGET_BYTES,
     mp_domain_check,
     mp_privacy_check,
     mp_setdata_lint,
     mp_size_check,
 )
-from autoproduct.operations import (
+from ai_venture_studio.operations import (
     HotFileEntry,
     OperationsError,
     OperationsPolicy,

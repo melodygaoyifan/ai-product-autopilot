@@ -7,12 +7,12 @@ import subprocess
 import pytest
 import yaml as yaml_lib
 
-from autoproduct import testing as testing_mod
-from autoproduct.providers.base import Provider, register
-from autoproduct.upstream import init_workspace
-from autoproduct.upstream.autopilot import run_autopilot
-from autoproduct.upstream.correction import run_correction
-from autoproduct.upstream.walkthrough import generate_walkthrough
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.providers.base import Provider, register
+from ai_venture_studio.upstream import init_workspace
+from ai_venture_studio.upstream.autopilot import run_autopilot
+from ai_venture_studio.upstream.correction import run_correction
+from ai_venture_studio.upstream.walkthrough import generate_walkthrough
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 
@@ -43,8 +43,8 @@ class TwoAttemptRepairer(Provider):
     name = "two_attempt_repairer"
 
     def chat(self, *, model, system, messages, max_tokens=4096):
-        from autoproduct.providers.mock import MockProvider
-        from autoproduct.upstream.correction import CORRECTION_MARKER
+        from ai_venture_studio.providers.mock import MockProvider
+        from ai_venture_studio.upstream.correction import CORRECTION_MARKER
 
         user = messages[0]["content"]
         if CORRECTION_MARKER in system:

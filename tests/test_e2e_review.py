@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from autoproduct.orchestrator import run_review
-from autoproduct.state import Verdict
+from ai_venture_studio.orchestrator import run_review
+from ai_venture_studio.state import Verdict
 
 
 def test_planted_bugs_found_end_to_end(tmp_path, planted_diff_text, skills_dir):

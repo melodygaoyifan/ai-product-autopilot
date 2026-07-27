@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.product import (
+from ai_venture_studio.product import (
     DemandHypothesis,
     KillRegistryError,
     OpportunityCandidate,
@@ -26,8 +26,8 @@ from autoproduct.product import (
     match_killed,
     sizing_calc,
 )
-from autoproduct.product.evidence import store_snapshot
-from autoproduct.product.sizing import SizingFactor, TopDownCrosscheck
+from ai_venture_studio.product.evidence import store_snapshot
+from ai_venture_studio.product.sizing import SizingFactor, TopDownCrosscheck
 
 UPSTREAM = Path(__file__).parent / "fixtures" / "upstream"
 TODAY = dt.date(2026, 7, 26)

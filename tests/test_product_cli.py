@@ -11,9 +11,9 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-from autoproduct.cli import app
-from autoproduct.experiment import lock_preregistration
-from autoproduct.product import PRD, emit_handoff, write_handoff
+from ai_venture_studio.cli import app
+from ai_venture_studio.experiment import lock_preregistration
+from ai_venture_studio.product import PRD, emit_handoff, write_handoff
 
 REPO_METRICS = str(Path(__file__).parent.parent / "metrics")
 

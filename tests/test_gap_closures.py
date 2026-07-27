@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from autoproduct.cascade import (
+from ai_venture_studio.cascade import (
     CascadePolicy,
     GepaConfigError,
     cascade_route,
@@ -13,12 +13,12 @@ from autoproduct.cascade import (
     load_gepa_budget,
     merge_queue_admit,
 )
-from autoproduct.profile_schema import (
+from ai_venture_studio.profile_schema import (
     ProfileSchemaError,
     compose_profiles,
     validate_profile,
 )
-from autoproduct.tools.debt import jscpd_clones, radon_complexity, vulture_dead_code
+from ai_venture_studio.tools.debt import jscpd_clones, radon_complexity, vulture_dead_code
 
 
 def test_structured_profiles_add_only_and_compose():
@@ -79,7 +79,7 @@ def test_gepa_budget_schema(tmp_path):
 
 
 def test_debt_tools_skip_visibly_when_absent(monkeypatch):
-    monkeypatch.setattr("autoproduct.tools.debt.shutil.which", lambda _: None)
+    monkeypatch.setattr("ai_venture_studio.tools.debt.shutil.which", lambda _: None)
     for report in (radon_complexity(), jscpd_clones(), vulture_dead_code()):
         assert report.status == "skipped"
         assert "VISIBLY" in report.detail

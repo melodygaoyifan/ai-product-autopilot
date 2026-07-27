@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.adoption import calibration_report, write_calibration_report
-from autoproduct.adoption.calibrate import CalibrationReport
+from ai_venture_studio.adoption import calibration_report, write_calibration_report
+from ai_venture_studio.adoption.calibrate import CalibrationReport
 
 
 def _manifest(tmp_path: Path, defects: list[dict]) -> Path:

@@ -2,15 +2,15 @@ import shutil
 
 import pytest
 
-from autoproduct import testing as testing_mod
-from autoproduct.upstream import (
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.upstream import (
     approve_spec,
     init_workspace,
     load_project,
     run_build,
     run_spec_stage,
 )
-from autoproduct.upstream.ears import classify, lint_criteria
+from ai_venture_studio.upstream.ears import classify, lint_criteria
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -87,7 +87,7 @@ def test_build_refuses_unapproved_spec(tmp_path):
 
 def test_end_to_end_init_spec_approve_build(tmp_path, monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 
@@ -103,7 +103,7 @@ def test_end_to_end_init_spec_approve_build(tmp_path, monkeypatch):
     assert "2 passed" in result.test_summary
 
     # The build commit is a reviewable diff for the downstream stages.
-    from autoproduct.orchestrator import run_review
+    from ai_venture_studio.orchestrator import run_review
     from pathlib import Path
 
     skills = str(Path(__file__).parent.parent / "skills")

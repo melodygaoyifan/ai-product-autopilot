@@ -11,7 +11,7 @@
 #   S3  + observability       → maintenance
 #   S4  + progressive delivery → deploy_review at full depth
 #
-# Run `autoproduct readiness` after editing — it prints which stages are
+# Run `avs readiness` after editing — it prints which stages are
 # active and what each missing rung would unlock.
 substrate:
   vcs: git              # git | none

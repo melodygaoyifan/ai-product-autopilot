@@ -1,5 +1,5 @@
-from autoproduct.diff import parse_unified_diff
-from autoproduct.tools import external, probes
+from ai_venture_studio.diff import parse_unified_diff
+from ai_venture_studio.tools import external, probes
 
 
 def _diff(path: str, *added: str) -> str:
@@ -143,7 +143,7 @@ def test_bandit_b310_skipped_on_test_files(monkeypatch, tmp_path):
     import json as _json
     import shutil as _shutil
 
-    from autoproduct.tools import external
+    from ai_venture_studio.tools import external
 
     (tmp_path / "tests").mkdir()
     (tmp_path / "app").mkdir()

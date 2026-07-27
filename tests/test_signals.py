@@ -16,9 +16,9 @@ import types
 import pytest
 import yaml
 
-from autoproduct.harness.taint_guard import RESEARCH_TAG, TaintGuard, contains_research
-from autoproduct.maintenance import signals
-from autoproduct.maintenance.signals import (
+from ai_venture_studio.harness.taint_guard import RESEARCH_TAG, TaintGuard, contains_research
+from ai_venture_studio.maintenance import signals
+from ai_venture_studio.maintenance.signals import (
     DATADOG_API_KEY_ENV,
     DATADOG_APP_KEY_ENV,
     JAEGER_URL_ENV,
@@ -357,8 +357,8 @@ def test_a_too_short_secret_is_left_alone_rather_than_shredding_the_payload():
 
 
 def test_all_six_readers_are_served_by_the_l1_maintenance_partition():
-    from autoproduct.mcp.server import SERVER_RISK, SERVER_TOOLS, server_for
-    from autoproduct.mcp.stage_tools import risk_of
+    from ai_venture_studio.mcp.server import SERVER_RISK, SERVER_TOOLS, server_for
+    from ai_venture_studio.mcp.stage_tools import risk_of
 
     for tool in READERS:
         assert server_for(tool) == "maintenance", tool
@@ -378,7 +378,7 @@ def test_all_six_readers_are_served_by_the_l1_maintenance_partition():
 def test_stage_tools_report_a_skip_rather_than_faking_a_read(
     tmp_path, monkeypatch, tool, args
 ):
-    from autoproduct.mcp.stage_tools import call_stage_tool
+    from ai_venture_studio.mcp.stage_tools import call_stage_tool
 
     for _n, _c, env in UNCONFIGURED:
         monkeypatch.delenv(env, raising=False)
@@ -390,7 +390,7 @@ def test_stage_tools_report_a_skip_rather_than_faking_a_read(
 def test_maintenance_run_enriches_a_sentry_incident(tmp_path, monkeypatch, http):
     import subprocess
 
-    from autoproduct.maintenance import Incident, run_maintenance
+    from ai_venture_studio.maintenance import Incident, run_maintenance
 
     monkeypatch.setenv(SENTRY_TOKEN_ENV, TOKEN)
     http.returns(dict(ISSUE))
@@ -421,7 +421,7 @@ def test_maintenance_run_enriches_a_sentry_incident(tmp_path, monkeypatch, http)
 def test_a_manual_incident_never_calls_out(tmp_path, monkeypatch):
     import subprocess
 
-    from autoproduct.maintenance import Incident, run_maintenance
+    from ai_venture_studio.maintenance import Incident, run_maintenance
 
     monkeypatch.setattr(
         signals, "_http_get",
@@ -438,7 +438,7 @@ def test_a_manual_incident_never_calls_out(tmp_path, monkeypatch):
 def test_sentry_webhook_passes_the_issue_id_through(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from autoproduct.server import create_app
+    from ai_venture_studio.server import create_app
 
     monkeypatch.setenv("AUTOPRODUCT_WEBHOOK_SECRET", "shared")
     (tmp_path / ".mas").mkdir()

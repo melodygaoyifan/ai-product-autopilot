@@ -2,7 +2,7 @@ import datetime
 
 import yaml
 
-from autoproduct.compound import (
+from ai_venture_studio.compound import (
     SECTION_HEADER,
     Proposal,
     apply_to_claude_md,

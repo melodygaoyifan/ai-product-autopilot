@@ -11,22 +11,22 @@ from pathlib import Path
 import pytest
 import yaml
 
-import autoproduct.deploy.graph as deploy_graph
-import autoproduct.maintenance.graph as maint_graph
-from autoproduct.deploy import DeployVerdict, recover_deploy_reviews, run_deploy_review
-from autoproduct.maintenance import (
+import ai_venture_studio.deploy.graph as deploy_graph
+import ai_venture_studio.maintenance.graph as maint_graph
+from ai_venture_studio.deploy import DeployVerdict, recover_deploy_reviews, run_deploy_review
+from ai_venture_studio.maintenance import (
     Incident,
     MaintenanceVerdict,
     recover_maintenance,
     run_maintenance,
 )
-from autoproduct.orchestrator.checkpoint import (
+from ai_venture_studio.orchestrator.checkpoint import (
     KEY_ENV,
     CheckpointKeyError,
     build_saver,
     encryption_status,
 )
-from autoproduct.secrets import SecretError
+from ai_venture_studio.secrets import SecretError
 
 SKILLS = str(Path(__file__).parent.parent / "skills" / "deploy")
 

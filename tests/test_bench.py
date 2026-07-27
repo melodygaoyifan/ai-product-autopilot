@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from autoproduct.bench import load_cases, run_benchmark
+from ai_venture_studio.bench import load_cases, run_benchmark
 
 CASES = Path(__file__).parent.parent / "benchmarks" / "cases"
 SKILLS = Path(__file__).parent.parent / "skills"

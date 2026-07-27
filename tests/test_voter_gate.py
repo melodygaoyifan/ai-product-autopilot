@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.product.stage_engine import load_voter_charters, run_product_stage
-from autoproduct.product.stages import opportunity_spec
-from autoproduct.product.strategy import StrategyError, load_strategy
-from autoproduct.product.voter_gate import (
+from ai_venture_studio.product.stage_engine import load_voter_charters, run_product_stage
+from ai_venture_studio.product.stages import opportunity_spec
+from ai_venture_studio.product.strategy import StrategyError, load_strategy
+from ai_venture_studio.product.voter_gate import (
     FIXTURES_ROOT,
     VoterFixtureError,
     load_voter_fixtures,
@@ -110,7 +110,7 @@ class _NoisyVoter:
 
 def test_gate_registers_sharp_and_fails_noisy(tmp_path, monkeypatch):
     root = _mini_fixture_root(tmp_path)
-    import autoproduct.product.voter_gate as vg
+    import ai_venture_studio.product.voter_gate as vg
 
     monkeypatch.setattr(vg, "get_provider", lambda name: _SharpVoter())
     run = run_voter_gate("opportunity", "probe", "system", provider="x",

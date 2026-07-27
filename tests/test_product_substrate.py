@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from autoproduct.product import (
+from ai_venture_studio.product import (
     SignalSourceError,
     TaintPolicyError,
     load_signal_sources,
@@ -20,7 +20,7 @@ from autoproduct.product import (
     store_snapshot,
     verify_snapshot,
 )
-from autoproduct.product.taint import MIN_COHORT_FLOOR
+from ai_venture_studio.product.taint import MIN_COHORT_FLOOR
 
 # --- evidence snapshots (§20.53.5) -----------------------------------------
 

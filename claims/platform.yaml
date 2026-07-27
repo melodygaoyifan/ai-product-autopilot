@@ -17,7 +17,7 @@ claims:
     source_type: primary_measured
     n: 13
     evidence:
-      - {method: bench_run, locator: "repo://benchmarks/cases (autoproduct bench)",
+      - {method: bench_run, locator: "repo://benchmarks/cases (avs bench)",
          retrieved_at: "2026-07-22T00:00:00Z"}
     falsifier: "a bench re-run at the same tag reporting different recall or precision"
   - id: PC-3
@@ -89,7 +89,7 @@ claims:
     source_type: primary_measured
     n: 1
     evidence:
-      - {method: demo_replay, locator: "repo://editions/demo/reviews (uvx autoproduct replay --demo)",
+      - {method: demo_replay, locator: "repo://editions/demo/reviews (uvx avs replay --demo)",
          retrieved_at: "2026-07-26T18:00:00Z"}
     falsifier: "the vendored bundle failing to replay offline or containing no escalation step"
   - id: PC-11

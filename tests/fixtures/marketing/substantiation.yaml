@@ -4,7 +4,7 @@ fixtures:
   - label: unregistered-capability
     expect: {rules: [unsubstantiated]}
     input:
-      draft_text: "autoproduct integrates with every major ATS on the market."
+      draft_text: "avs integrates with every major ATS on the market."
       register: []
   - label: number-drift
     expect: {rules: [number_drift]}
@@ -30,7 +30,7 @@ fixtures:
   - label: clean-registered-match
     expect: {rules: []}
     input:
-      draft_text: "autoproduct exports 12,000 rows in under 4 seconds."
+      draft_text: "avs exports 12,000 rows in under 4 seconds."
       register:
         - {id: C-101, text: "exports 12,000 rows in under 4 seconds",
            source_type: primary_measured}

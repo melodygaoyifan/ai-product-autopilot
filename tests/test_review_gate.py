@@ -7,13 +7,13 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from autoproduct.paths import skills_root
-from autoproduct.product.voter_gate import (
+from ai_venture_studio.paths import skills_root
+from ai_venture_studio.product.voter_gate import (
     VoterFixtureError,
     record_gate_run,
     registry_status,
 )
-from autoproduct.review_gate import (
+from ai_venture_studio.review_gate import (
     REVIEW_FIXTURES,
     REVIEW_STAGE,
     load_review_fixtures,
@@ -135,7 +135,7 @@ def _diff() -> str:
 
 
 def _vote(tmp_path, registry: dict):
-    from autoproduct.orchestrator.graph import vote_node
+    from ai_venture_studio.orchestrator.graph import vote_node
 
     mas = tmp_path / ".mas"
     mas.mkdir(exist_ok=True)

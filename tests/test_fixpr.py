@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from autoproduct.maintenance.fixpr import generate_fix_pr
-from autoproduct.maintenance.review import Incident, RootCauseResult
+from ai_venture_studio.maintenance.fixpr import generate_fix_pr
+from ai_venture_studio.maintenance.review import Incident, RootCauseResult
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -43,7 +43,7 @@ ROOT_CAUSE = RootCauseResult(
 def _no_docker(monkeypatch):
     # Hermetic: fix verification uses the subprocess path in tests.
     monkeypatch.setattr(
-        "autoproduct.maintenance.fixpr.docker_available", lambda: False
+        "ai_venture_studio.maintenance.fixpr.docker_available", lambda: False
     )
 
 
@@ -52,7 +52,7 @@ def test_fix_pr_creates_branch_with_passing_fix(tmp_path):
     attempt = generate_fix_pr(INCIDENT, ROOT_CAUSE, repo_dir=str(repo), provider="mock")
     # No remote in the fixture repo: push fails -> branch_only, never 'opened'.
     assert attempt.status == "branch_only"
-    assert attempt.branch == "autoproduct/fix-inc9"
+    assert attempt.branch == "avs/fix-inc9"
     assert attempt.files_changed == ["calc.py"]
     show = subprocess.run(
         ["git", "show", f"{attempt.branch}:calc.py"],
@@ -76,7 +76,7 @@ def test_regression_test_dropped_when_it_passes_prefix(tmp_path):
     reproduce the incident — it must be dropped visibly, fix kept."""
     import yaml as yaml_lib
 
-    from autoproduct.providers.base import Provider, register
+    from ai_venture_studio.providers.base import Provider, register
 
     @register
     class UselessTestFixer(Provider):
@@ -122,7 +122,7 @@ def test_fix_abandoned_when_tests_still_fail(tmp_path):
     attempt = generate_fix_pr(INCIDENT, ROOT_CAUSE, repo_dir=str(repo), provider="mock")
     assert attempt.status == "abstained"
     branches = subprocess.run(
-        ["git", "branch", "--list", "autoproduct/*"],
+        ["git", "branch", "--list", "avs/*"],
         cwd=repo, capture_output=True, text=True,
     ).stdout
     assert branches.strip() == ""  # nothing pushed, nothing left behind

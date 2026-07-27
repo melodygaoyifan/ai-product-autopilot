@@ -11,7 +11,7 @@ with kill criteria, and reads the outcome cohort honestly
 ([one real run](https://github.com/melodygaoyifan/ai-venture-studio#a-real-run-unedited)).
 
 You do not have to take any of that on trust, and you should not. The
-first step needs no API key: `uvx autoproduct replay --demo` replays a
+first step needs no API key: `uvx avs replay --demo` replays a
 real review of the repo's own code, offline — including the run where the
 pipeline escalated to a human instead of pretending. The numbers are in
 the open and typed: the review benchmark reports recall 100%, precision

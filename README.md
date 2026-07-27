@@ -21,7 +21,7 @@ signals.yaml — support tickets + GitHub issues, verbatim:
        leave autopilot running"
 ```
 
-&nbsp;&nbsp;&nbsp;&nbsp;↓ &nbsp;`autoproduct opportunity signals.yaml` → `market` → `prd` → *(build)* → `evidence`
+&nbsp;&nbsp;&nbsp;&nbsp;↓ &nbsp;`avs opportunity signals.yaml` → `market` → `prd` → *(build)* → `evidence`
 
 - ✅ **4 grounded candidates** (Gate PL0) — every claim cites its ticket verbatim; each carries a falsifiable hypothesis and a *named cheapest test* ("ship a clickable mockup to the 3 reporters", not "build an MVP")
 - ✅ **A market assessment its own voters attack** — the Sizing seat caught an ungrounded 0.15 affected-fraction inference; the Competitive seat caught "no competitor does this" resting on a single pricing-page probe; the dedicated Disconfirmation seat argues the other side on the same evidence
@@ -46,9 +46,9 @@ shipping, killing — to a named human at a recorded gate.
 ## Pick your door (one spine, three editions)
 
 ```bash
-uvx autoproduct replay --demo    # 2 minutes, NO API key: a real review's audit
+uvx avs replay --demo    # 2 minutes, NO API key: a real review's audit
                                  # trail, replayed offline — decide with evidence
-autoproduct init myco --profile web --edition solo         # or: enterprise | engineer
+avs init myco --profile web --edition solo         # or: enterprise | engineer
 ```
 
 Editions are narrowing presets over the same unchanged pipeline — never
@@ -67,7 +67,7 @@ forks, never fewer checks (`edition_lint` refuses anything that widens):
 ## For founders (no technical background needed)
 
 ```bash
-autoproduct studio myteam --profile web    # browser UI: the whole flow
+avs studio myteam --profile web    # browser UI: the whole flow
 ```
 
 <img src="docs/media/studio-en.png" alt="Founder Studio, English: the FDR entry screen — describe your product in your own words, and the system checks it and makes the plan before building anything" width="720">
@@ -79,13 +79,13 @@ and your FDR may be written in either language whichever UI you choose.
 Or the same flow in the terminal:
 
 ```bash
-autoproduct create myteam --profile web    # 1. writes FDR.md template + guide
+avs create myteam --profile web    # 1. writes FDR.md template + guide
 # ← fill in FDR.md in your own words
-autoproduct create myteam --profile web    # 2. asks questions OR confirms the plan
-autoproduct create myteam --profile web --yes   # 3. builds everything
-autoproduct preview                        # 4. try your product
-autoproduct add feature.md --yes           # 5. one small FDR per new feature
-autoproduct ship                           # 6. deploy artifacts + plain-language guide
+avs create myteam --profile web    # 2. asks questions OR confirms the plan
+avs create myteam --profile web --yes   # 3. builds everything
+avs preview                        # 4. try your product
+avs add feature.md --yes           # 5. one small FDR per new feature
+avs ship                           # 6. deploy artifacts + plain-language guide
 ```
 
 An FDR is six questions in your own words. This is the whole input for the
@@ -132,12 +132,12 @@ The two of us stop tracking work in chat messages.
 ## For product decisions (the outer loop)
 
 ```bash
-autoproduct opportunity signals.yaml         # P0: cluster real signals → candidates, Gate PL0
-autoproduct market cand-x --evidence probes.yaml   # P1: bottom-up sizing, six voters incl. Disconfirmation
-autoproduct market-approve --outcome pursue --scope-tier thin --decider you   # Gate PL1 (human)
-autoproduct prd                              # P2: PRD with kill criteria, planning tasks generated
-autoproduct prd-approve --decider you        # Gate PL2 + machine-checked handoff into the build
-autoproduct evidence events.yaml --metric build_progress_view_rate --cohort-start 2026-07-10
+avs opportunity signals.yaml         # P0: cluster real signals → candidates, Gate PL0
+avs market cand-x --evidence probes.yaml   # P1: bottom-up sizing, six voters incl. Disconfirmation
+avs market-approve --outcome pursue --scope-tier thin --decider you   # Gate PL1 (human)
+avs prd                              # P2: PRD with kill criteria, planning tasks generated
+avs prd-approve --decider you        # Gate PL2 + machine-checked handoff into the build
+avs evidence events.yaml --metric build_progress_view_rate --cohort-start 2026-07-10
 ```
 
 The rules that make it trustworthy are structural, not aspirational: every
@@ -239,15 +239,15 @@ including the runs that fail.
 
 ## Measured
 
-- **Review benchmark** (`autoproduct bench`): recall 100%, precision 67%
+- **Review benchmark** (`avs bench`): recall 100%, precision 67%
   on 13 labeled cases (bars: 40%/50%).
-- **Product benchmark** (`autoproduct product-bench`): full FDR→product
+- **Product benchmark** (`avs product-bench`): full FDR→product
   runs scored by *independent* behavioral probes executed against the
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
 - **1071 hermetic tests** (`uv run pytest`); every PR in this repo was
-  reviewed by autoproduct itself, and five of those reviews caught real
+  reviewed by avs itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
 
@@ -271,7 +271,7 @@ including the runs that fail.
 | `loop` | where the live product cycle stands against the v3.0.0 design gate ([runbook](docs/v3-live-loop.md)) — states, never decides |
 | `bench` · `product-bench` · `compound --pr` | the two benchmarks + the compounding loop |
 
-Install: `pip install autoproduct` ([PyPI](https://pypi.org/project/autoproduct/)) — or clone this repo for the benchmarks, voter fixtures, and bench history.
+Install: `pip install autoproduct` ([PyPI](https://pypi.org/project/autoproduct/)) — the published distribution is still named `autoproduct`; the rename to `ai-venture-studio` lands with the next release, and the `avs` command ships with it (the `autoproduct` command stays as an alias) — or clone this repo for the benchmarks, voter fixtures, and bench history.
 
 Setup: `uv sync`, then **your own** `ANTHROPIC_API_KEY`. The repo ships
 no keys, no proxy, and no metered backend: every provider call is billed
@@ -334,7 +334,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.22 ✅ | the launch pass, prepared (P20): [launch/](launch/) holds the platform's own PRD (kill criterion: 4 weeks over the attention budget cuts scope at Gate PL5), a launch post that survives all its own backstops, and a hash-pinned pre-registered experiment whose power check honestly returns BLOCKED at current traffic — the suite keeps all three green; plus CONTRIBUTING (gated contributions, bus-factor-1 honesty, watch items with falsifiers) |
 | v0.23 ✅ | complex-systems gap closure, deterministic core (docs 26–28, P21–P26): lintable perf ACs + VALID/INVALID load-run typing + `capacity.yaml` headroom arithmetic (perf lane calibrated: see roadmap v0.24); realtime delta (`det_sim_scan`, replay-identity/cross-build/desync checks, tick budgets); streaming delta (`stream_contract_check` — the word "default" is lexically illegal, exactly-once typed-or-downgraded, backpressure scan); architecture fitness (`deps.yaml` graph → `arch_contract_check`, brownfield checkpoint debt); delivery hardening (environment promotion DAG, `flag_lint` with owners+expiry, `migration_rehearsal` with reversibility round-trip) |
 | v0.24 ✅ | lane execution wrappers + calibration: k6 scripts compiled from perf ACs (thresholds ARE the AC; absent binary = visible skip with the script on record), netem condition profiles with gated apply, schema-registry wrapper + contract-file reconciliation — and the seeded perf-defect calibration ran for real: 5 of 5 defects caught at the 3x relative-detection factor (loopback, low parity, honestly scoped — satisfies no AC), converting the lane from PROVISIONAL to CALIBRATED |
-| v0.25 ✅ | the Sweep role (doc 29): `autoproduct sweep` harvests the maintenance queues the ledgers already keep (expired flags, checkpoint debt, stale claims/capacity, due watch items, contract drift), patches only allowlisted chores under the behavior-preservation contract (out-of-scope diffs abort), caps open PRs to the attention budget, records clean passes with a snapshot hash, and alarms on over-action — SW0 report-only by default, promotion is your recorded decision at the weekly review |
+| v0.25 ✅ | the Sweep role (doc 29): `avs sweep` harvests the maintenance queues the ledgers already keep (expired flags, checkpoint debt, stale claims/capacity, due watch items, contract drift), patches only allowlisted chores under the behavior-preservation contract (out-of-scope diffs abort), caps open PRs to the attention budget, records clean passes with a snapshot hash, and alarms on over-action — SW0 report-only by default, promotion is your recorded decision at the weekly review |
 | v0.26 ✅ | full design-doc cross-reference (docs 08–29 audited against the code): the [implementation map](docs/implementation-map.md) records every doc's shipped mechanism, tag, and named open items; gap-closure code from the audit — `operations-policy.yaml` (per-stage WIP + the shed rule + ci_concurrency), the `hot-files.yaml` shared-file registry + `lane_check`, the four 小程序 preflights (`mp_size_check`/`mp_domain_check`/`mp_setdata_lint`/`mp_privacy_check`), and `profiles/game.yaml` |
 | v0.27 ✅ | audit gap closures, round two: GitHub Actions CI (the suite — including the self-linting README — now runs on every push, making "fails CI" literal), the §41.1 structured profile schema (add-only, composable), doc-16's cascade policy with the model-family heterogeneity floor + serial merge-queue admission (sweep never starves features) + the `gepa.yaml` budget schema (proposer-off by default), and the debt tools (radon/jscpd/vulture, availability-gated, feeding Sweep's queues) |
 | v0.28 ✅ | gap-closure plan + phase A ([the plan](docs/gap-closure-plan.md) is a committed artifact; phases B–D queued): web det-tool runners (axe/Lighthouse/size-limit, gated), the data NFR grammar + lineage impact check, the full typed upstream verdict vocabulary, Gate P1 platform preflight (stale checklists and evidence-free checkboxes both fail; a named human submits), data-classification tags with downgrade refusal, and CHANGELOG.md |
@@ -350,7 +350,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.33 ✅ | plan phase D15 + D16 remainder: deploy review and maintenance rebuilt as checkpointed graphs on the shared saver — a crash mid-vote resumes from the last completed super-step via `recover` instead of re-paying the pipeline — and checkpoint rows encrypted at rest under `AUTOPRODUCT_CHECKPOINT_KEY` (honored or loud error, never silent plaintext; mirrors stay readable on purpose) |
 | v0.34 ✅ | Studio live progress + the wire-up gate: the building page shows per-task state updating in place (signals s1/s3 — no more staring at a frozen page), interrupted builds surface per-module 继续 buttons instead of a dead confirm screen, and a bidirectional frontend↔backend wire-up test — every rendered button/link/fetch must resolve to a route, every route must be rendered by some state |
 | v0.35.0 ✅ | the last small open items: registration gates for the six review voters (8 fixtures each, run through the real seat; the vote node fails closed and refuses to review with no roster), per-project `policy:` thresholds in `project.yaml` (unknown keys are a loud error, ranges bounded, a weakened bar stamped into the verdict), and the ready-queue fix — `next_tasks` read a field that never existed, so the plan never advanced past task one |
-| v0.36.0 ✅ | the instrument for the v3.0.0 design gate: `autoproduct loop` reads the cycle's own artifacts and reports the three criteria — and refuses to call the gate met on a quiet cycle or a recorded 'continue', because the gate is about the loop's ability to *stop* ([runbook](docs/v3-live-loop.md)) |
+| v0.36.0 ✅ | the instrument for the v3.0.0 design gate: `avs loop` reads the cycle's own artifacts and reports the three criteria — and refuses to call the gate met on a quiet cycle or a recorded 'continue', because the gate is about the loop's ability to *stop* ([runbook](docs/v3-live-loop.md)) |
 | v0.37.0 ✅ | MCP becomes the real internal tool transport (doc 11 §17): two subprocess-isolated partitions (`read_only`, `code_intel`) speaking JSON-RPC over stdio, the spec→host→server triple check where an unlisted tool is *unreachable* rather than refused, and the `mcp-audit` ledger recording every call with digested arguments — opt in with `AUTOPRODUCT_TOOL_TRANSPORT=mcp` |
 | v0.38.0 ✅ | multi-tenant server mode ([ADR-030](docs/adr/030-multi-tenant-server.md), a recorded reversal of a non-goal — the server half only, never SaaS): token→workspace resolution where workspaces must be provably disjoint, per-tenant `secret://` webhook secrets, tenant-scoped reads, and uniform 401s that never enumerate tenants; plus [docs/adr/](docs/adr/) recording every reversal |
 | v0.39.0 ✅ | policy-armed automation ([ADR-031](docs/adr/031-policy-armed-automation.md), the hardest reversal): `automerge` and `deploy-execute` exist but stay disarmed until a human writes an attributed, expiring policy naming exact branches — earned by track record, blocked on sensitive paths including the policy files themselves, and logging refusals as carefully as actions |
@@ -360,7 +360,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.43.0 ✅ | the first external-service tool (`sentry_get_issue` in the L1 maintenance partition): credential via `secret://`, a visible skip when unset, read-only by construction, and its payload wrapped as untrusted research so a hostile issue title is data rather than an instruction — wired into incident intake, and honest that it has not yet run against a live org |
 | v0.44.0 ✅ | all six §17.2 signal readers (sentry, datadog, pagerduty, prometheus, loki, jaeger) over one shared read-only core, with two honestly-distinguished gating families — credential for hosted services, base URL for self-hosted ones, and a visible skip naming the variable either way |
 | v0.45.0 ✅ | the deploy-side CLI wrappers (terraform/helm/kubectl/argocd/flagger/railway) complete §17.2's tool table: binaries gated on installation rather than credentials, read-only by construction (no sync/rollback/apply outside `--dry-run`, asserted on the source), and `kubectl_dry_run` client-side by default so a review never silently reaches into whatever cluster is current |
-| v0.46.0 ✅ | the attention collector: `autoproduct attention` derives the observable floor from gate dwell and recorded decisions, refuses to author the number itself, keeps the series append-only, and exits 3 demanding a human decision the moment four consecutive logged weeks breach the budget — the v3.0.0 blocker was an unautomated habit, not a missing four weeks |
+| v0.46.0 ✅ | the attention collector: `avs attention` derives the observable floor from gate dwell and recorded decisions, refuses to author the number itself, keeps the series append-only, and exits 3 demanding a human decision the moment four consecutive logged weeks breach the budget — the v3.0.0 blocker was an unautomated habit, not a missing four weeks |
 | v0.47.0 ✅ | the bot fleet (doc 17 §45.2's last unbuilt check): defined by a session protocol rather than by a game, so its detectors are verified against real sessions of a real deterministic sim — and the first real run immediately found a dedupe bug that a stubbed stream would have hidden |
 | v0.48.0 ✅ | upstream resume (a crashed `create` skips tasks already built instead of re-paying them — task-granular, and said so plainly), grounding extended to the spec writer (which immediately showed the spec writer never saw CLAUDE.md or the module invariants it must not contradict), and the gap-closure plan closed out |
 | v0.49.0 ✅ | the use-case matrix: every profile builds, every edition narrows, every substrate rung activates exactly what its floors allow — which found that six of eight stages knew their infrastructure floor without enforcing it (an S0 team with no git could still run `build`), now fixed and pinned in both directions |
@@ -368,6 +368,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.51.0 ✅ | a second kill-criterion axis, chosen by the human and evaluated by the machine: product-bench capability regression, whose series is already collected weekly — so unlike the attention axis it can fire on the next run, with floors read off the observed distribution rather than picked |
 | v0.52.0 ✅ | the Studio speaks English (`--lang en`): every string in a per-language table, an English FDR template, and the README's founder demo replaced with an English-first walkthrough plus a real screenshot of the real UI — the demo previously claimed English while showing a Chinese interface |
 | v0.53.0 ✅ | renamed to **ai-venture-studio** (live links updated; recorded evidence locators left as recorded, with a rename note, because a snapshot is not edited after the fact) and English became the Studio default — `--lang zh` restores the original bilingual UI character for character |
+| v0.54.0 ✅ | package + CLI renamed to match: `import ai_venture_studio`, command **`avs`** (with `autoproduct` kept as an alias so nothing scripted breaks) — while env vars, Prometheus series, telemetry keys and the CLAUDE.md section header were deliberately left alone, because renaming a wire format silently breaks its consumers |
 | next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history

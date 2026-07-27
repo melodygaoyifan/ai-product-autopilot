@@ -2,11 +2,11 @@ import shutil
 
 import pytest
 
-from autoproduct import testing as testing_mod
-from autoproduct.tools.wireup import wireup_check
-from autoproduct.upstream import init_workspace
-from autoproduct.upstream.autopilot import run_feature
-from autoproduct.upstream.build import _write_files
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.tools.wireup import wireup_check
+from ai_venture_studio.upstream import init_workspace
+from ai_venture_studio.upstream.autopilot import run_feature
+from ai_venture_studio.upstream.build import _write_files
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -82,7 +82,7 @@ FEATURE_FDR = "给接龙加一个功能：住户可以取消自己的订单。�
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 

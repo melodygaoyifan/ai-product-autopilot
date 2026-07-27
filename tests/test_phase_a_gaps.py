@@ -6,22 +6,22 @@ import datetime as dt
 
 import pytest
 
-from autoproduct.classification import classification_check
-from autoproduct.lanes.data_nfr import lineage_impact_check, lint_data_nfr
-from autoproduct.lanes.platform_gate import (
+from ai_venture_studio.classification import classification_check
+from ai_venture_studio.lanes.data_nfr import lineage_impact_check, lint_data_nfr
+from ai_venture_studio.lanes.platform_gate import (
     GateP1Preflight,
     PlatformPreflightItem,
     gate_p1_check,
     record_submission,
 )
-from autoproduct.lanes.web_tools import axe_scan, lighthouse_budget, size_limit_check
-from autoproduct.upstream.verdicts import ALL_VERDICTS, is_escalation
+from ai_venture_studio.lanes.web_tools import axe_scan, lighthouse_budget, size_limit_check
+from ai_venture_studio.upstream.verdicts import ALL_VERDICTS, is_escalation
 
 TODAY = dt.date(2026, 7, 26)
 
 
 def test_web_tools_skip_visibly(monkeypatch):
-    monkeypatch.setattr("autoproduct.lanes.web_tools.shutil.which", lambda _: None)
+    monkeypatch.setattr("ai_venture_studio.lanes.web_tools.shutil.which", lambda _: None)
     for report in (axe_scan("http://x/"), lighthouse_budget("http://x/", "b.json"),
                    size_limit_check()):
         assert report.status == "skipped" and "VISIBLY" in report.detail

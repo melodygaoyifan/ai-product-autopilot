@@ -6,11 +6,11 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from autoproduct import scoring
-from autoproduct.maintenance.review import CONFIDENCE_MIN
-from autoproduct.orchestrator.graph import MAX_REVIEWABLE_LINES
-from autoproduct.policy import _BOUNDS, Policy, PolicyError, load_policy
-from autoproduct.state import Confidence, Severity, VoterFinding
+from ai_venture_studio import scoring
+from ai_venture_studio.maintenance.review import CONFIDENCE_MIN
+from ai_venture_studio.orchestrator.graph import MAX_REVIEWABLE_LINES
+from ai_venture_studio.policy import _BOUNDS, Policy, PolicyError, load_policy
+from ai_venture_studio.state import Confidence, Severity, VoterFinding
 
 
 def _write(tmp_path, block=None, extra=None):
@@ -100,7 +100,7 @@ def test_scoring_honors_the_policy_thresholds():
 
 
 def test_dor_gate_uses_the_project_ceiling_and_records_the_policy(tmp_path):
-    from autoproduct.orchestrator.graph import dor_gate_node
+    from ai_venture_studio.orchestrator.graph import dor_gate_node
 
     _write(tmp_path, {"max_reviewable_lines": 60})
     added = "\n".join(f"+line {i}" for i in range(100))
@@ -115,7 +115,7 @@ def test_dor_gate_uses_the_project_ceiling_and_records_the_policy(tmp_path):
 
 
 def test_weakened_policy_is_stamped_into_the_leader_summary(tmp_path):
-    from autoproduct.orchestrator.graph import leader_node
+    from ai_venture_studio.orchestrator.graph import leader_node
 
     state = {
         "policy": Policy(report_threshold=55).as_dict(),
@@ -132,7 +132,7 @@ def test_maintenance_confidence_floor_is_policy_configurable(tmp_path):
     """The mock root-cause pass returns 75; a floor above it must escalate."""
     import subprocess
 
-    from autoproduct.maintenance import Incident, MaintenanceVerdict, run_maintenance
+    from ai_venture_studio.maintenance import Incident, MaintenanceVerdict, run_maintenance
 
     repo = tmp_path / "repo"
     repo.mkdir()

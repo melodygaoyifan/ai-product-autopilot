@@ -22,19 +22,19 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from autoproduct import testing as testing_mod
-from autoproduct.adoption.substrate import (
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.adoption.substrate import (
     STAGE_FLOORS,
     Rung,
     StageInactiveError,
     check_stage,
     load_substrate_profile,
 )
-from autoproduct.cli import app
-from autoproduct.editions import EDITIONS, edition_lint, resolve_edition
-from autoproduct.upstream import approve_spec, init_workspace, run_build
-from autoproduct.upstream.spec import run_spec_stage
-from autoproduct.upstream.workspace import available_profiles
+from ai_venture_studio.cli import app
+from ai_venture_studio.editions import EDITIONS, edition_lint, resolve_edition
+from ai_venture_studio.upstream import approve_spec, init_workspace, run_build
+from ai_venture_studio.upstream.spec import run_spec_stage
+from ai_venture_studio.upstream.workspace import available_profiles
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
@@ -62,7 +62,7 @@ LADDER: dict[str, dict] = {
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 

@@ -13,17 +13,17 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from autoproduct.cli import app
-from autoproduct.editions import (
+from ai_venture_studio.cli import app
+from ai_venture_studio.editions import (
     EDITIONS,
     EditionError,
     edition_lint,
     load_edition_preset,
     resolve_edition,
 )
-from autoproduct.product import lint_ledger
-from autoproduct.product.platform_claims import check_platform_claims, check_repo
-from autoproduct.usage_telemetry import (
+from ai_venture_studio.product import lint_ledger
+from ai_venture_studio.product.platform_claims import check_platform_claims, check_repo
+from ai_venture_studio.usage_telemetry import (
     PAYLOAD_FIELDS,
     build_payload,
     set_telemetry,

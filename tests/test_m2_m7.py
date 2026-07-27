@@ -4,18 +4,18 @@ import subprocess
 import pytest
 import yaml
 
-from autoproduct import testing as testing_mod
-from autoproduct.upstream import init_workspace
-from autoproduct.upstream.autopilot import (
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.upstream import init_workspace
+from ai_venture_studio.upstream.autopilot import (
     estimate_hint,
     run_autopilot,
     tag_checkpoint,
     undo_last,
 )
-from autoproduct.upstream.blocks import blocks_context, catalog_summary, matching_blocks
-from autoproduct.upstream.correction import run_correction
-from autoproduct.upstream.telemetry import generate_digest, install_telemetry, read_events
-from autoproduct.upstream.walkthrough import built_criteria, generate_walkthrough
+from ai_venture_studio.upstream.blocks import blocks_context, catalog_summary, matching_blocks
+from ai_venture_studio.upstream.correction import run_correction
+from ai_venture_studio.upstream.telemetry import generate_digest, install_telemetry, read_events
+from ai_venture_studio.upstream.walkthrough import built_criteria, generate_walkthrough
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -27,7 +27,7 @@ GOOD_FDR = "团长发起接龙，住户下单，团长看汇总。必须有：�
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 
@@ -52,7 +52,7 @@ def test_design_baselines_written_and_constrained(tmp_path):
 
 
 def test_screenshots_gated_visibly(tmp_path):
-    from autoproduct.upstream.screenshots import capture
+    from ai_venture_studio.upstream.screenshots import capture
 
     root = init_workspace(tmp_path / "w", "w", "web")
     result = capture(root, "web")

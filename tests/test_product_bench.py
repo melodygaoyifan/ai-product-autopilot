@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from autoproduct import testing as testing_mod
-from autoproduct.product_bench import load_cases, run_case
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.product_bench import load_cases, run_case
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -16,7 +16,7 @@ CASES = Path(__file__).parent.parent / "benchmarks" / "products"
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 
@@ -62,7 +62,7 @@ def test_bench_is_honest_about_failing_probes(tmp_path):
 
 
 def test_crashed_case_still_records_duration(monkeypatch, tmp_path):
-    import autoproduct.product_bench as pb
+    import ai_venture_studio.product_bench as pb
 
     def _boom(case, provider=None):
         import time

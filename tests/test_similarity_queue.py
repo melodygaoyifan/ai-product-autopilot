@@ -1,8 +1,8 @@
 """Deferral closures: lexical similarity matching + SQLite job queue."""
 
-from autoproduct.jobqueue import Job, claim, complete, enqueue, pending, requeue_stale, worker_loop
-from autoproduct.similarity import rank, tokenize
-from autoproduct.upstream.blocks import matching_blocks
+from ai_venture_studio.jobqueue import Job, claim, complete, enqueue, pending, requeue_stale, worker_loop
+from ai_venture_studio.similarity import rank, tokenize
+from ai_venture_studio.upstream.blocks import matching_blocks
 
 
 # --- similarity ---------------------------------------------------------------
@@ -91,7 +91,7 @@ def test_worker_loop_drains_with_custom_runner(tmp_path):
 
 
 def test_server_spawn_enqueues_when_env_set(tmp_path, monkeypatch):
-    from autoproduct.server import _spawn
+    from ai_venture_studio.server import _spawn
 
     db = tmp_path / "q.db"
     monkeypatch.setenv("AUTOPRODUCT_QUEUE_DB", str(db))

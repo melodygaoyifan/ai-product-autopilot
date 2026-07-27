@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.adoption import (
+from ai_venture_studio.adoption import (
     ChangePackage,
     Rung,
     StageInactiveError,
@@ -23,7 +23,7 @@ from autoproduct.adoption import (
     stage_activation,
     write_evidence_bundle,
 )
-from autoproduct.adoption.substrate import PROFILE_FILENAME
+from ai_venture_studio.adoption.substrate import PROFILE_FILENAME
 
 
 def _write_profile(root: Path, substrate: dict) -> Path:
@@ -290,7 +290,7 @@ def test_write_bundle_lands_in_evidence_dir(tmp_path):
 def test_review_cli_exits_4_below_floor(tmp_path):
     from typer.testing import CliRunner
 
-    from autoproduct.cli import app
+    from ai_venture_studio.cli import app
 
     _write_profile(tmp_path, S0)
     result = CliRunner().invoke(
@@ -305,8 +305,8 @@ def test_review_cli_exits_4_below_floor(tmp_path):
 # --- banner wiring (G1 Day 5) ---------------------------------------------------
 
 def test_adoption_banners_collects_rung_and_toolchains(tmp_path):
-    from autoproduct.adoption import adoption_banners, register_toolchain
-    from autoproduct.adoption.toolchains import BenchmarkResult, DefectOutcome
+    from ai_venture_studio.adoption import adoption_banners, register_toolchain
+    from ai_venture_studio.adoption.toolchains import BenchmarkResult, DefectOutcome
 
     if adoption_banners(tmp_path) != []:
         pytest.fail("no profile, no registry → no banners")
@@ -324,9 +324,9 @@ def test_adoption_banners_collects_rung_and_toolchains(tmp_path):
 
 
 def test_post_node_carries_banners_into_mirror_and_comment(tmp_path, monkeypatch):
-    from autoproduct import render
-    from autoproduct.mirror import YamlMirror
-    from autoproduct.orchestrator import graph as graph_mod
+    from ai_venture_studio import render
+    from ai_venture_studio.mirror import YamlMirror
+    from ai_venture_studio.orchestrator import graph as graph_mod
 
     _write_profile(tmp_path, S1)
     monkeypatch.setattr(render, "render_pr_comment", lambda *a, **k: "body\n")
@@ -353,7 +353,7 @@ def test_post_node_carries_banners_into_mirror_and_comment(tmp_path, monkeypatch
 # --- prepare_change_package (review → CAB-ready) ----------------------------------
 
 def test_prepare_change_package_prefills_from_final_record(tmp_path):
-    from autoproduct.adoption import gate_r_entry, prepare_change_package
+    from ai_venture_studio.adoption import gate_r_entry, prepare_change_package
 
     review_dir = _fake_mirror(tmp_path, "rev-cab")
     (review_dir / "05-final.yaml").write_text(yaml.safe_dump({
@@ -383,7 +383,7 @@ def test_prepare_change_package_prefills_from_final_record(tmp_path):
 
 
 def test_prepare_change_package_refuses_unfinished_review(tmp_path):
-    from autoproduct.adoption import prepare_change_package
+    from ai_venture_studio.adoption import prepare_change_package
 
     review_dir = tmp_path / ".mas" / "reviews" / "rev-open"
     review_dir.mkdir(parents=True)
@@ -396,7 +396,7 @@ def test_prepare_change_package_refuses_unfinished_review(tmp_path):
 
 
 def test_save_change_package_round_trips(tmp_path):
-    from autoproduct.adoption import ChangePackage, save_change_package
+    from ai_venture_studio.adoption import ChangePackage, save_change_package
 
     package = ChangePackage(change_id="CHG-9", description="d")
     path = save_change_package(tmp_path, package)
@@ -408,7 +408,7 @@ def test_save_change_package_round_trips(tmp_path):
 # --- review-train plan check (§18.48.2) -------------------------------------------
 
 def test_review_train_dependency_flagged():
-    from autoproduct.upstream.plan import Task, review_train_check
+    from ai_venture_studio.upstream.plan import Task, review_train_check
 
     tasks = [
         Task(id="t1", title="build export", estimate_hours=4,
@@ -427,7 +427,7 @@ def test_review_train_dependency_flagged():
 def test_external_review_value_validated():
     from pydantic import ValidationError
 
-    from autoproduct.upstream.plan import Task
+    from ai_venture_studio.upstream.plan import Task
 
     with pytest.raises(ValidationError):
         Task(id="t1", title="x", estimate_hours=1, external_review="ussa-audit")
@@ -436,7 +436,7 @@ def test_external_review_value_validated():
 # --- attestation ledger (§18.49) ---------------------------------------------------
 
 def test_ledger_appends_and_verifies(tmp_path):
-    from autoproduct.adoption import append_attestation, verify_ledger
+    from ai_venture_studio.adoption import append_attestation, verify_ledger
 
     empty = verify_ledger(tmp_path)
     if not empty.ok or empty.entries != 0:
@@ -451,8 +451,8 @@ def test_ledger_appends_and_verifies(tmp_path):
 def test_tampered_entry_breaks_the_chain(tmp_path):
     import json
 
-    from autoproduct.adoption import append_attestation, verify_ledger
-    from autoproduct.adoption.attestation import LEDGER_PATH
+    from ai_venture_studio.adoption import append_attestation, verify_ledger
+    from ai_venture_studio.adoption.attestation import LEDGER_PATH
 
     for i in range(3):
         append_attestation(tmp_path, {"verdict": f"V{i}"})
@@ -470,8 +470,8 @@ def test_tampered_entry_breaks_the_chain(tmp_path):
 
 
 def test_deleted_entry_breaks_the_chain(tmp_path):
-    from autoproduct.adoption import append_attestation, verify_ledger
-    from autoproduct.adoption.attestation import LEDGER_PATH
+    from ai_venture_studio.adoption import append_attestation, verify_ledger
+    from ai_venture_studio.adoption.attestation import LEDGER_PATH
 
     for i in range(3):
         append_attestation(tmp_path, {"verdict": f"V{i}"})
@@ -483,7 +483,7 @@ def test_deleted_entry_breaks_the_chain(tmp_path):
 
 
 def test_attest_review_chains_marks_and_upgrades_bundle(tmp_path):
-    from autoproduct.adoption import attest_review, build_evidence_bundle, review_attested
+    from ai_venture_studio.adoption import attest_review, build_evidence_bundle, review_attested
 
     _fake_mirror(tmp_path, "rev-led")
     bundle_before = build_evidence_bundle(tmp_path, "rev-led")
@@ -501,7 +501,7 @@ def test_attest_review_chains_marks_and_upgrades_bundle(tmp_path):
 
 
 def test_attest_refuses_empty_payload_and_gateless_review(tmp_path):
-    from autoproduct.adoption import append_attestation, attest_review
+    from ai_venture_studio.adoption import append_attestation, attest_review
 
     with pytest.raises(ValueError, match="empty payload"):
         append_attestation(tmp_path, {})
@@ -521,7 +521,7 @@ DATA_DIFF = Path(__file__).parent / "fixtures" / "planted_data_bugs.diff"
 
 
 def test_data_voter_skills_validate_and_register():
-    from autoproduct.voters.base import load_voters
+    from ai_venture_studio.voters.base import load_voters
 
     voters = load_voters(DATA_SKILLS, provider_override="mock")
     names = sorted(v.spec.name for v in voters)
@@ -569,7 +569,7 @@ def _escalated_review(tmp_path: Path, review_id: str, dwell_s: int, decision: st
 
 
 def test_dwell_measured_per_escalated_review(tmp_path):
-    from autoproduct.adoption import gate_dwell_report
+    from ai_venture_studio.adoption import gate_dwell_report
 
     _escalated_review(tmp_path, "r1", 300, "ack")
     _escalated_review(tmp_path, "r2", 60, "override:REQUEST_CHANGES")
@@ -583,7 +583,7 @@ def test_dwell_measured_per_escalated_review(tmp_path):
 
 
 def test_rubber_stamp_needs_both_fast_and_zero_overrides(tmp_path):
-    from autoproduct.adoption import gate_dwell_report
+    from ai_venture_studio.adoption import gate_dwell_report
 
     for i in range(5):
         _escalated_review(tmp_path, f"r{i}", 10, "ack")
@@ -593,7 +593,7 @@ def test_rubber_stamp_needs_both_fast_and_zero_overrides(tmp_path):
 
 
 def test_fast_but_overriding_gate_is_healthy(tmp_path):
-    from autoproduct.adoption import gate_dwell_report
+    from ai_venture_studio.adoption import gate_dwell_report
 
     for i in range(4):
         _escalated_review(tmp_path, f"r{i}", 10, "ack")
@@ -603,7 +603,7 @@ def test_fast_but_overriding_gate_is_healthy(tmp_path):
 
 
 def test_few_samples_reported_not_flagged(tmp_path):
-    from autoproduct.adoption import gate_dwell_report
+    from ai_venture_studio.adoption import gate_dwell_report
 
     _escalated_review(tmp_path, "r1", 5, "ack")
     report = gate_dwell_report(tmp_path)
@@ -612,7 +612,7 @@ def test_few_samples_reported_not_flagged(tmp_path):
 
 
 def test_no_escalations_says_so(tmp_path):
-    from autoproduct.adoption import gate_dwell_report
+    from ai_venture_studio.adoption import gate_dwell_report
 
     report = gate_dwell_report(tmp_path)
     if report.samples or "nothing to measure" not in report.notes[0]:
@@ -624,7 +624,7 @@ def test_no_escalations_says_so(tmp_path):
 def test_load_voters_accepts_pathsep_joined_dirs():
     import os
 
-    from autoproduct.voters.base import load_voters
+    from ai_venture_studio.voters.base import load_voters
 
     skills = Path(__file__).parent.parent / "skills"
     combined = os.pathsep.join([str(skills), str(skills / "data")])
@@ -640,7 +640,7 @@ def test_review_head_composes_data_voters_for_data_profile(tmp_path, monkeypatch
     pytest.importorskip("langgraph")
     if shutil.which("git") is None:
         pytest.skip("git not on PATH")
-    from autoproduct.upstream import autopilot, init_workspace
+    from ai_venture_studio.upstream import autopilot, init_workspace
 
     root = init_workspace(tmp_path / "ws", "pipeline", "data")
     captured = {}
@@ -649,7 +649,7 @@ def test_review_head_composes_data_voters_for_data_profile(tmp_path, monkeypatch
         captured["skills_dir"] = skills_dir
         return None, {}
 
-    monkeypatch.setattr("autoproduct.orchestrator.run_review", fake_run_review)
+    monkeypatch.setattr("ai_venture_studio.orchestrator.run_review", fake_run_review)
     autopilot._review_head(root, "mock")
     parts = str(captured["skills_dir"]).split(os.pathsep)
     if len(parts) != 2 or not parts[1].endswith("data"):
@@ -659,7 +659,7 @@ def test_review_head_composes_data_voters_for_data_profile(tmp_path, monkeypatch
 def test_data_gate_blocks_on_findings_not_on_skipped(tmp_path):
     import sys
 
-    from autoproduct.upstream.build import data_gate_blockers
+    from ai_venture_studio.upstream.build import data_gate_blockers
 
     if data_gate_blockers(tmp_path, "web"):
         pytest.fail("non-data profiles never hit the data gate")

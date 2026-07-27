@@ -13,7 +13,7 @@ import datetime as dt
 
 import pytest
 
-from autoproduct.marketing import (
+from ai_venture_studio.marketing import (
     FORBIDDEN_AUTONOMOUS,
     ApprovalScope,
     AutonomyPolicyError,
@@ -205,7 +205,7 @@ def _draft() -> Draft:
     return Draft(
         id="post-1",
         channel="content_geo",
-        text="autoproduct exports 12,000 rows in under 4 seconds.",
+        text="avs exports 12,000 rows in under 4 seconds.",
     )
 
 
@@ -224,12 +224,12 @@ def test_gate_packet_presents_the_substantiation_map():
         _register(),
         True,
         {"claim_substantiation_check": [], "spam_policy_check": []},
-        last_approved_text="autoproduct exports rows quickly.",
+        last_approved_text="avs exports rows quickly.",
     )
     assert packet.artifact_text == _draft().text  # the exact artifact
     assert packet.substantiation_map[0].claim_id == "C-101"
     assert packet.substantiation_map[0].evidence_locators == ["bench://july"]
-    assert "-autoproduct exports rows quickly." in packet.diff_vs_last_approved
+    assert "-avs exports rows quickly." in packet.diff_vs_last_approved
 
 
 def test_approvals_have_no_unscoped_representation():

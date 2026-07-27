@@ -17,8 +17,8 @@ import types
 
 import pytest
 
-from autoproduct.deploy import externals
-from autoproduct.deploy.externals import (
+from ai_venture_studio.deploy import externals
+from ai_venture_studio.deploy.externals import (
     DEPLOY_EXTERNALS,
     argocd_app_diff,
     flagger_inspect,
@@ -282,8 +282,8 @@ def test_railway_unlinked_project_is_an_error(cli, tmp_path):
 
 
 def test_all_wrappers_are_served_by_the_l1_deploy_partition():
-    from autoproduct.mcp.server import SERVER_RISK, SERVER_TOOLS, server_for
-    from autoproduct.mcp.stage_tools import risk_of
+    from ai_venture_studio.mcp.server import SERVER_RISK, SERVER_TOOLS, server_for
+    from ai_venture_studio.mcp.stage_tools import risk_of
 
     for tool in DEPLOY_EXTERNALS:
         assert server_for(tool) == "deploy", tool
@@ -293,7 +293,7 @@ def test_all_wrappers_are_served_by_the_l1_deploy_partition():
 
 
 def test_stage_tools_pass_through_the_skip(tmp_path, no_binaries):
-    from autoproduct.mcp.stage_tools import call_stage_tool
+    from ai_venture_studio.mcp.stage_tools import call_stage_tool
 
     payload = json.loads(
         call_stage_tool("terraform_validate", tmp_path, {"config_dir": "infra"})
@@ -302,7 +302,7 @@ def test_stage_tools_pass_through_the_skip(tmp_path, no_binaries):
 
 
 def test_kubectl_stage_tool_keeps_the_client_side_default(tmp_path, cli):
-    from autoproduct.mcp.stage_tools import call_stage_tool
+    from ai_venture_studio.mcp.stage_tools import call_stage_tool
 
     (tmp_path / "k8s.yaml").write_text("kind: Deployment\n")
     cli.returns(stdout="deployment.apps/api configured (dry run)")

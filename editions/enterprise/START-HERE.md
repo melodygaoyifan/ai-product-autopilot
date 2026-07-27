@@ -10,8 +10,8 @@ needs before the machinery is allowed to run (design doc 24 §69).
 ## Day 1
 
 ```bash
-autoproduct init pilot --profile web --edition enterprise
-autoproduct readiness        # which substrate rung you actually occupy — today
+avs init pilot --profile web --edition enterprise
+avs readiness        # which substrate rung you actually occupy — today
 ```
 
 `--edition enterprise` sets `require_gate_owner: true`: workspace init

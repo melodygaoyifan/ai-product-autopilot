@@ -4,18 +4,18 @@ import subprocess
 import pytest
 import yaml
 
-from autoproduct import testing as testing_mod
-from autoproduct.testing import combine_reports, run_js_tests
-from autoproduct.upstream import init_workspace
-from autoproduct.upstream.autopilot import run_autopilot, schedule_waves
-from autoproduct.upstream.plan import Task
-from autoproduct.upstream.provisioning import (
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.testing import combine_reports, run_js_tests
+from ai_venture_studio.upstream import init_workspace
+from ai_venture_studio.upstream.autopilot import run_autopilot, schedule_waves
+from ai_venture_studio.upstream.plan import Task
+from ai_venture_studio.upstream.provisioning import (
     preview_env,
     provision_local,
     services_context,
     write_cloud_guide,
 )
-from autoproduct.upstream.ship import ship
+from ai_venture_studio.upstream.ship import ship
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 
@@ -82,7 +82,7 @@ def test_js_absent_surface_is_none(tmp_path):
 
 @node
 def test_combined_gate_fails_if_either_side_fails(tmp_path):
-    from autoproduct.testing import TestReport
+    from ai_venture_studio.testing import TestReport
 
     js_fail = TestReport(status="failed", summary="1 failing")
     py_pass = TestReport(status="passed", summary="ok")

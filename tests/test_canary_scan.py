@@ -1,5 +1,5 @@
-from autoproduct.deploy.probes import canary_scan
-from autoproduct.diff import parse_unified_diff
+from ai_venture_studio.deploy.probes import canary_scan
+from ai_venture_studio.diff import parse_unified_diff
 
 
 def _diff(path, added=(), removed=()):

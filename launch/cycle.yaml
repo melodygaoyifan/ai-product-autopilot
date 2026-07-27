@@ -1,6 +1,6 @@
 # Loop-entry declaration for this repo's own product cycle (v0.36).
 #
-# `autoproduct loop --root launch` reads this to know which stages are in
+# `avs loop --root launch` reads this to know which stages are in
 # scope. Entering above P0 is legal but never silent: the reason is
 # recorded here, so a skipped stage is a decision on the record rather
 # than a gap nobody noticed.

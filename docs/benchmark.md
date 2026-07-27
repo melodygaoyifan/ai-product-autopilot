@@ -11,7 +11,7 @@ in-repo and a version that drops recall shows in the diff.
 - Every number carries model ID, date, harness version, and run count;
   single-run numbers are labeled **n=1** and never headline.
 - Catch-rate claims come only from seeded-defect manifests
-  (`autoproduct toolchain --manifest`); uncalibrated lanes publish
+  (`avs toolchain --manifest`); uncalibrated lanes publish
   **PROVISIONAL** in the same font size.
 - No cross-framework comparison tables: comparing our recall to another
   framework's would require running *their* harness at equal effort, which
@@ -21,7 +21,7 @@ in-repo and a version that drops recall shows in the diff.
 
 ## Review benchmark — 13 labeled cases
 
-recall 100%, precision 67% (bars: 40% / 50%) · `autoproduct bench` ·
+recall 100%, precision 67% (bars: 40% / 50%) · `avs bench` ·
 harness v0.12.0+, 2026-07-22. Cases: planted SQL injection, missing-WHERE,
 swallowed exceptions, eval-on-input, hardcoded secrets, typosquat deps,
 CSRF/SSRF, plus clean-diff controls and three real-bug regressions.
@@ -44,8 +44,8 @@ probes *can* fail (one probe demands the impossible).
 ## Reproduce
 
 ```bash
-uvx autoproduct replay --demo        # no key: a real review's audit trail
-autoproduct bench                    # ~10 min, one key: the 13-case review bench
-autoproduct product-bench            # long: full FDR→product runs
-autoproduct init demo --profile web --from-bench 01-groupbuy-api   # templates ARE the fixtures
+uvx avs replay --demo        # no key: a real review's audit trail
+avs bench                    # ~10 min, one key: the 13-case review bench
+avs product-bench            # long: full FDR→product runs
+avs init demo --profile web --from-bench 01-groupbuy-api   # templates ARE the fixtures
 ```

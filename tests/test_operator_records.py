@@ -9,8 +9,8 @@ import pathlib
 
 import yaml
 
-from autoproduct.evidence.cohort import required_n_two_proportions
-from autoproduct.experiment.design import verify_at_analysis
+from ai_venture_studio.evidence.cohort import required_n_two_proportions
+from ai_venture_studio.experiment.design import verify_at_analysis
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 

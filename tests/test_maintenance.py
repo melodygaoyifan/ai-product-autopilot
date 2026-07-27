@@ -1,8 +1,8 @@
 import subprocess
 from pathlib import Path
 
-from autoproduct.maintenance import Incident, MaintenanceVerdict, run_maintenance
-from autoproduct.maintenance.correlate import correlate
+from ai_venture_studio.maintenance import Incident, MaintenanceVerdict, run_maintenance
+from ai_venture_studio.maintenance.correlate import correlate
 
 
 def _repo_with_history(tmp_path: Path) -> Path:

@@ -1,5 +1,5 @@
-from autoproduct.leader import synthesize
-from autoproduct.state import (
+from ai_venture_studio.leader import synthesize
+from ai_venture_studio.state import (
     Confidence,
     Severity,
     Verdict,

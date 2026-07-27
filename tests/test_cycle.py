@@ -12,7 +12,7 @@ import pathlib
 import pytest
 import yaml
 
-from autoproduct.product.cycle import read_cycle
+from ai_venture_studio.product.cycle import read_cycle
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 
@@ -188,7 +188,7 @@ def test_loop_reports_the_real_distance_to_the_gate(tmp_path):
     v3_3 = next(c for c in state.criteria if c.id == "V3-3")
     assert "2/4 consecutive logged weeks" in v3_3.detail
     # And the next action names the week to log, not "wait".
-    assert "autoproduct attention --week" in state.next_action
+    assert "avs attention --week" in state.next_action
     assert "2 more would fire" in state.next_action
 
 
@@ -197,7 +197,7 @@ def test_a_recorded_untracked_week_is_reported_as_itself(tmp_path):
     be wrong, and saying 'log it' would ask for a rewrite of the record."""
     import datetime
 
-    from autoproduct.attention import iso_week
+    from ai_venture_studio.attention import iso_week
 
     cycle = _cycle_dir(tmp_path)
     last_week = iso_week(datetime.date.today() - datetime.timedelta(days=7))

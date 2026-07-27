@@ -3,7 +3,7 @@ narrating prose around their YAML envelope on large diffs."""
 
 import pytest
 
-from autoproduct.yamlx import extract_mapping
+from ai_venture_studio.yamlx import extract_mapping
 
 CLEAN = "status: OK\nfindings: []\n"
 
@@ -52,7 +52,7 @@ def test_no_mapping_raises():
 def test_bare_tool_shape_accepted_as_request():
     """repo_graph on PR #9 emitted `tool: read_file` without the
     tool_request wrapper — that must parse as a request, not a failure."""
-    from autoproduct.voters.base import Voter
+    from ai_venture_studio.voters.base import Voter
 
     raw = "tool: read_file\nargs: {path: src/x.py}\n"
     request = Voter._tool_request(raw)

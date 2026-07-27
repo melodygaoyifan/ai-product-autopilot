@@ -4,6 +4,36 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.54.0 — package and CLI renamed: `ai_venture_studio`, command `avs`
+- Import package `autoproduct` → **`ai_venture_studio`** (874 references
+  across 268 files), distribution `autoproduct` → **`ai-venture-studio`**,
+  and the CLI command is now **`avs`**. `autoproduct` stays as a console-script
+  ALIAS so anything scripted against it — cron entries, CI steps, shell
+  history — keeps working; docs use `avs`.
+- **Compatibility contracts were deliberately NOT renamed**, each with a
+  comment in the code saying why:
+  * `AUTOPRODUCT_*` env vars (19 of them) — renaming breaks every existing
+    deployment's configuration.
+  * `autoproduct_reviews_total` / `autoproduct_errors_total` Prometheus
+    series — renaming a metric silently breaks every dashboard, alert and
+    recording rule built on it. A real rename needs a dual-emit window.
+  * the `autoproduct_version` telemetry field — a wire key consumers parse.
+  * `## Learned constraints (autoproduct)` in CLAUDE.md — this string matches
+    the header already written into existing workspaces; changing it would
+    make the compounding loop append a duplicate section instead of updating
+    its own.
+- **Two real breakages the rename caused, both found and fixed:** the
+  root `skills` symlink still pointed at `src/autoproduct/skills` (21 tests
+  failed until it was repointed), and `version("autoproduct")` in the
+  telemetry payload raised `PackageNotFoundError` under the new dist name —
+  now tries the new name and falls back to the old.
+- Honest install line: `ai-venture-studio` is not on PyPI yet, so the README
+  still tells you `pip install autoproduct` and says the rename lands with
+  the next release rather than instructing an install that would fail.
+- Recorded evidence untouched again: the demo review audit trail cites
+  `src/autoproduct/*` files because that is what it reviewed.
+- Suite: 1071 tests, unchanged and green.
+
 ## v0.53.0 — renamed to ai-venture-studio; English is the UI default
 - **Repository renamed** melodygaoyifan/ai-product-autopilot →
   **ai-venture-studio**. Live references updated (pyproject URLs, README,
@@ -24,12 +54,12 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 - The FDR template follows the same default, and the Chinese-founder tests
   now ask for `lang="zh"` explicitly rather than relying on a default, with
   new tests covering the English default path end to end.
-- The package and CLI are still named `autoproduct`: renaming those would
+- The package and CLI are still named `avs`: renaming those would
   break every existing install, and that is a separate decision.
 - Suite: 1068 -> 1071 hermetic tests
 
 ## v0.52.0 — the Studio speaks English, and the README demo shows it
-- `autoproduct studio --lang en` renders the entire flow in English. Every
+- `avs studio --lang en` renders the entire flow in English. Every
   user-facing string moved to `studio_i18n.py` keyed by language, and the
   FDR template gained an English twin asking the same six questions.
 - **What made this necessary:** the README's founder demo claimed an
@@ -68,7 +98,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
   system already climbed out of once. Two runs rather than one because at
   n=4 cases a single dip is noise, and a criterion that cries wolf gets
   ignored.
-- `autoproduct bench-criterion` evaluates it, and `autoproduct loop` now
+- `avs bench-criterion` evaluates it, and `avs loop` now
   reports both axes with their real readings in one line. Either firing
   demands a recorded human decision at Gate PL5 (invariant 14.20); neither
   evaluator decides.
@@ -82,10 +112,10 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 - Suite: 1048 -> 1060 hermetic tests
 
 ## v0.50.0 — `loop` and `attention` now answer one question together
-- `autoproduct loop` reads the attention streak, so the v3.0.0 gate report
+- `avs loop` reads the attention streak, so the v3.0.0 gate report
   states the real distance to firing ("2/4 consecutive logged weeks over
   4.0h; 2 more would fire it") and the real next action ("log last week:
-  `autoproduct attention --week 2026-W31 …`") instead of a static "the
+  `avs attention --week 2026-W31 …`") instead of a static "the
   criteria need data that does not exist yet". Two commands shipped in
   separate releases were leaving the operator to join them by hand.
 - A `not_tracked` row is reported as itself: it is a RECORDED decision, not
@@ -148,7 +178,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
   battery)
 
 ## v0.47.0 — the bot fleet: the game profile's last unbuilt check
-- `autoproduct botfleet` runs N parallel bot sessions and triages what they
+- `avs botfleet` runs N parallel bot sessions and triages what they
   hit: crashes, softlocks, unreachable-state regressions, out-of-bounds
   positions, and errors. Findings dedupe by signature across sessions and
   each carries a reproduction command — a bug a fleet found that cannot be
@@ -176,7 +206,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 - Suite: 982 -> 1008 hermetic tests
 
 ## v0.46.0 — the attention collector: making the v3.0.0 criterion able to fire
-- `autoproduct attention` measures the OBSERVABLE FLOOR of weekly
+- `avs attention` measures the OBSERVABLE FLOOR of weekly
   maintenance attention from ledgers `.mas/` already writes — gate dwell
   (escalate→final, the same measurement the rubber-stamp detector uses),
   recorded product-gate decisions, sweep reviews — and prints it with the
@@ -355,7 +385,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 - Suite: 856 -> 866 hermetic tests
 
 ## v0.39.0 — policy-armed merge and deploy execution (ADR-031)
-- `autoproduct automerge <review-id>` and `deploy-execute <id>`: the
+- `avs automerge <review-id>` and `deploy-execute <id>`: the
   capabilities the README listed as out-of-scope now exist, DISARMED. A
   human arms them per repository in `.mas/automerge-policy.yaml` /
   `.mas/deploy-exec-policy.yaml`; the system's job is to refuse unless
@@ -381,7 +411,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 ## v0.38.0 — multi-tenant server mode (ADR-030) + the ADR directory
 - One `serve` process may now front several isolated workspaces:
   `.mas/tenants.yaml` maps a tenant id to a SHA-256 token hash and a
-  workspace root; `autoproduct tenant add|list` manages it and prints the
+  workspace root; `avs tenant add|list` manages it and prints the
   plaintext token exactly once.
 - Isolation is the mechanism, not the aspiration: workspaces must be
   disjoint (a root contained in another fails at LOAD time), the token
@@ -408,7 +438,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 - autoproduct/mcp/: JSON-RPC 2.0 over stdio (newline-delimited), two real
   partitions from doc 11 §17.2 — read_only (read_file/grep/list_files) and
   code_intel (symbol_refs) — each served by its own subprocess via
-  `python -m autoproduct.mcp.server <name>`.
+  `python -m ai_venture_studio.mcp.server <name>`.
 - The triple check made real (§17.3): the skill allowlist decides which
   tools exist, MCPHost mounts only the servers those tools live in (so an
   unlisted tool is unreachable, not merely refused), and the server itself
@@ -429,7 +459,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 - Suite: 778 -> 795 hermetic tests
 
 ## v0.36.0 — the live-loop instrument for the v3.0.0 design gate
-- autoproduct loop: reads a cycle's artifacts (stages P0-P5, gates
+- avs loop: reads a cycle's artifacts (stages P0-P5, gates
   PL1/PL2/PL3/PL5) and reports the three v3.0.0 criteria with reasons.
   States, never decides: a cycle where nothing fired is NOT the gate, and
   a recorded 'continue' is not either — the gate is about the loop's
@@ -448,7 +478,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 
 ## v0.35.0 — the last small open items: review-voter gates, policy thresholds, the ready-queue fix
 - Review voters now register like every other roster (§11.19):
-  `autoproduct review-gate` runs each of the six core charters against 8
+  `avs review-gate` runs each of the six core charters against 8
   fixtures (4 positive / 2 negative / 2 boundary, unified diffs) through
   the REAL Voter seat, ≥87.5% to register, recorded under `review/<voter>`
   in `.mas/voter-registry.yaml`. The vote node fails closed on a FAILED
@@ -489,7 +519,7 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 - Deploy review and maintenance rebuilt as LangGraph graphs on the shared
   `.mas/checkpoints.db` saver (thread ids `deploy:<id>` / `incident:<id>`):
   a crash mid-vote or mid-root-cause resumes from the last completed
-  super-step via `autoproduct recover` (now covering all three graphs)
+  super-step via `avs recover` (now covering all three graphs)
   instead of re-paying the pipeline; mirror step names, verdict taxonomies,
   lint-only degraded mode, and the recommend-only ceiling unchanged
 - Encrypted checkpointer serde (doc 09 §3.1): `AUTOPRODUCT_CHECKPOINT_KEY`

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.evidence import (
+from ai_venture_studio.evidence import (
     AnalyticsStore,
     CohortTooSmallError,
     FeedbackStore,
@@ -31,7 +31,7 @@ from autoproduct.evidence import (
     route_signal,
     sample_sufficiency_check,
 )
-from autoproduct.product import synthetic_persona_scan
+from ai_venture_studio.product import synthetic_persona_scan
 
 FIXTURES = Path(__file__).parent / "fixtures" / "evidence"
 REPO_METRICS = Path(__file__).parent.parent / "metrics"

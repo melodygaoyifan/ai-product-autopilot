@@ -1,7 +1,7 @@
 import pytest
 
-from autoproduct.orchestrator import run_review
-from autoproduct.replay import load_replay, summarize_step
+from ai_venture_studio.orchestrator import run_review
+from ai_venture_studio.replay import load_replay, summarize_step
 
 
 def test_replay_reconstructs_timeline(tmp_path, planted_diff_text, skills_dir):

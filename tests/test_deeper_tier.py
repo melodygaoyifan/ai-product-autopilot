@@ -2,9 +2,9 @@ import shutil
 
 import pytest
 
-from autoproduct.upstream import init_workspace
-from autoproduct.upstream.provisioning import auto_provision_cloud
-from autoproduct.upstream.ship import push_web, setup_miniprogram_tests
+from ai_venture_studio.upstream import init_workspace
+from ai_venture_studio.upstream.provisioning import auto_provision_cloud
+from ai_venture_studio.upstream.ship import push_web, setup_miniprogram_tests
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"

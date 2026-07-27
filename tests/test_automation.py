@@ -13,8 +13,9 @@ import pathlib
 import pytest
 import yaml
 
-from autoproduct import automation
-from autoproduct.automation import (
+from ai_venture_studio import automation
+from ai_venture_studio.paths import skills_root
+from ai_venture_studio.automation import (
     ALWAYS_HUMAN_PATHS,
     AUTOMERGE_POLICY,
     DEPLOY_EXEC_POLICY,
@@ -282,7 +283,7 @@ def test_merge_helper_refuses_non_pr_targets_and_admin_override():
     """No --admin: branch protection is a human's configured intent."""
     import inspect
 
-    from autoproduct import github
+    from ai_venture_studio import github
 
     ok, note = github.merge_pr("not-a-url")
     assert ok is False and "refusing to merge" in note
@@ -321,8 +322,8 @@ def test_deploy_review_records_the_branch_it_covers(tmp_path, monkeypatch):
     check against the policy."""
     import subprocess
 
-    import autoproduct.deploy.graph as deploy_graph
-    from autoproduct.deploy import run_deploy_review
+    import ai_venture_studio.deploy.graph as deploy_graph
+    from ai_venture_studio.deploy import run_deploy_review
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -338,8 +339,7 @@ def test_deploy_review_records_the_branch_it_covers(tmp_path, monkeypatch):
     )
     result = run_deploy_review(
         "main...HEAD", repo_dir=str(repo),
-        skills_dir=str(pathlib.Path(__file__).parent.parent / "src" / "autoproduct"
-                       / "skills" / "deploy"),
+        skills_dir=str(skills_root() / "deploy"),
         provider_override="mock",
         diff_text=(
             "diff --git a/helm/values.yaml b/helm/values.yaml\n"

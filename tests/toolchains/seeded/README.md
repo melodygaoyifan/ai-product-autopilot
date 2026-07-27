@@ -3,7 +3,7 @@
 One mini-repo per language lane, with hand-planted defects and a
 `seeded.yaml` manifest mapping each defect to the det_tools slot that must
 catch it. This is the fixture gate for toolchains (ADR-U16): a language
-registers first-class only after `autoproduct toolchain <lang>
+registers first-class only after `avs toolchain <lang>
 --manifest tests/toolchains/seeded/<lang>/seeded.yaml` measures its
 catch-rate here.
 
@@ -24,7 +24,7 @@ Hermetic CI validates manifest structure and that every planted file
 exists; running the real scanners is availability-gated and manual.
 
 **Calibrating the patterns.** `make calibrate` (from the repo root) builds
-the scanner container and runs `autoproduct calibrate` per lane, producing
+the scanner container and runs `avs calibrate` per lane, producing
 `.mas/calibration/<lang>.yaml` — for every planted defect, caught or missed,
 and the actual scanner output for each miss. When a pattern here misses a
 defect the scanner *did* flag, copy the right substring out of that captured

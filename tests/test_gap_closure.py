@@ -3,11 +3,11 @@ import shutil
 import pytest
 import yaml
 
-from autoproduct import testing as testing_mod
-from autoproduct.tools.integrity import assertion_delta
-from autoproduct.upstream import init_workspace, run_spec_stage
-from autoproduct.upstream.plan import Task, budget_check, lane_check
-from autoproduct.upstream.spec import approve_scr, load_spec, raise_scr
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.tools.integrity import assertion_delta
+from ai_venture_studio.upstream import init_workspace, run_spec_stage
+from ai_venture_studio.upstream.plan import Task, budget_check, lane_check
+from ai_venture_studio.upstream.spec import approve_scr, load_spec, raise_scr
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -41,7 +41,7 @@ def test_weakened_skeleton_is_kept_not_written(tmp_path):
     is dropped (file untouched, visible in `kept`) instead of failing the
     batch — real models reword skeletons every attempt and a refusal loop
     never converges (bench run 3: 5/8 tasks dead on the old wall)."""
-    from autoproduct.upstream.build import _write_files
+    from ai_venture_studio.upstream.build import _write_files
 
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_s.py").write_text(BEFORE)
@@ -60,7 +60,7 @@ def test_helper_files_under_tests_are_writable_but_guarded(tmp_path):
     """tests/helpers, conftest, __init__ are shared fixtures, not walls —
     run 3's t3 died refusing 'tests/helpers/__init__.py'. Weakening the
     asserts inside one still drops the file (skeleton-wins guard)."""
-    from autoproduct.upstream.build import _write_files
+    from ai_venture_studio.upstream.build import _write_files
 
     (tmp_path / "tests" / "helpers").mkdir(parents=True)
     helper = tmp_path / "tests" / "helpers" / "__init__.py"
@@ -93,7 +93,7 @@ def test_helper_files_under_tests_are_writable_but_guarded(tmp_path):
 
 def test_refused_write_is_atomic(tmp_path):
     """Two-pass write: a refusal mid-list leaves NOTHING written."""
-    from autoproduct.upstream.build import _write_files
+    from ai_venture_studio.upstream.build import _write_files
 
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_old.py").write_text("def test_a():\n    assert True\n")
@@ -114,8 +114,8 @@ def test_build_retries_after_refused_write(tmp_path):
     instant-error version collapsed both real bench cases to 1/7 tasks."""
     import yaml as yaml_lib
 
-    from autoproduct.providers.base import Provider, register
-    from autoproduct.upstream import approve_spec, run_build
+    from ai_venture_studio.providers.base import Provider, register
+    from ai_venture_studio.upstream import approve_spec, run_build
 
     @register
     class LockBumper(Provider):
@@ -123,7 +123,7 @@ def test_build_retries_after_refused_write(tmp_path):
         calls = {"n": 0}
 
         def chat(self, *, model, system, messages, max_tokens=4096):
-            from autoproduct.providers.mock import MockProvider
+            from ai_venture_studio.providers.mock import MockProvider
 
             if "single-writer implementer" not in system:
                 return MockProvider().chat(model=model, system=system, messages=messages)
@@ -183,13 +183,13 @@ def test_budget_check():
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 
 
 def _built_spec(tmp_path):
-    from autoproduct.upstream import approve_spec, run_build
+    from ai_venture_studio.upstream import approve_spec, run_build
 
     root = init_workspace(tmp_path / "p", "p", "web")
     spec = run_spec_stage(root, "an item store API", provider="mock")
@@ -206,7 +206,7 @@ def test_built_spec_is_frozen_without_scr(tmp_path):
 
 
 def test_approved_scr_grants_one_regeneration(tmp_path):
-    from autoproduct.upstream import approve_spec, run_build
+    from ai_venture_studio.upstream import approve_spec, run_build
 
     root, slug = _built_spec(tmp_path)
     raise_scr(root, slug, "criteria missed the empty-name case")
@@ -241,7 +241,7 @@ def test_malformed_file_entry_is_valueerror_not_keyerror(tmp_path):
     loop's ValueError feedback channel — run 4, case 01: the raw KeyError
     escaped it and zeroed the whole case. Two-pass atomicity holds: the
     good entry in the same batch stays unwritten."""
-    from autoproduct.upstream.build import _write_files
+    from ai_venture_studio.upstream.build import _write_files
 
     for bad in [{"path": "a.py"}, {"new_content": "x = 1\n"}, "a.py", {}]:
         with pytest.raises(ValueError, match="malformed file entry"):

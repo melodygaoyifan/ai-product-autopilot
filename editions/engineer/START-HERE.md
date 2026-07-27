@@ -10,9 +10,9 @@ to try to break it.
 ## Day 1
 
 ```bash
-uvx autoproduct replay --demo    # no API key: a real review's audit trail
-autoproduct bench                # one key: the seeded-defect catch rates, on your machine
-autoproduct init lab --profile web --edition engineer
+uvx avs replay --demo    # no API key: a real review's audit trail
+avs bench                # one key: the seeded-defect catch rates, on your machine
+avs init lab --profile web --edition engineer
 ```
 
 ## Extension points (each with a machine-checked contract)
@@ -23,9 +23,9 @@ autoproduct init lab --profile web --edition engineer
 | Language lanes | seeded-defect manifest; **PROVISIONAL** until calibrated | design doc 19 |
 | Domain/channel profiles | delta-only; a profile cannot weaken a core check | `profiles/`, `.mas/channel-profile.yaml` |
 | Editions | `edition_lint` — narrowing-only, unknown keys refused | `editions/` |
-| Deterministic tools | pure functions + fixture files; the suite is the gate | `src/autoproduct/…`, `tests/` |
+| Deterministic tools | pure functions + fixture files; the suite is the gate | `src/ai_venture_studio/…`, `tests/` |
 
-`autoproduct bench` and `product-bench` are the regression bar your
+`avs bench` and `product-bench` are the regression bar your
 modification must clear; `eval-gate` pins the baseline so a recall drop
 shows in the diff.
 

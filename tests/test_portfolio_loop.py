@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.evidence import AnalyticsStore, cohort_calc
-from autoproduct.evidence.metrics import MetricDefinition
-from autoproduct.product import (
+from ai_venture_studio.evidence import AnalyticsStore, cohort_calc
+from ai_venture_studio.evidence.metrics import MetricDefinition
+from ai_venture_studio.product import (
     CycleReport,
     DemandHypothesis,
     GatePL5Decision,

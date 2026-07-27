@@ -41,7 +41,7 @@ territory it has already climbed out of once.
 
 ## How it is evaluated
 
-`autoproduct bench-criterion` reads the tracked result YAMLs, takes the two
+`avs bench-criterion` reads the tracked result YAMLs, takes the two
 most recent comparable runs, and reports whether the criterion has fired. It
 never rewrites history and never averages across a corpus change. A fired
 criterion demands a recorded human decision at Gate PL5 (invariant 14.20) —

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from autoproduct import testing
-from autoproduct.testing import run_mutation, run_test_gate
+from ai_venture_studio import testing
+from ai_venture_studio.testing import run_mutation, run_test_gate
 
 pytestmark = [
     pytest.mark.skipif(shutil.which("mutmut") is None, reason="mutmut not on PATH"),

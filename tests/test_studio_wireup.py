@@ -20,8 +20,8 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from autoproduct.studio import create_studio_app
-from autoproduct.upstream import init_workspace
+from ai_venture_studio.studio import create_studio_app
+from ai_venture_studio.upstream import init_workspace
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
@@ -174,7 +174,7 @@ def test_status_payload_matches_what_the_building_page_js_reads(studio):
     assert all(set(t) == {"id", "title", "state"} for t in data["tasks"])
     page_src = client.get("/").text  # editor state — no script, but the
     # building page's JS is source-checked here so a rename fails loudly:
-    from autoproduct import studio as studio_mod
+    from ai_venture_studio import studio as studio_mod
     import inspect
 
     src = inspect.getsource(studio_mod)

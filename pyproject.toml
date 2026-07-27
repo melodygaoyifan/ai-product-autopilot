@@ -1,7 +1,7 @@
 [project]
-name = "autoproduct"
+name = "ai-venture-studio"
 version = "0.33.1"
-description = "AI product autopilot: a full-lifecycle multi-agent system that finds opportunities, writes PRDs, builds, launches, and measures — with typed claims and human gates"
+description = "AI venture studio: a full-lifecycle multi-agent system that finds opportunities, writes PRDs, builds, launches, and measures — with typed claims and human gates"
 readme = "README.md"
 authors = [
     { name = "melodygaoyifan", email = "168382010+melodygaoyifan@users.noreply.github.com" }
@@ -37,7 +37,11 @@ Homepage = "https://github.com/melodygaoyifan/ai-venture-studio"
 Changelog = "https://github.com/melodygaoyifan/ai-venture-studio/blob/main/CHANGELOG.md"
 
 [project.scripts]
-autoproduct = "autoproduct.cli:main"
+avs = "ai_venture_studio.cli:main"
+# The old command stays as an alias: anything scripted against `autoproduct`
+# (cron entries, CI steps, a founder's shell history) keeps working. Docs use
+# `avs`. Removing this is a separate, breaking decision.
+autoproduct = "ai_venture_studio.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]

@@ -6,7 +6,7 @@ to end, ending in a recorded human kill-or-pivot decision at Gate PL5**
 never been asked to stop anything, and the README says so under Honest
 limits.
 
-`autoproduct loop --root launch` is the instrument for it. It reads the
+`avs loop --root launch` is the instrument for it. It reads the
 artifacts the stages already write and reports three criteria:
 
 | | requirement | why it is not satisfiable by code alone |
@@ -56,8 +56,8 @@ this).
 1. Log maintenance attention weekly, once per week, with:
 
    ```
-   autoproduct attention                      # last week's floor + streak state
-   autoproduct attention --confirm-hours 5.5 --by <you>
+   avs attention                      # last week's floor + streak state
+   avs attention --confirm-hours 5.5 --by <you>
    ```
 
    The first form measures only what left a timestamp (gate dwell, recorded
@@ -66,7 +66,7 @@ this).
    until four consecutive logged weeks exist, or you reach loop 3 —
    whichever comes first. When the criterion fires, the command exits 3 and
    points here.
-2. `autoproduct loop --root launch` reports the streak inline — how many
+2. `avs loop --root launch` reports the streak inline — how many
    consecutive over-budget weeks exist, how many remain, and which week to
    log next. Re-run the evaluation mechanically against
    `launch/prd.yaml`'s criteria when it says the criterion has fired.

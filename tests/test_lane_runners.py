@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import pytest
 
-from autoproduct.lanes.calibrate_perf import (
+from ai_venture_studio.lanes.calibrate_perf import (
     CALIBRATION_FILE,
     lane_status,
     run_perf_calibration,
 )
-from autoproduct.lanes.runners import (
+from ai_venture_studio.lanes.runners import (
     NETEM_PROFILES,
     apply_netem,
     k6_script_from_ac,
@@ -33,7 +33,7 @@ def test_k6_script_compiles_the_ac_into_thresholds():
 
 
 def test_run_k6_skips_visibly_without_the_binary(monkeypatch):
-    monkeypatch.setattr("autoproduct.lanes.runners.shutil.which", lambda _: None)
+    monkeypatch.setattr("ai_venture_studio.lanes.runners.shutil.which", lambda _: None)
     report = run_k6("UNDER 50 rps open THE SYSTEM SHALL http_req_duration "
                     "< 500ms AT p95 FOR 60s", url="http://127.0.0.1:1/")
     assert report.status == "skipped"

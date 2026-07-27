@@ -1,6 +1,6 @@
 import pytest
 
-from autoproduct.harness import SpecValidator, VoterSpecValidationError
+from ai_venture_studio.harness import SpecValidator, VoterSpecValidationError
 
 
 def test_loads_valid_skill(skills_dir):

@@ -15,8 +15,8 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from autoproduct.server import create_app
-from autoproduct.tenants import (
+from ai_venture_studio.server import create_app
+from ai_venture_studio.tenants import (
     Tenant,
     TenantError,
     add_tenant,

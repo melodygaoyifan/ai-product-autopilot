@@ -31,8 +31,8 @@ that justified it stopped holding.
 Ship both capabilities, disarmed, behind a human-authored policy file per
 repository:
 
-- `.mas/automerge-policy.yaml` → `autoproduct automerge <review-id>`
-- `.mas/deploy-exec-policy.yaml` → `autoproduct deploy-execute <id>`
+- `.mas/automerge-policy.yaml` → `avs automerge <review-id>`
+- `.mas/deploy-exec-policy.yaml` → `avs deploy-execute <id>`
 
 The system never decides *whether* automation is acceptable. A human does,
 in advance, in writing, in a file they own. The system's job is to refuse

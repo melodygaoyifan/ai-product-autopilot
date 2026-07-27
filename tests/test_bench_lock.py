@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from autoproduct.product_bench import (
+from ai_venture_studio.product_bench import (
     acquire_bench_lock,
     release_bench_lock,
     run_product_bench,

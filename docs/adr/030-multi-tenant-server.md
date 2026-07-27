@@ -7,7 +7,7 @@
 
 ## Context
 
-`autoproduct serve` fronted exactly one workspace. Anyone running it for
+`avs serve` fronted exactly one workspace. Anyone running it for
 two projects ran two processes on two ports, which is fine for one person
 and untenable for an agency or an internal platform team fronting several
 repos — the E1 enterprise edition's most common shape.
@@ -32,7 +32,7 @@ store, no hosted offering, no cross-tenant surface of any kind.
 ## Mechanism (what keeps it bounded)
 
 - **A tenant is a token and a directory.** `.mas/tenants.yaml` maps an id
-  to a SHA-256 token hash and a workspace root. `autoproduct tenant add`
+  to a SHA-256 token hash and a workspace root. `avs tenant add`
   prints the plaintext token once; only the hash is stored.
 - **Workspaces must be disjoint.** Registry loading refuses two tenants
   sharing a root *or one root containing another*. Containment is what

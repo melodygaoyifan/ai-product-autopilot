@@ -7,13 +7,13 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from autoproduct.module_specs import (
+from ai_venture_studio.module_specs import (
     ModuleSpec,
     ModuleSpecError,
     load_module_specs,
     spec_drift_check,
 )
-from autoproduct.observability import (
+from ai_venture_studio.observability import (
     CostModel,
     ToolAuditEntry,
     append_tool_audit,
@@ -93,7 +93,7 @@ def test_metrics_and_named_webhooks(tmp_path, monkeypatch):
     text = prometheus_metrics(tmp_path)
     assert "autoproduct_schema_version 1" in text
 
-    from autoproduct.server import create_app
+    from ai_venture_studio.server import create_app
 
     monkeypatch.setenv("AUTOPRODUCT_WEBHOOK_SECRET", "s3cret")
     client = TestClient(create_app(str(tmp_path)))

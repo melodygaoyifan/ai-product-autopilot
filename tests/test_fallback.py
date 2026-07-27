@@ -1,6 +1,6 @@
-from autoproduct.harness import SpecValidator
-from autoproduct.state import VoterStatus
-from autoproduct.voters.base import Voter
+from ai_venture_studio.harness import SpecValidator
+from ai_venture_studio.state import VoterStatus
+from ai_venture_studio.voters.base import Voter
 
 DIFF = """\
 diff --git a/a.py b/a.py

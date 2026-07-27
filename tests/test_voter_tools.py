@@ -1,11 +1,11 @@
 import pytest
 import yaml
 
-from autoproduct.harness import SpecValidator, VoterSpecValidationError
-from autoproduct.providers.base import Provider, register
-from autoproduct.state import VoterStatus
-from autoproduct.tools.voter_tools import ToolBox
-from autoproduct.voters.base import Voter
+from ai_venture_studio.harness import SpecValidator, VoterSpecValidationError
+from ai_venture_studio.providers.base import Provider, register
+from ai_venture_studio.state import VoterStatus
+from ai_venture_studio.tools.voter_tools import ToolBox
+from ai_venture_studio.voters.base import Voter
 
 # --- ToolBox ----------------------------------------------------------------
 
@@ -48,7 +48,7 @@ def test_allowlist_enforced(repo):
 
 
 def test_budget_enforced(repo):
-    from autoproduct.tools.voter_tools import ToolBudgetExceeded
+    from ai_venture_studio.tools.voter_tools import ToolBudgetExceeded
 
     box = ToolBox(repo, ["read_file"], budget=1)
     box.call("read_file", {"path": "app/utils.py"})

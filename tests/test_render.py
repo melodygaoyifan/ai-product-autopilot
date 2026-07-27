@@ -1,5 +1,5 @@
-from autoproduct.render import render_issue_body, render_pr_comment
-from autoproduct.state import (
+from ai_venture_studio.render import render_issue_body, render_pr_comment
+from ai_venture_studio.state import (
     Confidence,
     LeaderResult,
     Severity,
@@ -55,8 +55,8 @@ def test_issue_body_has_resume_instructions():
         RESULT,
         review_id="abc123",
         target="https://github.com/x/y/pull/1",
-        resume_hint="autoproduct resume abc123 --decision ack",
+        resume_hint="avs resume abc123 --decision ack",
     )
     assert "Gate 3" in body
-    assert "autoproduct resume abc123" in body
+    assert "avs resume abc123" in body
     assert "override:<VERDICT>" in body

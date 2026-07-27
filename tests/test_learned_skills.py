@@ -3,8 +3,8 @@ from pathlib import Path
 
 import yaml
 
-from autoproduct.maintenance import Incident, run_maintenance
-from autoproduct.maintenance.skills_registry import (
+from ai_venture_studio.maintenance import Incident, run_maintenance
+from ai_venture_studio.maintenance.skills_registry import (
     LearnedSkill,
     load_registry,
     match,

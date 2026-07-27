@@ -29,13 +29,13 @@
 
 ## 4. Evaluation cadence
 
-- `autoproduct eval-gate` on every change (the 87% profile): yes / yes.
-- Weekly: gate-latency + approval-dwell distribution (`autoproduct dwell`).
+- `avs eval-gate` on every change (the 87% profile): yes / yes.
+- Weekly: gate-latency + approval-dwell distribution (`avs dwell`).
 - Per loop: cycle report with `attention_spent` reviewed at Gate PL5.
 
 ## 5. Scope honesty
 
-- Substrate rung at start (`autoproduct readiness`): ______
+- Substrate rung at start (`avs readiness`): ______
 - Stages inactive at that rung (listed, not hidden): ______________
 - What this pilot does NOT claim: headcount replacement; autonomous
   deploys; coverage of stacks without a calibrated det-tools lane

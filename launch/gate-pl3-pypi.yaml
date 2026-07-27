@@ -22,5 +22,5 @@ preflight:
     platform claim ledger (claims/platform.yaml), no new claims added
     for this surface.
 verification:
-  method: "pip install autoproduct in a clean venv, importlib.metadata.version == 0.33.1"
+  method: "pip install avs in a clean venv, importlib.metadata.version == 0.33.1"
   retrieved_at: "2026-07-26"

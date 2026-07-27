@@ -1,0 +1,357 @@
+"""MCP tool servers — one subprocess per partition (doc 11 §17.2).
+
+    python -m ai_venture_studio.mcp.server read_only --root /path/to/repo
+
+Serves `initialize`, `tools/list`, `tools/call` on stdin/stdout. The
+partition table below is the server-side half of the triple check: a
+server refuses a tool it does not declare even if the caller asks nicely,
+so a host bug cannot widen a voter's reach.
+
+Five partitions ship: the two L0 read-only ones (v0.37) and the L1/L2
+stage servers (v0.40) whose tools exist — deploy probes, maintenance
+correlation, and test execution. Each declares a risk tier, and the host
+refuses to mount one above the caller's ceiling.
+
+`sentry_get_issue` (v0.43) is the first external-service tool, and adding
+it needed only a row in this table plus a reader module — no transport,
+host, or RBAC change. The remaining §17.2 integrations
+(`terraform_validate`, `datadog_query_metrics`, …) stay named as open rather
+than stubbed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+from typing import IO
+
+from ai_venture_studio.mcp import protocol
+
+# server name → tools it serves (doc 11 §17.2). L0 partitions serve the
+# voter tool registry; L1/L2 partitions serve the stage tools in
+# mcp/stage_tools.py. The §17.2 external-service tools that remain unbuilt
+# (terraform_validate, datadog_query_metrics, …) stay named as open in the
+# implementation map rather than stubbed here.
+SERVER_TOOLS: dict[str, tuple[str, ...]] = {
+    "read_only": ("read_file", "grep", "list_files"),
+    "code_intel": ("symbol_refs",),
+    "deploy": (
+        "migration_scan", "workflow_scan", "canary_scan",
+        # The §17.2 deploy CLI wrappers (deploy/externals.py).
+        "terraform_validate", "helm_lint", "kubectl_dry_run",
+        "argocd_app_diff", "flagger_inspect", "railway_inspect",
+    ),
+    "maintenance": (
+        "recent_commits", "correlate",
+        # The six §17.2 signal readers (maintenance/signals.py).
+        "sentry_get_issue", "datadog_query_metrics", "pagerduty_get_incident",
+        "prometheus_query", "loki_query", "jaeger_query_trace",
+    ),
+    "test_exec": ("run_tests",),
+}
+
+# Risk tier per server (§17.2). The host refuses to mount a server above the
+# caller's declared ceiling, so a read-only voter cannot reach L1/L2 even if
+# a future skill names one of their tools.
+SERVER_RISK: dict[str, int] = {
+    "read_only": 0,
+    "code_intel": 0,
+    "deploy": 1,
+    "maintenance": 1,
+    "test_exec": 2,
+}
+
+TOOL_SCHEMAS: dict[str, dict] = {
+    "read_file": {
+        "description": "Read a window of one repo file, line-numbered.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "start": {"type": "integer"},
+                "limit": {"type": "integer"},
+            },
+            "required": ["path"],
+        },
+    },
+    "grep": {
+        "description": "Regex search across repo files matching a glob.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string"},
+                "glob": {"type": "string"},
+                "max_results": {"type": "integer"},
+            },
+            "required": ["pattern"],
+        },
+    },
+    "list_files": {
+        "description": "List repo files matching a glob.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"glob": {"type": "string"}},
+        },
+    },
+    "symbol_refs": {
+        "description": "Find definitions and references of a symbol.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"symbol": {"type": "string"}},
+            "required": ["symbol"],
+        },
+    },
+    "migration_scan": {
+        "description": "Scan a diff for destructive or unguarded migrations.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"}},
+            "required": ["diff_text"],
+        },
+    },
+    "workflow_scan": {
+        "description": "Scan a diff for unsafe CI workflow configuration.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"}},
+            "required": ["diff_text"],
+        },
+    },
+    "canary_scan": {
+        "description": "Scan a diff for canary/rollout policy problems.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"}},
+            "required": ["diff_text"],
+        },
+    },
+    "terraform_validate": {
+        "description": "terraform validate -json in a config directory.",
+        "inputSchema": {"type": "object",
+                        "properties": {"config_dir": {"type": "string"}},
+                        "required": ["config_dir"]},
+    },
+    "helm_lint": {
+        "description": "helm lint one chart directory.",
+        "inputSchema": {"type": "object",
+                        "properties": {"chart_dir": {"type": "string"}},
+                        "required": ["chart_dir"]},
+    },
+    "kubectl_dry_run": {
+        "description": "kubectl apply --dry-run over a manifest (client-side "
+                       "by default; server_side contacts the current cluster).",
+        "inputSchema": {"type": "object",
+                        "properties": {"manifest": {"type": "string"},
+                                       "server_side": {"type": "boolean"}},
+                        "required": ["manifest"]},
+    },
+    "argocd_app_diff": {
+        "description": "argocd app diff for one application (read-only).",
+        "inputSchema": {"type": "object",
+                        "properties": {"app": {"type": "string"}},
+                        "required": ["app"]},
+    },
+    "flagger_inspect": {
+        "description": "Read Flagger Canary resources in a namespace.",
+        "inputSchema": {"type": "object",
+                        "properties": {"namespace": {"type": "string"}}},
+    },
+    "railway_inspect": {
+        "description": "railway status --json for the linked project.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    "recent_commits": {
+        "description": "Recent commits with touched files, for correlation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer"},
+                           "limit": {"type": "integer"}},
+        },
+    },
+    "correlate": {
+        "description": "Rank recent commits by overlap with an incident text.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"incident_text": {"type": "string"},
+                           "days": {"type": "integer"}},
+            "required": ["incident_text"],
+        },
+    },
+    "sentry_get_issue": {
+        "description": "Read one Sentry issue (read-only; payload is wrapped "
+                       "as untrusted research).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"issue_id": {"type": "string"}},
+            "required": ["issue_id"],
+        },
+    },
+    "datadog_query_metrics": {
+        "description": "Query Datadog timeseries over an explicit window "
+                       "(read-only; payload wrapped as untrusted research).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"},
+                           "from_ts": {"type": "integer"},
+                           "to_ts": {"type": "integer"}},
+            "required": ["query", "from_ts", "to_ts"],
+        },
+    },
+    "pagerduty_get_incident": {
+        "description": "Read one PagerDuty incident (read-only: cannot ack, "
+                       "resolve, or reassign).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"incident_id": {"type": "string"}},
+            "required": ["incident_id"],
+        },
+    },
+    "prometheus_query": {
+        "description": "Instant query against a self-hosted Prometheus.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}, "at": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+    "loki_query": {
+        "description": "Range query against a self-hosted Loki (log lines "
+                       "arrive wrapped as untrusted research).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}, "start": {"type": "string"},
+                           "end": {"type": "string"}, "limit": {"type": "integer"}},
+            "required": ["query"],
+        },
+    },
+    "jaeger_query_trace": {
+        "description": "Fetch one trace by id from a self-hosted Jaeger.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"trace_id": {"type": "string"}},
+            "required": ["trace_id"],
+        },
+    },
+    "run_tests": {
+        "description": "Run the repository's test gate (EXECUTES repo code).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"diff_text": {"type": "string"},
+                           "mode": {"type": "string"}},
+        },
+    },
+}
+
+
+def server_for(tool: str) -> str | None:
+    """Which partition serves this tool (None if no server does)."""
+    for name, tools in SERVER_TOOLS.items():
+        if tool in tools:
+            return name
+    return None
+
+
+def _handle(
+    message: dict, *, server: str, tools: tuple[str, ...], box, root: str | Path = "."
+) -> dict | None:
+    method = message.get("method")
+    msg_id = message.get("id")
+    if method == "initialize":
+        return protocol.result(msg_id, {
+            "protocolVersion": protocol.PROTOCOL_VERSION,
+            "serverInfo": {"name": f"ai_venture_studio.{server}", "version": "1"},
+            "capabilities": {"tools": {}},
+        })
+    if method in ("notifications/initialized", "initialized"):
+        return None  # notification: no response
+    if method == "tools/list":
+        return protocol.result(msg_id, {
+            "tools": [
+                {"name": name, **TOOL_SCHEMAS[name]}
+                for name in tools
+                if name in TOOL_SCHEMAS
+            ]
+        })
+    if method == "tools/call":
+        params = message.get("params") or {}
+        name = params.get("name")
+        if name not in tools:
+            # The server-side half of the triple check.
+            return protocol.error(
+                msg_id, protocol.TOOL_NOT_PERMITTED,
+                f"server {server!r} does not serve tool {name!r} "
+                f"(it serves {list(tools)})",
+            )
+        try:
+            arguments = params.get("arguments") or {}
+            if box is not None:
+                text = box.call(name, arguments)
+            else:
+                from ai_venture_studio.mcp.stage_tools import call_stage_tool
+
+                text = call_stage_tool(name, root, arguments)
+        except Exception as exc:  # noqa: BLE001 — errors travel as protocol data
+            return protocol.error(
+                msg_id, protocol.INTERNAL_ERROR, f"{type(exc).__name__}: {exc}"
+            )
+        return protocol.result(msg_id, {
+            "content": [{"type": "text", "text": text}],
+            "isError": text.startswith("error:"),
+        })
+    if method == "shutdown":
+        return protocol.result(msg_id, {})
+    return protocol.error(msg_id, protocol.METHOD_NOT_FOUND, f"unknown method {method!r}")
+
+
+def serve(
+    server: str, root: str | Path, stdin: IO[str] | None = None,
+    stdout: IO[str] | None = None,
+) -> None:
+    """Run one server's request loop until EOF or `shutdown`."""
+    if server not in SERVER_TOOLS:
+        raise SystemExit(
+            f"unknown server {server!r}; known: {sorted(SERVER_TOOLS)}"
+        )
+    from ai_venture_studio.tools.voter_tools import VOTER_TOOL_REGISTRY, ToolBox
+
+    tools = SERVER_TOOLS[server]
+    # L0 partitions serve registry tools through the ToolBox (path scoping,
+    # size caps); L1/L2 partitions dispatch to stage_tools. The subprocess's
+    # own budget is unbounded: the *caller's* budget is the contract
+    # (enforced host-side, per invocation). Bounding it twice with different
+    # counters would silently truncate long investigations.
+    box = (
+        ToolBox(root, allowed=list(tools), budget=10**9)
+        if set(tools) <= VOTER_TOOL_REGISTRY
+        else None
+    )
+    stdin = stdin or sys.stdin
+    stdout = stdout or sys.stdout
+    while True:
+        try:
+            message = protocol.read_message(stdin)
+        except protocol.ProtocolError as exc:
+            protocol.write_message(
+                stdout, protocol.error(None, protocol.PARSE_ERROR, str(exc))
+            )
+            continue
+        if message is None:
+            return
+        response = _handle(message, server=server, tools=tools, box=box, root=root)
+        if response is not None:
+            protocol.write_message(stdout, response)
+        if message.get("method") == "shutdown":
+            return
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="ai_venture_studio.mcp.server")
+    parser.add_argument("server", choices=sorted(SERVER_TOOLS))
+    parser.add_argument("--root", default=".", help="Repository root to serve")
+    args = parser.parse_args(argv)
+    serve(args.server, args.root)
+
+
+if __name__ == "__main__":  # pragma: no cover — subprocess entry point
+    main()

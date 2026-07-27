@@ -6,7 +6,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from autoproduct.server import create_app
+from ai_venture_studio.server import create_app
 
 SECRET = "test-webhook-secret"
 
@@ -107,7 +107,7 @@ def test_incident_without_title_rejected(harness):
 
 def test_reviews_endpoints_read_mirrors(harness, planted_diff_text, skills_dir):
     client, _, tmp_path = harness
-    from autoproduct.orchestrator import run_review
+    from ai_venture_studio.orchestrator import run_review
 
     _, state = run_review(
         "fixture://server",

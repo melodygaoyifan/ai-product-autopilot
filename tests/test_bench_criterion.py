@@ -14,7 +14,7 @@ import pathlib
 import pytest
 import yaml
 
-from autoproduct.bench_criterion import (
+from ai_venture_studio.bench_criterion import (
     BUILD_FLOOR,
     CONSECUTIVE_RUNS_TO_FIRE,
     PROBE_FLOOR,
@@ -141,7 +141,7 @@ def test_the_prd_now_carries_two_axes_and_the_second_names_its_series():
 
 
 def test_loop_reports_the_capability_axis_beside_the_attention_one():
-    from autoproduct.product.cycle import read_cycle
+    from ai_venture_studio.product.cycle import read_cycle
 
     state = read_cycle(REPO / "launch")
     assert state.capability is not None and state.capability.tracked

@@ -7,7 +7,7 @@ import datetime as dt
 
 import pytest
 
-from autoproduct.lanes import (
+from ai_venture_studio.lanes import (
     DepsGraphError,
     EnvironmentsError,
     PerfRunTelemetry,

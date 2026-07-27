@@ -14,7 +14,7 @@ checks:
   - det_sim_scan (deterministic, lanes/realtime.py)
   - replay_identity / cross_build_replay / desync_probe (fixture-driven)
   - perf_spike over WS (reconnect stampede; availability-gated fortio/ghz)
-  - bot playtests under netem profiles (lanes/botfleet.py + `autoproduct botfleet`;
+  - bot playtests under netem profiles (lanes/botfleet.py + `avs botfleet`;
     the session protocol is newline-delimited JSON — see benchmarks/botfleet/toy_sim.py
     for the reference emitter; availability-gated on a runnable command, skipped VISIBLY)
 stack_hint: 'Deterministic simulation core (integer/fixed-point math, injected RNG and tick clock) separated from presentation. The human playtest gate is the release gate no bot replaces.'

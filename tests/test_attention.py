@@ -14,7 +14,7 @@ import pathlib
 import pytest
 import yaml
 
-from autoproduct.attention import (
+from ai_venture_studio.attention import (
     BUDGET_HOURS,
     CONSECUTIVE_WEEKS_TO_FIRE,
     AttentionError,
@@ -238,7 +238,7 @@ def test_budget_and_window_match_the_prd():
 def test_cli_reports_without_logging_and_requires_an_author(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
-    from autoproduct.cli import app
+    from ai_venture_studio.cli import app
 
     _log(tmp_path, [_untracked("2026-W30")])
     runner = CliRunner()
@@ -261,7 +261,7 @@ def test_cli_reports_without_logging_and_requires_an_author(tmp_path, monkeypatc
 def test_cli_logs_the_humans_number_and_records_the_floor_beside_it(tmp_path):
     from typer.testing import CliRunner
 
-    from autoproduct.cli import app
+    from ai_venture_studio.cli import app
 
     _log(tmp_path, [])
     review = tmp_path / ".mas" / "reviews" / "r1"
@@ -286,7 +286,7 @@ def test_cli_logs_the_humans_number_and_records_the_floor_beside_it(tmp_path):
 def test_cli_exits_3_and_demands_a_human_decision_when_the_criterion_fires(tmp_path):
     from typer.testing import CliRunner
 
-    from autoproduct.cli import app
+    from ai_venture_studio.cli import app
 
     _log(tmp_path, [_logged(f"2026-W{30 + i}", 9.0) for i in range(3)])
     result = CliRunner().invoke(app, [

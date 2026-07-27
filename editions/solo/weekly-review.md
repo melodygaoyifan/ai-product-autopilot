@@ -6,7 +6,7 @@
 
 ## 1. Kill criteria — first, while attention is fresh (10 min)
 
-- `autoproduct` cycle report: any **fired** criterion has already
+- `avs` cycle report: any **fired** criterion has already
   interrupted your week (it is never batchable — invariant 14.20). Here
   you review the *near-threshold* ones: what reading would fire them, and
   is next week's plan raising or lowering that chance?
@@ -18,7 +18,7 @@
 - Gate 2 plan confirmations (`risk: low` only) · Gate PL3 publish
   approvals · trust-tier promotions · compounding-loop CLAUDE.md
   proposals · cadence/WIP tuning.
-- **Blocking exit criterion:** run `autoproduct dwell`. Fast acks + zero
+- **Blocking exit criterion:** run `avs dwell`. Fast acks + zero
   overrides is the rubber-stamp pattern (F-24.1) — if it flags, slow down
   and actually read one item end-to-end before closing the review.
 - Never in this queue: PL5 decisions, incident triage, anything touching

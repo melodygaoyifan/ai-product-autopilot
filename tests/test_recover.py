@@ -1,13 +1,13 @@
 """Crash recovery: a review that dies mid-run continues from its SQLite
-checkpoint via `autoproduct recover` — the single-instance supervision
+checkpoint via `avs recover` — the single-instance supervision
 tier below the documented Celery upgrade path."""
 
 import shutil
 
 import pytest
 
-from autoproduct import testing as testing_mod
-from autoproduct.orchestrator import recover_reviews, run_review
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.orchestrator import recover_reviews, run_review
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"

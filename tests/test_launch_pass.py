@@ -13,9 +13,9 @@ from pathlib import Path
 
 import yaml
 
-from autoproduct.evidence import load_metric_vocabulary
-from autoproduct.experiment import fdr_plan_check, load_design, verify_at_analysis
-from autoproduct.marketing import (
+from ai_venture_studio.evidence import load_metric_vocabulary
+from ai_venture_studio.experiment import fdr_plan_check, load_design, verify_at_analysis
+from ai_venture_studio.marketing import (
     BrandConfig,
     ComplianceProfile,
     Draft,
@@ -28,7 +28,7 @@ from autoproduct.marketing import (
     geo_extractability_check,
     spam_policy_check,
 )
-from autoproduct.product import PRD, lint_ledger, prd_lint
+from ai_venture_studio.product import PRD, lint_ledger, prd_lint
 
 REPO = Path(__file__).parent.parent
 TODAY = dt.date(2026, 7, 26)

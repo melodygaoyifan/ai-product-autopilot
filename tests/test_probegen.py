@@ -7,8 +7,8 @@ import subprocess
 
 import pytest
 
-from autoproduct.upstream import init_workspace
-from autoproduct.upstream.probegen import generate_probes, verify_product
+from ai_venture_studio.upstream import init_workspace
+from ai_venture_studio.upstream.probegen import generate_probes, verify_product
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"

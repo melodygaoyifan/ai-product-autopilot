@@ -2,15 +2,15 @@
 
 import pytest
 
-from autoproduct.cascade import GepaBudget
-from autoproduct.gepa import (
+from ai_venture_studio.cascade import GepaBudget
+from ai_venture_studio.gepa import (
     GepaError,
     GepaProposal,
     holdout_split,
     propose_charter,
     write_proposal,
 )
-from autoproduct.product.voter_gate import VoterFixture
+from ai_venture_studio.product.voter_gate import VoterFixture
 
 
 def _fixtures(n=8):
@@ -89,7 +89,7 @@ def test_no_improvement_emits_record_only():
 
 def test_proposer_never_sees_holdout_labels(monkeypatch):
     seen = {}
-    from autoproduct.providers import base as provider_base
+    from ai_venture_studio.providers import base as provider_base
     real = provider_base.get_provider
 
     class Spy:
@@ -98,7 +98,7 @@ def test_proposer_never_sees_holdout_labels(monkeypatch):
             return real("mock").complete(model=model, system=system,
                                          user=user, max_tokens=max_tokens)
 
-    monkeypatch.setattr("autoproduct.gepa.get_provider", lambda name: Spy())
+    monkeypatch.setattr("ai_venture_studio.gepa.get_provider", lambda name: Spy())
     fixtures = _fixtures(16)
     _, holdout = holdout_split(fixtures, fraction=0.25, salt="gepa")
     propose_charter(target="product/prd-metrics", current_charter="old",

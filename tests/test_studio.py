@@ -3,8 +3,8 @@ import shutil
 import pytest
 from fastapi.testclient import TestClient
 
-from autoproduct.studio import create_studio_app
-from autoproduct.upstream import init_workspace
+from ai_venture_studio.studio import create_studio_app
+from ai_venture_studio.upstream import init_workspace
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -149,7 +149,7 @@ def test_interrupted_build_offers_per_task_retry_and_reset_escapes(studio):
 
 
 def _page(root, lang):
-    from autoproduct.studio import create_studio_app
+    from ai_venture_studio.studio import create_studio_app
 
     client = TestClient(
         create_studio_app(root, spawn=lambda r: 1, provider="mock", lang=lang)
@@ -186,7 +186,7 @@ def test_chinese_is_still_available_character_for_character(tmp_path):
 def test_english_is_the_default_when_no_language_is_given(tmp_path):
     import re
 
-    from autoproduct.studio import create_studio_app
+    from ai_venture_studio.studio import create_studio_app
 
     root = init_workspace(tmp_path / "default", "d", "web")
     unset = TestClient(create_studio_app(root, spawn=lambda r: 1,
@@ -211,7 +211,7 @@ def test_an_unknown_language_falls_back_rather_than_blanking_the_ui(tmp_path):
 
 
 def test_every_string_exists_in_both_languages():
-    from autoproduct.studio_i18n import LANGUAGES, STRINGS
+    from ai_venture_studio.studio_i18n import LANGUAGES, STRINGS
 
     for key, values in STRINGS.items():
         assert set(values) == set(LANGUAGES), f"{key} is missing a language"

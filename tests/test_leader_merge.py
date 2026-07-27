@@ -1,5 +1,5 @@
-from autoproduct.leader import semantic_merge, synthesize
-from autoproduct.state import Confidence, Severity, VoterFinding, VoterOutput, VoterStatus
+from ai_venture_studio.leader import semantic_merge, synthesize
+from ai_venture_studio.state import Confidence, Severity, VoterFinding, VoterOutput, VoterStatus
 
 
 def _finding(voter, title, line, severity=Severity.CRITICAL, **overrides) -> VoterFinding:

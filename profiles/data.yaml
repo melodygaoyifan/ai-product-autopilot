@@ -13,4 +13,4 @@ checks:
   - dbt test / Great-Expectations-class contract suites (availability-gated)
   - DAG lint + dry-run compile (availability-gated)
   - eval-set regression vs pinned baseline
-stack_hint: Keep the stack boring — Python + the team's existing warehouse/orchestrator. autoproduct wraps the project's own dbt/GE/orchestrator installs; it never vendors them.
+stack_hint: Keep the stack boring — Python + the team's existing warehouse/orchestrator. avs wraps the project's own dbt/GE/orchestrator installs; it never vendors them.

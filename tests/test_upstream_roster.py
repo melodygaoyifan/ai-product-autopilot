@@ -10,16 +10,16 @@ import shutil
 import pytest
 import yaml
 
-from autoproduct.product.stage_engine import (
+from ai_venture_studio.product.stage_engine import (
     load_voter_charters,
     run_critique_roster,
 )
-from autoproduct.product.voter_gate import (
+from ai_venture_studio.product.voter_gate import (
     FAMILY_FIXTURES,
     family_roots,
     load_voter_fixtures,
 )
-from autoproduct.upstream import init_workspace
+from ai_venture_studio.upstream import init_workspace
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -66,7 +66,7 @@ class _ScriptedRoster:
     marker — exercises the voter → verify → leader path deterministically."""
 
     def complete(self, *, model, system, user, max_tokens=4096):
-        from autoproduct.product.stage_engine import (
+        from ai_venture_studio.product.stage_engine import (
             PRODUCT_LEADER_MARKER,
             PRODUCT_VERIFIER_MARKER,
             PRODUCT_VOTER_MARKER,
@@ -133,7 +133,7 @@ def test_upstream_stages_carry_roster_lenses(tmp_path):
     """run_discovery on the mock provider routes critics through the
     charter roster: every issue's lens is a charter name, not the old
     panel's hardcoded lens vocabulary."""
-    from autoproduct.upstream import run_discovery
+    from ai_venture_studio.upstream import run_discovery
 
     root = init_workspace(tmp_path / "p", "p", "web")
     brief = run_discovery(root, "a link sharing tool", provider="mock")

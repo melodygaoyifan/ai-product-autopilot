@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.orchestrator import run_review
-from autoproduct.testing import run_test_gate
+from ai_venture_studio.orchestrator import run_review
+from ai_venture_studio.testing import run_test_gate
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"

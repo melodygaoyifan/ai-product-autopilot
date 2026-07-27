@@ -2,10 +2,10 @@ import shutil
 
 import pytest
 
-from autoproduct import testing as testing_mod
-from autoproduct.upstream import init_workspace
-from autoproduct.upstream.autopilot import run_autopilot
-from autoproduct.upstream.fdr import write_template
+from ai_venture_studio import testing as testing_mod
+from ai_venture_studio.upstream import init_workspace
+from ai_venture_studio.upstream.autopilot import run_autopilot
+from ai_venture_studio.upstream.fdr import write_template
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -21,7 +21,7 @@ GOOD_FDR = """# 产品需求
 @pytest.fixture(autouse=True)
 def _no_docker(monkeypatch):
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     monkeypatch.setattr(build_mod, "docker_available", lambda: False)
 
@@ -90,7 +90,7 @@ def test_a_crashed_run_resumes_instead_of_re_paying_built_tasks(tmp_path, monkey
     A task is the expensive unit here — spec + build + review, minutes and
     real money each — so a run interrupted at task 2 must not rebuild task 1.
     """
-    import autoproduct.upstream.autopilot as autopilot_mod
+    import ai_venture_studio.upstream.autopilot as autopilot_mod
 
     root = _workspace(tmp_path, GOOD_FDR)
     built_calls: list[str] = []
@@ -129,7 +129,7 @@ def test_a_stale_outcome_claiming_built_is_not_trusted(tmp_path):
     on disk, the task is redone rather than skipped."""
     import yaml
 
-    from autoproduct.upstream.autopilot import _resume_outcomes
+    from ai_venture_studio.upstream.autopilot import _resume_outcomes
 
     root = _workspace(tmp_path, GOOD_FDR)
     (root / "product").mkdir(exist_ok=True)

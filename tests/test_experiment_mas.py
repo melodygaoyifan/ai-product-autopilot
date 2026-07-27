@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.experiment import (
+from ai_venture_studio.experiment import (
     ArmReading,
     CompoundingBoundaryError,
     EthicsVerdict,

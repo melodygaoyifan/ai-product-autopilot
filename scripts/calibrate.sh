@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Scanner-calibration driver (§19 G7, R-G3).
 #
-# Runs `autoproduct calibrate` for each language lane against the real
+# Runs `avs calibrate` for each language lane against the real
 # scanners in the Dockerfile.calibrate image, writing per-defect reports to
 # .mas/calibration/<lang>.yaml and a roll-up to calibration-summary.md.
 #
@@ -33,7 +33,7 @@ overall_rc=0
 for lang in "${LANGS[@]}"; do
   echo "== calibrating ${lang} lane =="
   rc=0
-  uv run autoproduct calibrate "$lang" || rc=$?
+  uv run avs calibrate "$lang" || rc=$?
   [ "$rc" -ne 0 ] && overall_rc=1
 
   report=".mas/calibration/${lang}.yaml"

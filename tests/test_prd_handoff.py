@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.evidence import load_metric_vocabulary
-from autoproduct.product import (
+from ai_venture_studio.evidence import load_metric_vocabulary
+from ai_venture_studio.product import (
     PRD,
     DemandHypothesis,
     GatePL1Decision,
@@ -30,9 +30,9 @@ from autoproduct.product import (
     validate_handoff_at_dor,
     write_handoff,
 )
-from autoproduct.product.sizing import SizingFactor
-from autoproduct.product.sources import SignalSourceError, load_signal_sources
-from autoproduct.upstream.discover import Hypothesis
+from ai_venture_studio.product.sizing import SizingFactor
+from ai_venture_studio.product.sources import SignalSourceError, load_signal_sources
+from ai_venture_studio.upstream.discover import Hypothesis
 
 UPSTREAM = Path(__file__).parent / "fixtures" / "upstream"
 REPO_METRICS = Path(__file__).parent.parent / "metrics"

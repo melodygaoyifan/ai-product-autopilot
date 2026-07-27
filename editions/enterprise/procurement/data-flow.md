@@ -9,10 +9,10 @@ the workspace, to git, or into any prompt (credential vault, design
 §21.57). If a provider key is absent, the seat fails loudly or visibly
 substitutes — never silently.
 
-**Telemetry: nothing, by default.** Opt-in only (`autoproduct telemetry
+**Telemetry: nothing, by default.** Opt-in only (`avs telemetry
 on`), aggregate-only and schema-pinned — version, edition, substrate rung,
 stage/gate outcome counts, error classes. Never: FDR content, code,
-prompts, model outputs, repo names, claims. `autoproduct telemetry show`
+prompts, model outputs, repo names, claims. `avs telemetry show`
 prints the exact next payload before anything would send (ADR-U28).
 
 ## What never leaves
@@ -32,8 +32,8 @@ prints the exact next payload before anything would send (ADR-U28).
 
 Every gate decision, automated approval, and voter verdict lands in the
 YAML mirror (`.mas/reviews/…`, replayable offline) and the hash-chained
-attestation ledger (`autoproduct attest`); Gate-R evidence bundles export
-per review (`autoproduct evidence-bundle`). Records are edition-invariant
+attestation ledger (`avs attest`); Gate-R evidence bundles export
+per review (`avs evidence-bundle`). Records are edition-invariant
 (invariant 14.22) — batched approvals log identically to unbatched ones.
 
 Cross-references: `SECURITY.md` (design repo) for the OWASP LLM Top 10

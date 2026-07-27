@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.product import (
+from ai_venture_studio.product import (
     ProductPolicy,
     ProductPolicyError,
     ledger_class_for,
@@ -24,7 +24,7 @@ from autoproduct.product import (
     store_snapshot,
     synthetic_persona_scan,
 )
-from autoproduct.upstream.discover import EVIDENCE_CLASSES
+from ai_venture_studio.upstream.discover import EVIDENCE_CLASSES
 
 FABRICATION = Path(__file__).parent / "fixtures" / "fabrication"
 TODAY = dt.date(2026, 7, 26)

@@ -10,9 +10,9 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-from autoproduct.cli import app
-from autoproduct.product.stage_engine import load_voter_charters, run_product_stage
-from autoproduct.product.stages import market_spec, opportunity_spec
+from ai_venture_studio.cli import app
+from ai_venture_studio.product.stage_engine import load_voter_charters, run_product_stage
+from ai_venture_studio.product.stages import market_spec, opportunity_spec
 
 REPO_METRICS = str(Path(__file__).parent.parent / "metrics")
 runner = CliRunner()
@@ -165,13 +165,13 @@ def test_full_chain_p0_to_p4(tmp_path):
 
 
 def test_prd_voters_see_the_generated_planning_tasks(tmp_path):
-    from autoproduct.product.stages import prd_spec
+    from ai_venture_studio.product.stages import prd_spec
 
     ws = _workspace(tmp_path)
     spec = prd_spec(str(ws), metrics_dir=REPO_METRICS,
                     ledger_claim_ids={"C-M1", "C-M2"})
-    import autoproduct.providers.mock as mock_mod
-    from autoproduct.yamlx import extract_mapping
+    import ai_venture_studio.providers.mock as mock_mod
+    from ai_venture_studio.yamlx import extract_mapping
 
     data = extract_mapping(mock_mod.MockProvider()._prd_writer(), ("prd",))
     bundle, artifact_text = spec.parse(data)
@@ -184,7 +184,7 @@ def test_prd_voters_see_the_generated_planning_tasks(tmp_path):
 
 def test_gate_pl0_blocks_a_thin_candidate_set(tmp_path, monkeypatch):
     ws = _workspace(tmp_path)
-    import autoproduct.providers.mock as mock_mod
+    import ai_venture_studio.providers.mock as mock_mod
 
     thin = yaml.safe_dump({"candidates": yaml.safe_load(
         mock_mod.MockProvider()._opportunity_writer()

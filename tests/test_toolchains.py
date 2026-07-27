@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.adoption import (
+from ai_venture_studio.adoption import (
     benchmark_toolchain,
     load_seeded_manifest,
     register_toolchain,
@@ -190,7 +190,7 @@ def test_bad_baseline_rejected(tmp_path):
 # --- workspace data profile (§18.48.1) -----------------------------------------
 
 def test_data_profile_available_for_init():
-    from autoproduct.upstream.workspace import available_profiles, load_profile
+    from ai_venture_studio.upstream.workspace import available_profiles, load_profile
 
     if "data" not in available_profiles():
         pytest.fail("data profile missing from profiles/")

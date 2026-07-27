@@ -25,7 +25,7 @@ human-, pilot-, or external-shaped — each is named, none is silent.
 | 26 perf lane | perf EARS grammar, VALID/INVALID run typing, `capacity.yaml` arithmetic, k6 script compilation + gated run, seeded manifest **calibrated 5/5** (loopback, relative detection) | v0.23–v0.24 | prod_mirror AC runs (need a real environment; ADR-U30 prec. 4) |
 | 27 realtime & streaming | `det_sim_scan`, replay-identity/cross-build/desync checks, tick budgets, netem profiles + gated apply; `stream_contract_check` ("default" lexically illegal), exactly-once typing, backpressure scan, registry wrapper + reconciliation | v0.23–v0.24 | live registry/netem hosts |
 | 28 architecture & delivery | `deps.yaml` graph + `arch_contract_check` + brownfield checkpoint, API-surface deprecation, environments DAG, `flag_lint`, `migration_rehearsal` | v0.23 | per-lane external checkers (import-linter/dependency-cruiser/ArchUnit) as gated wrappers |
-| 29 sweep role | `autoproduct sweep`: queue harvest over existing ledgers, behavior-preservation contract, SW0–SW2 ladder, attention caps, hash-stamped clean passes, over-action alarm | v0.25 | LLM patch-writer past SW0 (a recorded human promotion); vulture/jscpd feeds |
+| 29 sweep role | `avs sweep`: queue harvest over existing ledgers, behavior-preservation contract, SW0–SW2 ladder, attention caps, hash-stamped clean passes, over-action alarm | v0.25 | LLM patch-writer past SW0 (a recorded human promotion); vulture/jscpd feeds |
 
 **Cross-cutting deltas** (from the 2026-07-26 full audit): only the
 code-review stage is a checkpointed graph — deploy, maintenance, and the

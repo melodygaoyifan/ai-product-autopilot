@@ -8,7 +8,7 @@ Contribution is gated the way everything else here is gated (doc 25 §75.2)
 - **A voter skill** = frontmatter + charter + an 8-fixture set
   (4 positive / 2 negative / 2 boundary) under
   `tests/integration/voters/fixtures/`. The suite enforces the
-  charter↔fixture bijection; `autoproduct voter-gate` is the registration
+  charter↔fixture bijection; `avs voter-gate` is the registration
   bar (≥87.5%). **No fixture, no merge** — the public skills ecosystem's
   median quality is what happens when nothing stops registration.
 - **A language lane** lands **PROVISIONAL** until its seeded-defect
@@ -51,7 +51,7 @@ that doesn't exist yet.
 | Agent Skills spec convergence | 2026-10-01 | the spec stabilizes AND ≥2 tools we care about consume it → converge our frontmatter |
 | MCP Server Cards / statelessness | 2026-10-01 | spec adopted by the servers we'd wrap → declare tiers via Server Cards |
 | A2A / peer messaging | on demand | a concrete need to expose an external agent surface → formally revisit the doc-16 ADR, never quietly erode it |
-| PyPI publication | on demand | first external adopter asks for `uvx` without a checkout → publish `autoproduct` with attested artifacts (§73.2) |
+| PyPI publication | on demand | first external adopter asks for `uvx` without a checkout → publish `avs` with attested artifacts (§73.2) |
 
 Owner for all of the above: the maintainer. A watch item without a
 falsifier is a vibe; these have theirs.

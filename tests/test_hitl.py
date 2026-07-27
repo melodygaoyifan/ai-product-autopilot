@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from autoproduct.orchestrator import is_interrupted, resume_review, run_review
-from autoproduct.state import Verdict
+from ai_venture_studio.orchestrator import is_interrupted, resume_review, run_review
+from ai_venture_studio.state import Verdict
 
 # The mock provider marks interpolated-SELECT lines critical/P6 -> escalation.
 ESCALATING_DIFF = """\

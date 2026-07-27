@@ -13,7 +13,7 @@ metric:
 
 # activation_rate
 
-The activation moment for autoproduct is the **first successful export**:
+The activation moment for avs is the **first successful export**:
 it is the earliest event that proves a founder got real value out (the
 product built something and they took it away). Chosen over first-build
 because builds can succeed while the founder never returns for the result.

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.evidence import (
+from ai_venture_studio.evidence import (
     ATTRIBUTION_RULES,
     AttributionMethodError,
     ExposureLog,
@@ -24,7 +24,7 @@ from autoproduct.evidence import (
     compare_holdout,
     type_observation,
 )
-from autoproduct.product import lint_ledger
+from ai_venture_studio.product import lint_ledger
 
 FIXTURES = Path(__file__).parent / "fixtures" / "evidence"
 TODAY = dt.date(2026, 7, 26)

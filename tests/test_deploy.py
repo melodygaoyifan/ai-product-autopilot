@@ -2,9 +2,9 @@ from pathlib import Path
 
 import yaml
 
-from autoproduct.deploy import DeployVerdict, detect_deploy_files, run_deploy_review
-from autoproduct.deploy.probes import migration_scan, workflow_scan
-from autoproduct.diff import parse_unified_diff
+from ai_venture_studio.deploy import DeployVerdict, detect_deploy_files, run_deploy_review
+from ai_venture_studio.deploy.probes import migration_scan, workflow_scan
+from ai_venture_studio.diff import parse_unified_diff
 
 SKILLS = str(Path(__file__).parent.parent / "skills" / "deploy")
 

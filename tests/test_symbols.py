@@ -1,5 +1,5 @@
-from autoproduct.tools.symbols import symbol_refs
-from autoproduct.tools.voter_tools import ToolBox
+from ai_venture_studio.tools.symbols import symbol_refs
+from ai_venture_studio.tools.voter_tools import ToolBox
 
 
 def _repo(tmp_path):

@@ -1,4 +1,4 @@
-"""autoproduct block: session auth (web) — pre-built, reviewed once.
+"""avs block: session auth (web) — pre-built, reviewed once.
 
 Usage (stdlib-compatible):
     from blocks_auth import AuthStore

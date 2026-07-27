@@ -10,9 +10,9 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from autoproduct.cli import app
-from autoproduct.lanes.delivery import flag_lint
-from autoproduct.sweep import (
+from ai_venture_studio.cli import app
+from ai_venture_studio.lanes.delivery import flag_lint
+from ai_venture_studio.sweep import (
     ContractCheck,
     SweepConfig,
     SweepConfigError,

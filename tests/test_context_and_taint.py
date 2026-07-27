@@ -13,15 +13,15 @@ import json
 import pytest
 import yaml
 
-from autoproduct.harness.taint_guard import (
+from ai_venture_studio.harness.taint_guard import (
     RESEARCH_TAG,
     TaintGuard,
     ToolDenied,
     contains_research,
     wrap_research,
 )
-from autoproduct.mcp.host import MCPHost, read_audit
-from autoproduct.upstream.context_assembler import (
+from ai_venture_studio.mcp.host import MCPHost, read_audit
+from ai_venture_studio.upstream.context_assembler import (
     DEFAULT_CAP_TOKENS,
     ContextDrift,
     ContextOverflow,
@@ -200,8 +200,8 @@ def test_removed_and_unreadable_entries_count_as_drift(workspace):
 def test_build_refuses_a_spec_edited_after_gate_u3(tmp_path):
     """The end-to-end §35.5 behavior: approve, edit the frozen spec by hand,
     and the build blocks instead of building the fork."""
-    from autoproduct.upstream import approve_spec, init_workspace, run_build
-    from autoproduct.upstream.spec import load_spec, run_spec_stage
+    from ai_venture_studio.upstream import approve_spec, init_workspace, run_build
+    from ai_venture_studio.upstream.spec import load_spec, run_spec_stage
 
     root = init_workspace(tmp_path / "w", "w", "web")
     spec = run_spec_stage(root, "an item store API", provider="mock")
@@ -326,8 +326,8 @@ def test_untainted_host_behaves_exactly_as_before(repo):
 
 
 def _built_workspace(tmp_path):
-    from autoproduct.upstream import approve_spec, init_workspace
-    from autoproduct.upstream.spec import run_spec_stage
+    from ai_venture_studio.upstream import approve_spec, init_workspace
+    from ai_venture_studio.upstream.spec import run_spec_stage
 
     root = init_workspace(tmp_path / "w", "w", "web")
     spec = run_spec_stage(root, "an item store API", provider="mock")
@@ -339,7 +339,7 @@ def test_module_invariants_now_reach_the_implementer(tmp_path):
     """The gap the gate was built to find: Code Review enforces
     .mas/specs/*.spec.yaml, so an implementer that never saw the invariants
     is being held to a contract it was not shown."""
-    from autoproduct.upstream.build import _module_spec_context
+    from ai_venture_studio.upstream.build import _module_spec_context
 
     root, slug = _built_workspace(tmp_path)
     (root / ".mas" / "specs").mkdir(parents=True, exist_ok=True)
@@ -355,7 +355,7 @@ def test_module_invariants_now_reach_the_implementer(tmp_path):
     assert "item ids are stable across restarts" in block
     assert "- os\\.remove" in block  # verbatim, no inserted label
 
-    from autoproduct.upstream import run_build
+    from ai_venture_studio.upstream import run_build
 
     result = run_build(root, slug, provider="mock")
     assert result.status == "built", result.detail
@@ -372,7 +372,7 @@ def test_module_invariants_now_reach_the_implementer(tmp_path):
 def test_build_blocks_when_a_required_entry_misses_the_prompt(tmp_path, monkeypatch):
     """Simulate the regression the gate exists to prevent: a module spec
     that assembly lists but prompt construction forgot."""
-    import autoproduct.upstream.build as build_mod
+    import ai_venture_studio.upstream.build as build_mod
 
     root, slug = _built_workspace(tmp_path)
     (root / ".mas" / "specs").mkdir(parents=True, exist_ok=True)
@@ -435,8 +435,8 @@ def test_spec_writer_sees_its_hard_constraints_and_invariants(tmp_path):
     """A criterion that contradicts a module invariant becomes a build that
     cannot satisfy both — so the spec writer must see them, and the gate is
     what proved it wasn't."""
-    from autoproduct.upstream import init_workspace
-    from autoproduct.upstream.spec import run_spec_stage
+    from ai_venture_studio.upstream import init_workspace
+    from ai_venture_studio.upstream.spec import run_spec_stage
 
     root = init_workspace(tmp_path / "w", "w", "web")
     (root / "CLAUDE.md").write_text(
@@ -456,8 +456,8 @@ def test_spec_writer_sees_its_hard_constraints_and_invariants(tmp_path):
 def test_spec_generation_is_refused_when_constraints_miss_the_prompt(
     tmp_path, monkeypatch
 ):
-    import autoproduct.upstream.spec as spec_mod
-    from autoproduct.upstream import init_workspace
+    import ai_venture_studio.upstream.spec as spec_mod
+    from ai_venture_studio.upstream import init_workspace
 
     root = init_workspace(tmp_path / "w", "w", "web")
     (root / "CLAUDE.md").write_text(

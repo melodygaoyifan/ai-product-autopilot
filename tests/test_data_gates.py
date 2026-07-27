@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.adoption import (
+from ai_venture_studio.adoption import (
     contract_check,
     eval_gate,
     idempotency_check,
@@ -164,7 +164,7 @@ def test_contract_file_validation(tmp_path):
 # --- external data-check wrappers (data_tools) -----------------------------------
 
 def test_dbt_autodetected_and_overrides_merged(tmp_path):
-    from autoproduct.adoption import data_check_spec
+    from ai_venture_studio.adoption import data_check_spec
 
     if data_check_spec(tmp_path) != {}:
         pytest.fail("no dbt, no config → empty spec")
@@ -181,7 +181,7 @@ def test_dbt_autodetected_and_overrides_merged(tmp_path):
 
 
 def test_bad_check_config_rejected(tmp_path):
-    from autoproduct.adoption import data_check_spec
+    from ai_venture_studio.adoption import data_check_spec
 
     config = tmp_path / ".mas" / "data-checks.yaml"
     config.parent.mkdir(parents=True)
@@ -191,7 +191,7 @@ def test_bad_check_config_rejected(tmp_path):
 
 
 def test_unconfigured_workspace_is_loudly_unchecked(tmp_path):
-    from autoproduct.adoption import run_data_checks
+    from ai_venture_studio.adoption import run_data_checks
 
     results = run_data_checks(tmp_path)
     if len(results) != 1 or results[0].status != "skipped":
@@ -203,7 +203,7 @@ def test_unconfigured_workspace_is_loudly_unchecked(tmp_path):
 def test_declared_checks_run_and_capture(tmp_path):
     import sys
 
-    from autoproduct.adoption import run_data_checks
+    from ai_venture_studio.adoption import run_data_checks
 
     config = tmp_path / ".mas" / "data-checks.yaml"
     config.parent.mkdir(parents=True)

@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-from autoproduct.lanes.botfleet import (
+from ai_venture_studio.lanes.botfleet import (
     SOFTLOCK_TICKS,
     SessionEvent,
     detect,
@@ -22,7 +22,7 @@ from autoproduct.lanes.botfleet import (
     run_fleet,
     run_session,
 )
-from autoproduct.lanes.realtime import NETWORK_PROFILES
+from ai_venture_studio.lanes.realtime import NETWORK_PROFILES
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 TOY_SIM = REPO / "benchmarks" / "botfleet" / "toy_sim.py"
@@ -253,7 +253,7 @@ def test_sessions_are_spread_across_the_declared_profiles():
 def test_cli_exits_1_on_findings_and_prints_reproductions():
     from typer.testing import CliRunner
 
-    from autoproduct.cli import app
+    from ai_venture_studio.cli import app
 
     result = CliRunner().invoke(app, [
         "botfleet", " ".join(SIM_CMD), "--repo-dir", str(REPO),
@@ -270,7 +270,7 @@ def test_cli_exits_1_on_findings_and_prints_reproductions():
 def test_cli_exits_0_when_clean():
     from typer.testing import CliRunner
 
-    from autoproduct.cli import app
+    from ai_venture_studio.cli import app
 
     result = CliRunner().invoke(app, [
         "botfleet", " ".join(SIM_CMD), "--repo-dir", str(REPO),

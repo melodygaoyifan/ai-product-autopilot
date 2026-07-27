@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from autoproduct.product.stage_engine import load_voter_charters
-from autoproduct.product.voter_gate import (
+from ai_venture_studio.product.stage_engine import load_voter_charters
+from ai_venture_studio.product.voter_gate import (
     FAMILY_FIXTURES,
     FAMILY_SKILLS,
     family_roots,

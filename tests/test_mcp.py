@@ -12,17 +12,17 @@ import os
 
 import pytest
 
-from autoproduct.mcp import protocol
-from autoproduct.mcp.client import MCPClient, MCPClientError
-from autoproduct.mcp.host import MCPHost, MCPPermissionError, read_audit
-from autoproduct.mcp.server import SERVER_TOOLS, serve, server_for
-from autoproduct.mcp.toolbox import (
+from ai_venture_studio.mcp import protocol
+from ai_venture_studio.mcp.client import MCPClient, MCPClientError
+from ai_venture_studio.mcp.host import MCPHost, MCPPermissionError, read_audit
+from ai_venture_studio.mcp.server import SERVER_TOOLS, serve, server_for
+from ai_venture_studio.mcp.toolbox import (
     TRANSPORT_ENV,
     MCPToolBox,
     build_toolbox,
     tool_transport,
 )
-from autoproduct.tools.voter_tools import (
+from ai_venture_studio.tools.voter_tools import (
     VOTER_TOOL_REGISTRY,
     ToolBox,
     ToolBudgetExceeded,
@@ -44,8 +44,8 @@ def repo(tmp_path):
 
 
 def test_every_tool_is_served_by_exactly_one_partition():
-    from autoproduct.mcp.server import SERVER_RISK
-    from autoproduct.mcp.stage_tools import stage_tool_names
+    from ai_venture_studio.mcp.server import SERVER_RISK
+    from ai_venture_studio.mcp.stage_tools import stage_tool_names
 
     served = [t for tools in SERVER_TOOLS.values() for t in tools]
     assert len(served) == len(set(served)), "a tool may live in only one partition"
@@ -60,7 +60,7 @@ def test_every_tool_is_served_by_exactly_one_partition():
 
 def test_risk_tiers_match_the_design_table():
     """§17.2: read-only L0, deploy/maintenance L1, test execution L2."""
-    from autoproduct.mcp.server import SERVER_RISK
+    from ai_venture_studio.mcp.server import SERVER_RISK
 
     assert SERVER_RISK["read_only"] == SERVER_RISK["code_intel"] == 0
     assert SERVER_RISK["deploy"] == SERVER_RISK["maintenance"] == 1
@@ -237,8 +237,8 @@ def test_mcp_toolbox_matches_the_in_process_surface(repo):
 def test_voter_investigation_runs_over_mcp_end_to_end(repo, monkeypatch):
     """The whole point: a voter's tool loop works over the partitioned
     transport, and the audit ledger proves the calls left the process."""
-    from autoproduct.paths import skills_root
-    from autoproduct.voters import load_voters
+    from ai_venture_studio.paths import skills_root
+    from ai_venture_studio.voters import load_voters
 
     monkeypatch.setenv(TRANSPORT_ENV, "mcp")
     diff = (
@@ -264,12 +264,12 @@ def test_in_process_transport_writes_no_audit(repo, monkeypatch):
 
 
 def test_mcp_server_module_is_runnable_as_a_subprocess_entry_point(repo):
-    """`python -m autoproduct.mcp.server` is the documented spawn path."""
+    """`python -m ai_venture_studio.mcp.server` is the documented spawn path."""
     import subprocess
     import sys
 
     proc = subprocess.run(
-        [sys.executable, "-m", "autoproduct.mcp.server", "read_only",
+        [sys.executable, "-m", "ai_venture_studio.mcp.server", "read_only",
          "--root", str(repo)],
         input=protocol.encode(protocol.request(1, "tools/list")),
         capture_output=True, text=True, timeout=60,
@@ -348,7 +348,7 @@ def test_l1_maintenance_partition_reads_git_history(repo):
 
 def test_l2_test_exec_partition_requires_the_top_ceiling(repo, monkeypatch):
     """run_tests executes repo code, so only a ceiling-2 caller may mount it."""
-    import autoproduct.testing as testing_mod
+    import ai_venture_studio.testing as testing_mod
 
     monkeypatch.setattr(testing_mod, "docker_available", lambda: False)
     (repo / "tests").mkdir(exist_ok=True)
@@ -361,14 +361,14 @@ def test_l2_test_exec_partition_requires_the_top_ceiling(repo, monkeypatch):
 
 
 def test_stage_tools_return_errors_as_data(repo):
-    from autoproduct.mcp.stage_tools import call_stage_tool, risk_of, stage_tool_names
+    from ai_venture_studio.mcp.stage_tools import call_stage_tool, risk_of, stage_tool_names
 
     assert risk_of("migration_scan") == 1 and risk_of("run_tests") == 2
     assert risk_of("read_file") is None  # L0 lives in the ToolBox, not here
     assert "error: unknown stage tool" in call_stage_tool("nope", repo, {})
     assert "bad arguments" in call_stage_tool("migration_scan", repo, {"wrong": 1})
-    from autoproduct.deploy.externals import DEPLOY_EXTERNALS
-    from autoproduct.maintenance.signals import READERS
+    from ai_venture_studio.deploy.externals import DEPLOY_EXTERNALS
+    from ai_venture_studio.maintenance.signals import READERS
 
     assert set(stage_tool_names()) == {
         "migration_scan", "workflow_scan", "canary_scan",

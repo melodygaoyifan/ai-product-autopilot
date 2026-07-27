@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from autoproduct.marketing import (
+from ai_venture_studio.marketing import (
     BrandConfig,
     ComplianceProfile,
     DeliverabilityConfig,

@@ -3,7 +3,7 @@ import shutil
 import pytest
 import yaml
 
-from autoproduct.upstream import (
+from ai_venture_studio.upstream import (
     approve_brief,
     approve_plan,
     init_workspace,
@@ -11,7 +11,7 @@ from autoproduct.upstream import (
     run_discovery,
     run_planning,
 )
-from autoproduct.upstream.plan import Task, dag_check
+from ai_venture_studio.upstream.plan import Task, dag_check
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -28,7 +28,7 @@ class _RosterAwareStub:
         self.seen = seen if seen is not None else []
 
     def complete(self, **kwargs):
-        from autoproduct.product.stage_engine import (
+        from ai_venture_studio.product.stage_engine import (
             PRODUCT_LEADER_MARKER,
             PRODUCT_VERIFIER_MARKER,
             PRODUCT_VOTER_MARKER,
@@ -110,7 +110,7 @@ def test_ready_queue_advances_as_specs_are_built(tmp_path):
     the queue never advanced past the first task."""
     import yaml
 
-    from autoproduct.upstream.plan import built_task_ids
+    from ai_venture_studio.upstream.plan import built_task_ids
 
     root = init_workspace(tmp_path / "p", "p", "web")
     run_discovery(root, "a link sharing tool", provider="mock")
@@ -137,7 +137,7 @@ def test_ready_queue_advances_as_specs_are_built(tmp_path):
 def test_brief_writer_survives_a_bad_parse_streak(tmp_path, monkeypatch):
     """Unparseable writer output consumes a revision; the budget must
     survive a streak — run 4, case 02 died after only 2 attempts."""
-    import autoproduct.upstream.discover as discover
+    import ai_venture_studio.upstream.discover as discover
 
     valid = (
         'title: "t"\nproblem: "p"\ntarget_user: "u"\n'
@@ -159,7 +159,7 @@ def test_spec_writer_receives_the_literal_source_contract(tmp_path, monkeypatch)
     case 04: the writer only saw the planner's paraphrase and re-invented
     field names ("direction" for "name") and enums (integer rounds for
     "day5"), so every probe 400'd against a fully built product."""
-    import autoproduct.upstream.spec as spec_mod
+    import ai_venture_studio.upstream.spec as spec_mod
 
     contract = 'POST /api/candidates {"name": 候选方向名} → {"id"}; round is "day5" or "day12"'
     seen = []
@@ -199,7 +199,7 @@ def test_blocked_spec_records_why(tmp_path, monkeypatch):
     must name the uncovered criteria."""
     import itertools
 
-    import autoproduct.upstream.spec as spec_mod
+    import ai_venture_studio.upstream.spec as spec_mod
 
     writer = (
         'title: "t"\ndesign: |\n  d\n'

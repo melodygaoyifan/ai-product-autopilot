@@ -1,5 +1,5 @@
-from autoproduct.diff import parse_unified_diff
-from autoproduct.orchestrator.mode_router import select_mode
+from ai_venture_studio.diff import parse_unified_diff
+from ai_venture_studio.orchestrator.mode_router import select_mode
 
 DOCS_ONLY = """\
 diff --git a/README.md b/README.md

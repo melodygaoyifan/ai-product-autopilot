@@ -2,7 +2,7 @@
 
 import pytest
 
-from autoproduct.secrets import Secret, SecretError, SecretsLoader
+from ai_venture_studio.secrets import Secret, SecretError, SecretsLoader
 
 
 def test_secret_never_reprs_its_value():

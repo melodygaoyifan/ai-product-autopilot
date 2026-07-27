@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from autoproduct.upstream.build import (
+from ai_venture_studio.upstream.build import (
     _boot_gate,
     _preserve_failed_attempt,
     _reset_workspace,
@@ -82,7 +82,7 @@ def test_preserve_and_reset_after_failed_in_place_build(tmp_path):
 
 
 def test_web_profile_carries_scope_law_and_boot_contract():
-    from autoproduct.upstream.workspace import load_profile
+    from ai_venture_studio.upstream.workspace import load_profile
 
     profile = load_profile("web")
     text = " ".join(profile["constraints"])
@@ -101,8 +101,8 @@ def test_implementer_receives_the_literal_source_contract(tmp_path, monkeypatch)
     post-fix test: the scores handler invented "index" for the FDR's
     "item" and every probe died) — the implementer prompt must carry the
     FDR verbatim, via the workspace FDR.md fallback."""
-    import autoproduct.upstream.build as build_mod
-    from autoproduct.upstream import approve_spec, init_workspace, run_spec_stage
+    import ai_venture_studio.upstream.build as build_mod
+    from ai_venture_studio.upstream import approve_spec, init_workspace, run_spec_stage
 
     root = init_workspace(tmp_path / "p", "p", "web")
     spec = run_spec_stage(root, "an item store API", provider="mock")
@@ -136,7 +136,7 @@ def test_shared_test_fixtures_are_additive_only(tmp_path):
     a rewrite that drops a name is kept out (run 7, case 04: a conftest
     rewrite lost post_json and three straight iterations died on
     ImportError before any test ran)."""
-    from autoproduct.upstream.build import _write_files
+    from ai_venture_studio.upstream.build import _write_files
 
     (tmp_path / "tests").mkdir()
     conftest = tmp_path / "tests" / "conftest.py"
@@ -167,7 +167,7 @@ def test_private_names_are_not_vocabulary(tmp_path):
     """A helpers rewrite may restructure _private internals freely — only
     public names sibling tests can import are guarded (run 8, case 01 t3:
     the guard blocked a rewrite over reshuffled _check_url/_do)."""
-    from autoproduct.upstream.build import _write_files
+    from ai_venture_studio.upstream.build import _write_files
 
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "helpers.py").write_text(
@@ -193,7 +193,7 @@ def test_private_names_are_not_vocabulary(tmp_path):
 def test_stale_import_note_names_phantom_imports(tmp_path):
     """Files persisting across iterations that import names which don't
     exist get a precise deterministic callout in the feedback."""
-    from autoproduct.upstream.build import _stale_import_note
+    from ai_venture_studio.upstream.build import _stale_import_note
 
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "helpers.py").write_text("def post(base):\n    return 1\n")
@@ -210,8 +210,8 @@ def test_stale_import_note_names_phantom_imports(tmp_path):
 def test_probegen_dry_case_is_visibly_unmeasured(tmp_path, monkeypatch):
     """Zero generated probes must not read as a silently-scored 0% — run 9
     case 03 had 3/4 built and NO behavioral measurement at all."""
-    from autoproduct import product_bench
-    from autoproduct.upstream import probegen as probegen_mod
+    from ai_venture_studio import product_bench
+    from ai_venture_studio.upstream import probegen as probegen_mod
 
     calls = []
     monkeypatch.setattr(
@@ -231,7 +231,7 @@ def test_probegen_dry_case_is_visibly_unmeasured(tmp_path, monkeypatch):
 def test_save_summary_dual_writes_to_tracked_results(tmp_path):
     """.mas/ is gitignored and was lost once (2026-07-26, the whole bench
     history) — scoreboards also land in tracked benchmarks/results/."""
-    from autoproduct.product_bench import BenchSummary, save_summary
+    from ai_venture_studio.product_bench import BenchSummary, save_summary
 
     (tmp_path / "benchmarks").mkdir()
     summary = BenchSummary(
@@ -248,7 +248,7 @@ def test_probegen_falls_back_to_source_literals_and_fdr(tmp_path, monkeypatch):
     collect_routes, which left bench case 03 UNMEASURED for five runs.
     With an entry point present, generation proceeds on scraped path
     literals + the FDR instead of bailing before the model call."""
-    import autoproduct.upstream.probegen as probegen_mod
+    import ai_venture_studio.upstream.probegen as probegen_mod
 
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "main.py").write_text(

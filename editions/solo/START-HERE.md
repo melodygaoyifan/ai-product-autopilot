@@ -9,9 +9,9 @@ experiment machinery, and the kill discipline (design docs 20–23).
 ## Day 1
 
 ```bash
-uvx autoproduct replay --demo        # no API key: see a real audit trail (3 min)
-autoproduct init mycompany --profile web --edition solo
-cd mycompany && autoproduct studio   # describe your product in your own words
+uvx avs replay --demo        # no API key: see a real audit trail (3 min)
+avs init mycompany --profile web --edition solo
+cd mycompany && avs studio   # describe your product in your own words
 ```
 
 Then run Day-0 calibration (design repo `day-0-calibration.md`) before

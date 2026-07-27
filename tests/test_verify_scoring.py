@@ -1,6 +1,6 @@
-from autoproduct.scoring import passes_threshold, score_finding
-from autoproduct.state import Confidence, Severity, VoterFinding
-from autoproduct.verify import verify_finding
+from ai_venture_studio.scoring import passes_threshold, score_finding
+from ai_venture_studio.state import Confidence, Severity, VoterFinding
+from ai_venture_studio.verify import verify_finding
 
 
 def _finding(**overrides) -> VoterFinding:
