@@ -4,6 +4,31 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.44.0 — all six §17.2 signal readers, over one shared core
+- datadog_query_metrics, pagerduty_get_incident, prometheus_query,
+  loki_query, jaeger_query_trace join sentry_get_issue in the L1
+  `maintenance` partition. Sentry's shape became a shared read-only core
+  (gating, `secret://` resolution, GET-with-no-body, summarize, wrap,
+  multi-secret scrub, errors-as-data), so each reader is its endpoint and
+  its summary and nothing else.
+- **Two gating families, deliberately distinguished.** A hosted service is
+  gated on its credential; a self-hosted one on its base URL, because there
+  is no sensible default address for a Prometheus and defaulting to
+  localhost would turn "not configured" into a confusing connection error.
+  Either way, unconfigured means a visible skip naming the exact variable.
+- Details that are the point rather than decoration: Datadog requires BOTH
+  keys and an explicit window (a metric read whose window nobody stated is
+  not evidence); PagerDuty is read-only so it cannot ack, resolve, or
+  reassign — the on-call human owns those; Loki's limit is bounded and its
+  log lines get the same wrapper as everything else, which matters most
+  there because log lines are the most user-influenced text in the stack;
+  both Datadog keys are scrubbed from one payload.
+- Honest scope, unchanged: written against each vendor's documented REST API
+  and exercised against a stub transport. None has run against a live
+  account from this repo — no credentials exist here — and the map says so
+  per tool.
+- Suite: 908 -> 932 hermetic tests
+
 ## v0.43.0 — the first external-service tool: sentry_get_issue
 - maintenance/signals.py: reads one Sentry issue over the documented REST
   API, served by the L1 `maintenance` MCP partition. Adding it needed a row

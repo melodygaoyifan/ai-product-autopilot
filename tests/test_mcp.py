@@ -365,9 +365,11 @@ def test_stage_tools_return_errors_as_data(repo):
     assert risk_of("read_file") is None  # L0 lives in the ToolBox, not here
     assert "error: unknown stage tool" in call_stage_tool("nope", repo, {})
     assert "bad arguments" in call_stage_tool("migration_scan", repo, {"wrong": 1})
+    from autoproduct.maintenance.signals import READERS
+
     assert set(stage_tool_names()) == {
         "migration_scan", "workflow_scan", "canary_scan",
-        "recent_commits", "correlate", "sentry_get_issue", "run_tests",
+        "recent_commits", "correlate", "run_tests", *READERS,
     }
 
 

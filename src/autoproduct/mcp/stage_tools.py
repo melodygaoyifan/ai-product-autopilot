@@ -12,7 +12,7 @@ This module holds the L1/L2 tool implementations:
 | server | risk | tools | what it wraps |
 |---|---|---|---|
 | `deploy` | L1 | `migration_scan`, `workflow_scan`, `canary_scan` | the deterministic deploy probes |
-| `maintenance` | L1 | `recent_commits`, `correlate`, `sentry_get_issue` | git history, incident↔commit correlation, Sentry issue reads |
+| `maintenance` | L1 | `recent_commits`, `correlate`, and the six §17.2 signal readers (sentry/datadog/pagerduty/prometheus/loki/jaeger) | git history, incident↔commit correlation, external production signals |
 | `test_exec` | L2 | `run_tests` | the test gate, which EXECUTES repo code |
 
 What this buys beyond the in-process call:
@@ -29,11 +29,11 @@ What this buys beyond the in-process call:
    `test_exec` being L2 is that tests execute code, so a malicious test
    could otherwise affect the harness process. That is now a child process.
 
-`sentry_get_issue` (v0.43) is the first external-service tool, and it
-proved that claim: adding it was a registration in this table plus a reader
-module, with no change to the transport, the host, or the RBAC. The
-remaining §17.2 integrations (datadog, pagerduty, prometheus, loki, jaeger)
-follow the same shape.
+The external-service tools (v0.43-v0.44) proved that claim: all six §17.2
+signal readers are registrations in this table plus one shared reader module,
+with no change to the transport, the host, or the RBAC. What remains unbuilt
+is the deploy-side CLI wrappers (terraform/helm/kubectl), which are a
+different shape — binaries rather than HTTP.
 """
 
 from __future__ import annotations
@@ -119,18 +119,63 @@ def recent_commits_tool(root: pathlib.Path, days: int = 7, limit: int = 30) -> s
     return _report(recent_commits(str(root), days=int(days), limit=int(limit)))
 
 
-@_register("sentry_get_issue", 1)
-def sentry_get_issue_tool(root: pathlib.Path, issue_id: str) -> str:
-    """The first real external-service tool from §17.2's table. Read-only,
-    availability-gated, and its payload arrives research-wrapped so
-    consuming it taints the run out of L1+ (ADR-U03)."""
-    from autoproduct.maintenance.signals import sentry_get_issue
-
-    report = sentry_get_issue(issue_id)
+def _signal(report) -> str:
+    """A reader's result as tool output. A skip or error is reported as
+    itself, never rendered as an empty read; an ok payload travels wrapped
+    so consuming it taints the run out of L1+ (ADR-U03)."""
     if report.status != "ok":
-        # A skip is reported, never rendered as "nothing found".
         return _report({"status": report.status, "detail": report.detail})
     return report.wrapped
+
+
+@_register("sentry_get_issue", 1)
+def sentry_get_issue_tool(root: pathlib.Path, issue_id: str) -> str:
+    from autoproduct.maintenance.signals import sentry_get_issue
+
+    return _signal(sentry_get_issue(issue_id))
+
+
+@_register("datadog_query_metrics", 1)
+def datadog_query_metrics_tool(
+    root: pathlib.Path, query: str, from_ts: int, to_ts: int
+) -> str:
+    """The window is required, not defaulted: a metric read whose window
+    nobody stated is not evidence."""
+    from autoproduct.maintenance.signals import datadog_query_metrics
+
+    return _signal(datadog_query_metrics(query, from_ts=from_ts, to_ts=to_ts))
+
+
+@_register("pagerduty_get_incident", 1)
+def pagerduty_get_incident_tool(root: pathlib.Path, incident_id: str) -> str:
+    from autoproduct.maintenance.signals import pagerduty_get_incident
+
+    return _signal(pagerduty_get_incident(incident_id))
+
+
+@_register("prometheus_query", 1)
+def prometheus_query_tool(root: pathlib.Path, query: str, at: str = "") -> str:
+    from autoproduct.maintenance.signals import prometheus_query
+
+    return _signal(prometheus_query(query, at=at or None))
+
+
+@_register("loki_query", 1)
+def loki_query_tool(
+    root: pathlib.Path, query: str, start: str = "", end: str = "", limit: int = 100
+) -> str:
+    from autoproduct.maintenance.signals import loki_query
+
+    return _signal(
+        loki_query(query, start=start or None, end=end or None, limit=int(limit))
+    )
+
+
+@_register("jaeger_query_trace", 1)
+def jaeger_query_trace_tool(root: pathlib.Path, trace_id: str) -> str:
+    from autoproduct.maintenance.signals import jaeger_query_trace
+
+    return _signal(jaeger_query_trace(trace_id))
 
 
 @_register("correlate", 1)

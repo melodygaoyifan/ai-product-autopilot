@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-908-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-932-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -217,7 +217,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **908 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **932 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by autoproduct itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -326,6 +326,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.41.0 ✅ | the Context Manifest (content-hashed context assembly, grounding receipts where an unread contract is a violation, drift detection that refuses to build a spec edited outside the SCR channel, and overflow routed to Planning as a split) and research-session taint isolation (ADR-U03: consume research and the run loses L1+ tools for good, enforced at the transport rather than in a prompt) |
 | v0.42.0 ✅ | grounding enforced on every build: the manifest is assembled, recorded, and checked against the prompt, so a required contract that never reached the writer blocks the build — which immediately found that module-spec invariants were absent from the implementer's prompt while Code Review enforced them, and they are now quoted verbatim |
 | v0.43.0 ✅ | the first external-service tool (`sentry_get_issue` in the L1 maintenance partition): credential via `secret://`, a visible skip when unset, read-only by construction, and its payload wrapped as untrusted research so a hostile issue title is data rather than an instruction — wired into incident intake, and honest that it has not yet run against a live org |
+| v0.44.0 ✅ | all six §17.2 signal readers (sentry, datadog, pagerduty, prometheus, loki, jaeger) over one shared read-only core, with two honestly-distinguished gating families — credential for hosted services, base URL for self-hosted ones, and a visible skip naming the variable either way |
 | next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history

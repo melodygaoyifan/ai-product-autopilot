@@ -37,7 +37,12 @@ SERVER_TOOLS: dict[str, tuple[str, ...]] = {
     "read_only": ("read_file", "grep", "list_files"),
     "code_intel": ("symbol_refs",),
     "deploy": ("migration_scan", "workflow_scan", "canary_scan"),
-    "maintenance": ("recent_commits", "correlate", "sentry_get_issue"),
+    "maintenance": (
+        "recent_commits", "correlate",
+        # The six §17.2 signal readers (maintenance/signals.py).
+        "sentry_get_issue", "datadog_query_metrics", "pagerduty_get_incident",
+        "prometheus_query", "loki_query", "jaeger_query_trace",
+    ),
     "test_exec": ("run_tests",),
 }
 
@@ -140,6 +145,52 @@ TOOL_SCHEMAS: dict[str, dict] = {
             "type": "object",
             "properties": {"issue_id": {"type": "string"}},
             "required": ["issue_id"],
+        },
+    },
+    "datadog_query_metrics": {
+        "description": "Query Datadog timeseries over an explicit window "
+                       "(read-only; payload wrapped as untrusted research).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"},
+                           "from_ts": {"type": "integer"},
+                           "to_ts": {"type": "integer"}},
+            "required": ["query", "from_ts", "to_ts"],
+        },
+    },
+    "pagerduty_get_incident": {
+        "description": "Read one PagerDuty incident (read-only: cannot ack, "
+                       "resolve, or reassign).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"incident_id": {"type": "string"}},
+            "required": ["incident_id"],
+        },
+    },
+    "prometheus_query": {
+        "description": "Instant query against a self-hosted Prometheus.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}, "at": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+    "loki_query": {
+        "description": "Range query against a self-hosted Loki (log lines "
+                       "arrive wrapped as untrusted research).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}, "start": {"type": "string"},
+                           "end": {"type": "string"}, "limit": {"type": "integer"}},
+            "required": ["query"],
+        },
+    },
+    "jaeger_query_trace": {
+        "description": "Fetch one trace by id from a self-hosted Jaeger.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"trace_id": {"type": "string"}},
+            "required": ["trace_id"],
         },
     },
     "run_tests": {
