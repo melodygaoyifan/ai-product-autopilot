@@ -66,9 +66,29 @@ forks, never fewer checks (`edition_lint` refuses anything that widens):
 
 ## For founders (no technical background needed)
 
+Three steps to the browser UI:
+
 ```bash
-avs studio myteam --profile web    # browser UI: the whole flow
+pip install ai-venture-studio      # 1. install — needs Python; `avs` appears on your PATH
+export ANTHROPIC_API_KEY=...       # 2. the key that powers the build
+avs studio myteam --profile web    # 3. serve the Studio for a new workspace
 ```
+
+Then open **http://127.0.0.1:8433** in your browser. The Studio is
+localhost-only: no account, no signup, nothing leaves your machine except
+the model API calls. `myteam` is the folder your product is built into;
+profiles are `web` | `miniprogram` | `app`. Coming back later? Run
+`avs studio` from inside that folder — no flags needed. If `avs` says
+"command not found", the install went into a different Python environment
+— `uvx --from ai-venture-studio avs studio myteam --profile web` sidesteps
+that entirely.
+
+Want a look before handing over an API key? `avs replay --demo` prints a
+complete review, offline, key-free.
+
+The page header switches the view — **Founder** (default), **Engineer**,
+**Enterprise** — or set the default with `--mode engineer`. Every view is
+the same product; the deeper ones only add read-only detail.
 
 <img src="docs/media/studio-en.png" alt="Founder Studio, English: the FDR entry screen — describe your product in your own words, and the system checks it and makes the plan before building anything" width="720">
 
