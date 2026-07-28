@@ -42,6 +42,7 @@ def _routes(app) -> dict[str, set[str]]:
 
 
 def _resolves(path: str, route: str) -> bool:
+    path = path.split("?", 1)[0]  # ?mode=… routes by its path, not its query
     parts, route_parts = path.split("/"), route.split("/")
     return len(parts) == len(route_parts) and all(
         r.startswith("{") or p == r for p, r in zip(parts, route_parts)
@@ -122,6 +123,24 @@ def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
 
     # 7. Acceptance walkthrough page.
     pages.append(client.get("/acceptance").text)
+
+    # 8. Engineer and enterprise modes (v0.56) — the mode cards render
+    # references of their own (review links), so they are states too.
+    import datetime
+
+    review_dir = root / ".mas" / "reviews" / "rev-wire"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    t0 = datetime.datetime(2026, 7, 27, 10, 0, 0)
+    (review_dir / "01-dor_gate.yaml").write_text(yaml.safe_dump({
+        "step": 1, "node": "dor_gate", "written_at": t0.isoformat(),
+        "dor_pass": True}), encoding="utf-8")
+    (review_dir / "02-final.yaml").write_text(yaml.safe_dump({
+        "step": 2, "node": "final",
+        "written_at": (t0 + datetime.timedelta(seconds=5)).isoformat(),
+        "verdict": "APPROVE"}), encoding="utf-8")
+    pages.append(client.get("/?mode=engineer").text)
+    pages.append(client.get("/review/rev-wire").text)
+    pages.append(client.get("/?mode=enterprise").text)
 
     refs: dict[str, list[tuple[str, str]]] = {"POST": [], "GET": []}
     for page in pages:

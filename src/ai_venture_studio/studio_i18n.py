@@ -226,6 +226,87 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "edition 文件未通过检查 / Edition file fails lint",
         "en": "The edition file fails lint",
     },
+    # --- mode strip + per-mode pages (v0.56) ----------------------------
+    "mode_strip_label": {"zh": "视角 / View as:", "en": "View as:"},
+    "mode_founder": {"zh": "创始人 / Founder", "en": "Founder"},
+    "mode_engineer": {"zh": "工程师 / Engineer", "en": "Engineer"},
+    "mode_enterprise": {"zh": "企业 / Enterprise", "en": "Enterprise"},
+    "correction_log": {
+        "zh": "修正历史 / Correction history",
+        "en": "Correction history",
+    },
+    "title_review": {
+        "zh": "评审时间线 / Review timeline",
+        "en": "Review timeline",
+    },
+    "review_verdict": {"zh": "结论 / Verdict", "en": "Verdict"},
+    "review_duration": {"zh": "耗时 / Duration", "en": "Duration"},
+    "eng_reviews": {
+        "zh": "最近的评审 / Recent reviews",
+        "en": "Recent reviews",
+    },
+    "eng_reviews_none": {
+        "zh": "还没有评审记录。/ None yet.",
+        "en": "None yet.",
+    },
+    "eng_voter_health": {
+        "zh": "评审员健康度 / Voter health",
+        "en": "Voter health",
+    },
+    "eng_voter_cols": {
+        "zh": "（次数 · 被阻塞 · 换用备选模型）/ (runs · blocked · substituted)",
+        "en": "(runs · blocked · substituted)",
+    },
+    "gov_ledger_ok": {
+        "zh": "链校验通过 / chain verified",
+        "en": "chain verified",
+    },
+    "gov_ledger_broken": {
+        "zh": "存证链已损坏，从第 / ATTESTATION CHAIN BROKEN at entry",
+        "en": "ATTESTATION CHAIN BROKEN at entry",
+    },
+    "gov_stages": {
+        "zh": "阶段就绪状态 / Stage activation",
+        "en": "Stage activation",
+    },
+    "gov_no_substrate": {
+        "zh": "未声明基建档案（.mas/substrate-profile.yaml）— 各阶段按 S0 处理。"
+              "运行 avs readiness 查看。/ No substrate profile declared.",
+        "en": "No substrate profile declared (.mas/substrate-profile.yaml) — "
+              "stages assume S0. Run avs readiness to see the ladder.",
+    },
+    "gov_dwell": {
+        "zh": "闸门停留时间 / Gate dwell",
+        "en": "Gate dwell",
+    },
+    "gov_dwell_median": {
+        "zh": "中位停留 / Median dwell",
+        "en": "Median dwell",
+    },
+    "gov_override_rate": {
+        "zh": "推翻率 / Override rate",
+        "en": "Override rate",
+    },
+    "gov_automation": {
+        "zh": "自动化策略 / Automation policies",
+        "en": "Automation policies",
+    },
+    "gov_armed": {
+        "zh": "已启用，授权人 / ARMED by",
+        "en": "ARMED by",
+    },
+    "gov_expires": {
+        "zh": "到期 / expires",
+        "en": "expires",
+    },
+    "gov_disarmed": {
+        "zh": "未启用（默认）/ disarmed (the default)",
+        "en": "disarmed (the default)",
+    },
+    "gov_policy_error": {
+        "zh": "策略文件无效 / POLICY ERROR",
+        "en": "POLICY ERROR",
+    },
 }
 
 

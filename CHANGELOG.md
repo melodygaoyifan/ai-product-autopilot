@@ -4,6 +4,47 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.56.0 — per-mode UIs: each persona gets its organizing surface
+
+Researched before built: the design canon (doc 24's persona constraints,
+the solo weekly-review agenda, invariants 14.21/14.22), the adaptive-UI
+literature (Findlater & McGrenere CHI 2004: adaptable beats adaptive;
+NN/g on visible modes and progressive disclosure), and an inventory of
+every `.mas/` surface the CLI writes that no Studio route rendered.
+
+- **The mode is adaptable per request, never adaptive.** A visible
+  switcher on every page — including founder — sets `?mode=` and a
+  cookie; `--mode`/edition only supply the default, and the system never
+  flips the mode behind the user's back. An unknown `?mode=` is a loud
+  400, same policy as an unknown `--mode`.
+- **Engineer mode** gains the review machinery: a bounded newest-first
+  recent-reviews table (the server's `/reviews` pattern — no unbounded
+  scans per page load), a per-review timeline page at `/review/<id>`
+  rendering the same `NN-<node>.yaml` mirror `avs replay` reads, and a
+  voter-health board (runs · blocked · substituted) from
+  `.mas/voters/*/log.yaml` — previously visible only inside the weekly
+  compound proposal.
+- **Enterprise mode** stops counting and starts verifying: the
+  attestation card now recomputes the sha256 chain (`verify_ledger`) and
+  renders tampering as BROKEN-at-entry-N; plus the S0–S4 stage-activation
+  grid with the exact missing prerequisite per inactive stage, the F-18.3
+  gate-dwell/rubber-stamp report with its own notes verbatim, and
+  automation policy arming state (disarmed-by-default rendered as the
+  good news it is; an armed policy shows who armed it and until when).
+  The governance spokes render even without an edition file — a workspace
+  still has a ladder, a dwell distribution, and an arming state.
+- **Founder mode** stays the plain flow plus the switcher, and gains its
+  correction history (`product/CORRECTION-LOG.md` was written on every
+  correction and rendered nowhere).
+- The wire-up gate grew with the UI: query-string references route by
+  path, and the engineer/enterprise states joined the state walk — the
+  bidirectional every-button-resolves / every-route-rendered contract
+  now covers the mode cards too.
+- Every new card is a pure read of files the CLI already writes; the
+  Studio stays a veneer. LLM-calling and subprocess paths stay out of
+  GET handlers.
+- Suite: 1092 → 1112.
+
 ## v0.55.0 — Studio modes: different users, different depths of the same UI
 - `avs studio --mode founder|engineer|enterprise`. The editions system
   (doc 24, ADR-U26/U27) already encodes who is at the keyboard; the Studio

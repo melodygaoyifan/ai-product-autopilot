@@ -4,7 +4,7 @@
 PRD. Builds, tests, and reviews the product. Measures whether it worked —
 and forces the kill decision when it didn't.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-1092-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue) ![Tests](https://img.shields.io/badge/hermetic_tests-1112-brightgreen) [![PyPI](https://img.shields.io/pypi/v/autoproduct)](https://pypi.org/project/autoproduct/)
 
 A week of real product signals in — an evidence-gated product decision out:
 
@@ -246,7 +246,7 @@ including the runs that fail.
   built product ([WebGen-Bench](https://arxiv.org/abs/2505.03733)
   pattern) — build rate, probe pass rate, and clean-review rate reported
   unaveraged, with an honesty case proving probes can fail.
-- **1092 hermetic tests** (`uv run pytest`); every PR in this repo was
+- **1112 hermetic tests** (`uv run pytest`); every PR in this repo was
   reviewed by avs itself, and five of those reviews caught real
   bugs. The first live smoke of the outer loop surfaced three wiring bugs
   — each caught by a gate doing its job, each now a regression test.
@@ -370,6 +370,7 @@ Operations guide: [RUNBOOK.md](RUNBOOK.md).
 | v0.53.0 ✅ | renamed to **ai-venture-studio** (live links updated; recorded evidence locators left as recorded, with a rename note, because a snapshot is not edited after the fact) and English became the Studio default — `--lang zh` restores the original bilingual UI character for character |
 | v0.54.0 ✅ | package + CLI renamed to match: `import ai_venture_studio`, command **`avs`** (with `autoproduct` kept as an alias so nothing scripted breaks) — while env vars, Prometheus series, telemetry keys and the CLAUDE.md section header were deliberately left alone, because renaming a wire format silently breaks its consumers |
 | v0.55.0 ✅ | Studio modes (`--mode founder\|engineer\|enterprise`): the mode resolves from the workspace edition so different users get different depths of the same UI — founder unchanged and default, engineer adds task IDs/states and the CLI equivalent of every button, enterprise adds the resolved edition's governance facts and the attestation-ledger count. Modes only ever ADD visibility (tested structurally: every founder form survives in every mode) |
+| v0.56.0 ✅ | per-mode UIs, researched then built: the mode is now adaptable per request (visible switcher on every page, `?mode=` + cookie, never auto-flipped — Findlater & McGrenere CHI 2004), engineer mode gains the review timeline in the browser (`/review/<id>`, the mirror `avs replay` reads) and a voter-health board, enterprise mode gains attestation *chain verification* (tampering renders as BROKEN-at-entry-N, not a line count), the S0–S4 stage-activation grid, the F-18.3 dwell/rubber-stamp report, and automation arming state — every card a pure read of files the CLI already writes |
 | next 🔜 | the v3.0.0 design gate itself: this repo's cycle sits at V3-1/V3-2 met, V3-3 pending — the launch PRD's kill criterion needs four consecutive logged attention weeks, and a human records the decision |
 
 ## Star history

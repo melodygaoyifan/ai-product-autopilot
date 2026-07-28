@@ -22,6 +22,7 @@ may only ADD visibility — never remove a form or a required action.
 from __future__ import annotations
 
 import html
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,9 +33,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from ai_venture_studio.studio_i18n import DEFAULT_LANGUAGE, normalize, t
 from ai_venture_studio.studio_modes import (
+    MODES,
+    StudioModeError,
     engineer_panel,
     enterprise_panel,
+    mode_strip,
     resolve_mode,
+    review_timeline_body,
 )
 
 _STYLE = """
@@ -104,6 +109,9 @@ def _build_running(root: Path) -> bool:
 
 
 _STATE_ICON = {"built": "✅", "pending": "⏳"}
+# Same shape the server's review routes enforce — a review id is a path
+# segment, so anything else is a traversal attempt, not a typo.
+_REVIEW_ID = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
 
 
 def _task_states(root: Path) -> list[dict]:
@@ -170,22 +178,45 @@ def create_studio_app(
 ) -> FastAPI:
     root = Path(repo_dir).resolve()
     lang = normalize(lang)
-    mode = resolve_mode(root, mode)
+    # --mode / edition only set the DEFAULT; the user switches per request
+    # (adaptable, never adaptive — the UI must not flip modes on its own).
+    default_mode = resolve_mode(root, mode)
 
     def _(key: str) -> str:
         """This page's string in the chosen language (studio_i18n)."""
         return t(lang, key)
 
-    def _render(title: str, body: str) -> HTMLResponse:
-        """Every page, plus the mode's read-only card. Founder mode appends
-        nothing, so the default UI stays byte-for-byte what it was. Panels
-        are built per request — they reflect the workspace files as of this
-        page load, never a cached copy."""
-        if mode == "engineer":
+    def _req_mode(request: Request) -> str:
+        """Query beats cookie beats the startup default. An unknown ?mode=
+        is a loud 400, same policy as an unknown --mode."""
+        query = request.query_params.get("mode")
+        if query:
+            try:
+                return resolve_mode(root, query)
+            except StudioModeError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        cookie = request.cookies.get("studio_mode")
+        if cookie in MODES:
+            return cookie
+        return default_mode
+
+    def _render(request: Request, title: str, body: str) -> HTMLResponse:
+        """Every page: the visible mode strip, the page body, then the
+        mode's read-only cards. Founder mode appends no cards, so the
+        founder flow stays exactly the pre-mode UI plus the switcher.
+        Panels are built per request — they reflect the workspace files as
+        of this page load, never a cached copy."""
+        req_mode = _req_mode(request)
+        body = mode_strip(req_mode, _) + body
+        if req_mode == "engineer":
             body += engineer_panel(root, _, _task_states(root))
-        elif mode == "enterprise":
+        elif req_mode == "enterprise":
             body += enterprise_panel(root, _)
-        return _page(title, body)
+        response = _page(title, body)
+        if request.query_params.get("mode"):
+            # An explicit switch persists across the POST→redirect cycle.
+            response.set_cookie("studio_mode", req_mode)
+        return response
 
     app = FastAPI(
         title="avs studio", docs_url=None, redoc_url=None, openapi_url=None
@@ -224,7 +255,7 @@ def create_studio_app(
         return data["profile"]
 
     @app.get("/", response_class=HTMLResponse)
-    def home():
+    def home(request: Request):
         fdr = root / "FDR.md"
         report = root / "product" / "BUILD-REPORT.md"
         confirmation = root / "product" / "CONFIRMATION.md"
@@ -245,7 +276,7 @@ def create_studio_app(
             # works") — poll /status, update in place, one full reload when
             # the worker exits so the report page takes over.
             return _render(
-                _("title_building"),
+                request, _("title_building"),
                 f"<div class=card><p>{_('done_label')} <b id=done>{done}</b> / "
                 f"<b id=total>{total}</b> {_('updates_live')}</p>"
                 f"{checklist}</div>"
@@ -288,7 +319,7 @@ def create_studio_app(
                 else f"<p>{_('interrupted_resume')}</p>" + retries
             )
             return _render(
-                _("title_interrupted"),
+                request, _("title_interrupted"),
                 f"<div class=card><b class=warn>{_('interrupted_lead')}"
                 f"</b><ul style='list-style:none;padding-left:0'>"
                 f"{_task_list_html(tasks)}</ul>{done_note}</div>"
@@ -310,7 +341,7 @@ def create_studio_app(
             pending = _pending_feature(root)
             if pending:
                 return _render(
-                    _("title_confirm_feature"),
+                    request, _("title_confirm_feature"),
                     f"<pre>{_md(pending / 'CONFIRMATION.md')}</pre>"
                     f"<form method=post action=/feature/build>"
                     f"<input type=hidden name=slug value='{html.escape(pending.name)}'>"
@@ -347,12 +378,20 @@ def create_studio_app(
                 )
             no_features = f"<p class=muted>{_('first_version')}</p>"
             return _render(
-                _("title_product"),
+                request, _("title_product"),
                 f"<pre>{_md(report)}</pre>{acceptance}{gallery}{retry_block}"
                 f"<h2>{_('h_features')}</h2>"
                 f"{feature_cards or no_features}"
                 f"<h2>{_('h_something_wrong')}</h2>"
                 f"<p class=muted>{_('correction_hint')}</p>"
+                + (
+                    f"<details><summary class=muted>{_('correction_log')}"
+                    f"</summary><pre>"
+                    f"{_md(root / 'product' / 'CORRECTION-LOG.md')}"
+                    "</pre></details>"
+                    if (root / "product" / "CORRECTION-LOG.md").exists()
+                    else ""
+                ) +
                 "<form method=post action=/correct>"
                 "<textarea name=complaint style='min-height:80px' "
                 f"placeholder='{_('correction_placeholder')}'></textarea>"
@@ -367,7 +406,7 @@ def create_studio_app(
             )
         if confirmation.exists():
             return _render(
-                _("title_confirm_plan"),
+                request, _("title_confirm_plan"),
                 f"<pre>{_md(confirmation)}</pre>"
                 f"<form method=post action=/build><button>{_('btn_start_building')}"
                 "</button></form>"
@@ -387,7 +426,7 @@ def create_studio_app(
             fdr.read_text(encoding="utf-8") if fdr.exists() else template_for(lang)
         )
         return _render(
-            _("title_describe"),
+            request, _("title_describe"),
             f"{question_block}"
             f"<form method=post action=/fdr>"
             f"<textarea name=fdr>{html.escape(current)}</textarea>"
@@ -415,12 +454,25 @@ def create_studio_app(
         return RedirectResponse("/", status_code=303)
 
     @app.get("/acceptance", response_class=HTMLResponse)
-    def acceptance():
+    def acceptance(request: Request):
         return _render(
-            _("title_acceptance"),
+            request, _("title_acceptance"),
             f"<pre>{_md(root / 'product' / 'ACCEPTANCE.md')}</pre>"
             f"<p><a href='/'>{_('link_back')}</a></p>",
         )
+
+    @app.get("/review/{review_id}", response_class=HTMLResponse)
+    def review_detail(request: Request, review_id: str):
+        """One review's mirror as a timeline — `avs replay` in the browser.
+        Linked from the engineer card; reachable in every mode (modes add
+        visibility, they never own a page)."""
+        if not _REVIEW_ID.match(review_id):
+            raise HTTPException(404)
+        try:
+            body = review_timeline_body(root, review_id, _)
+        except FileNotFoundError:
+            raise HTTPException(404) from None
+        return _render(request, _("title_review"), body)
 
     @app.get("/shots/{name}")
     def shot(name: str):

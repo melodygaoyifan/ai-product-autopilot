@@ -160,11 +160,14 @@ def test_enterprise_edition_shows_its_governance_facts(tmp_path):
 
 
 def test_enterprise_attestation_count_is_read_from_the_ledger(tmp_path):
+    """Since v0.56 the panel verifies the sha256 chain rather than counting
+    lines — so the fixture must be real ledger entries."""
+    from ai_venture_studio.adoption.attestation import append_attestation
+
     root = _workspace(tmp_path)
     resolve_edition(root, "enterprise")
-    ledger = root / ".mas" / "attestation" / "ledger.jsonl"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text('{"a":1}\n{"a":2}\n{"a":3}\n', encoding="utf-8")
+    for i in range(3):
+        append_attestation(root, {"gate": "review", "seq_note": i})
     page = _client(root).get("/").text
     assert "Attestation ledger entries" in page and "<b>3</b>" in page
 
