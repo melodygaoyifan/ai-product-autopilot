@@ -756,9 +756,16 @@ def studio(
                    "Chinese-first). Your FDR may be written in either "
                    "language whichever UI you choose."
     ),
+    mode: str = typer.Option(
+        None, help="UI mode: founder | engineer | enterprise. Default: "
+                   "resolved from the workspace edition (.mas/edition.yaml"
+                   " — solo→founder), else founder. Modes only add "
+                   "read-only detail; the flow is the same in all three."
+    ),
 ):
     """Founder Studio: the browser UI for the FDR flow (localhost only)."""
     from ai_venture_studio.studio import serve_studio
+    from ai_venture_studio.studio_modes import StudioModeError
     from ai_venture_studio.upstream import init_workspace
 
     root = Path(repo_dir).resolve()
@@ -768,7 +775,11 @@ def studio(
             raise typer.Exit(code=2)
         init_workspace(root, root.name, profile)
     console.print(f"Studio: http://127.0.0.1:{port}  (workspace: {root})")
-    serve_studio(root, port=port, lang=lang)
+    try:
+        serve_studio(root, port=port, lang=lang, mode=mode)
+    except StudioModeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
 
 
 @app.command()

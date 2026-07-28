@@ -152,6 +152,80 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "已完成的模块都保留着，逐个继续就行：",
         "en": "Finished modules are kept. Resume the rest one at a time:",
     },
+    # --- studio modes (v0.55) -------------------------------------------
+    "h_engineer": {
+        "zh": "构建内幕 / Build internals",
+        "en": "Build internals",
+    },
+    "mode_note_engineer": {
+        "zh": "工程师模式 — 显示命令行视角的模块 ID 和状态，可用 --mode 切换。"
+              " / Engineer mode — switch with --mode.",
+        "en": "Engineer mode — task IDs and states as the CLI sees them. "
+              "Switch with --mode.",
+    },
+    "eng_profile": {"zh": "项目类型 / Profile", "en": "Profile"},
+    "eng_no_plan": {
+        "zh": "还没有计划 — 先写需求。/ No plan yet.",
+        "en": "No plan yet — write the FDR first.",
+    },
+    "eng_cli": {
+        "zh": "命令行等价操作 / CLI equivalents",
+        "en": "CLI equivalents",
+    },
+    "eng_cli_body": {
+        "zh": "avs retry-task <id> --repo-dir .   # 「重试」按钮\n"
+              "avs preview                        # 在本地运行产品\n"
+              "avs walkthrough                    # 验收清单\n"
+              "avs verify                         # 重新跑检查",
+        "en": "avs retry-task <id> --repo-dir .   # the Retry button\n"
+              "avs preview                        # run the product locally\n"
+              "avs walkthrough                    # acceptance walkthrough\n"
+              "avs verify                         # re-run the checks",
+    },
+    "h_governance": {"zh": "治理 / Governance", "en": "Governance"},
+    "mode_note_enterprise": {
+        "zh": "企业模式 — 显示当前 edition 的治理设置（.mas/edition.yaml），"
+              "可用 --mode 切换。 / Enterprise mode — switch with --mode.",
+        "en": "Enterprise mode — what this edition enforces, read from "
+              ".mas/edition.yaml. Switch with --mode.",
+    },
+    "gov_edition": {"zh": "预设 / Edition", "en": "Edition"},
+    "gov_rung": {"zh": "基建层级 / Substrate rung", "en": "Substrate rung"},
+    "gov_wip": {"zh": "并行上限 / WIP limit", "en": "WIP limit"},
+    "gov_weekly": {
+        "zh": "每周评审预算（分钟）/ Weekly review minutes",
+        "en": "Weekly review budget (minutes)",
+    },
+    "gov_never": {
+        "zh": "永不合并的闸门 / Never-batched gates",
+        "en": "Never-batched gates",
+    },
+    "gov_gate_owner_yes": {
+        "zh": "每个闸门都需要指定负责人。/ Named gate owner required.",
+        "en": "Every gate requires a named owner.",
+    },
+    "gov_gate_owner_no": {
+        "zh": "闸门不要求指定负责人。/ No gate owner required.",
+        "en": "No named gate owner required.",
+    },
+    "gov_attestations": {
+        "zh": "存证记录 / Attestation entries",
+        "en": "Attestation ledger entries",
+    },
+    "gov_no_ledger": {
+        "zh": "还没有存证记录 — 尚未进行任何存证。/ No attestation ledger yet.",
+        "en": "No attestation ledger yet — nothing has been attested.",
+    },
+    "gov_no_edition": {
+        "zh": "此工作区还没有选择 edition — 运行 avs init --edition "
+              "enterprise。/ No edition resolved for this workspace.",
+        "en": "No edition resolved for this workspace — run "
+              "avs init --edition enterprise.",
+    },
+    "gov_edition_error": {
+        "zh": "edition 文件未通过检查 / Edition file fails lint",
+        "en": "The edition file fails lint",
+    },
 }
 
 

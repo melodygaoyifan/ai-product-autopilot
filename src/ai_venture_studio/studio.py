@@ -12,6 +12,11 @@ runs as the same detached worker the CLI uses.
 Every user-facing string comes from `studio_i18n` so `--lang en` renders the
 whole flow in English. The default stays the original bilingual Chinese-first
 text, so nothing changes for existing users.
+
+Different users get different modes (`studio_modes`): founder is the
+original UI unchanged; engineer and enterprise append read-only cards. The
+mode resolves from the workspace's edition, `--mode` overrides, and a mode
+may only ADD visibility — never remove a form or a required action.
 """
 
 from __future__ import annotations
@@ -26,6 +31,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from ai_venture_studio.studio_i18n import DEFAULT_LANGUAGE, normalize, t
+from ai_venture_studio.studio_modes import (
+    engineer_panel,
+    enterprise_panel,
+    resolve_mode,
+)
 
 _STYLE = """
 body{font-family:-apple-system,'PingFang SC',sans-serif;max-width:760px;
@@ -41,6 +51,9 @@ margin:1rem 0}
 .muted{color:#888;font-size:.9rem}
 h1{font-size:1.4rem}
 .ok{color:#07c160}.warn{color:#c87d2f}.bad{color:#d23}
+table{border-collapse:collapse;width:100%}
+td{padding:.25rem .6rem;border-bottom:1px solid #eee;font-size:.9rem;
+text-align:left;vertical-align:top}
 """
 
 
@@ -153,14 +166,26 @@ def _task_list_html(tasks: list[dict]) -> str:
 
 def create_studio_app(
     repo_dir: str | Path, *, spawn=None, provider: str = "anthropic",
-    lang: str = DEFAULT_LANGUAGE,
+    lang: str = DEFAULT_LANGUAGE, mode: str | None = None,
 ) -> FastAPI:
     root = Path(repo_dir).resolve()
     lang = normalize(lang)
+    mode = resolve_mode(root, mode)
 
     def _(key: str) -> str:
         """This page's string in the chosen language (studio_i18n)."""
         return t(lang, key)
+
+    def _render(title: str, body: str) -> HTMLResponse:
+        """Every page, plus the mode's read-only card. Founder mode appends
+        nothing, so the default UI stays byte-for-byte what it was. Panels
+        are built per request — they reflect the workspace files as of this
+        page load, never a cached copy."""
+        if mode == "engineer":
+            body += engineer_panel(root, _, _task_states(root))
+        elif mode == "enterprise":
+            body += enterprise_panel(root, _)
+        return _page(title, body)
 
     app = FastAPI(
         title="avs studio", docs_url=None, redoc_url=None, openapi_url=None
@@ -219,7 +244,7 @@ def create_studio_app(
             # Live per-task progress (signal s3: "it looks frozen while it
             # works") — poll /status, update in place, one full reload when
             # the worker exits so the report page takes over.
-            return _page(
+            return _render(
                 _("title_building"),
                 f"<div class=card><p>{_('done_label')} <b id=done>{done}</b> / "
                 f"<b id=total>{total}</b> {_('updates_live')}</p>"
@@ -262,7 +287,7 @@ def create_studio_app(
                 if not unbuilt
                 else f"<p>{_('interrupted_resume')}</p>" + retries
             )
-            return _page(
+            return _render(
                 _("title_interrupted"),
                 f"<div class=card><b class=warn>{_('interrupted_lead')}"
                 f"</b><ul style='list-style:none;padding-left:0'>"
@@ -284,7 +309,7 @@ def create_studio_app(
                     feature_cards += f"<div class=card>{html.escape(d.name)} — {state}</div>"
             pending = _pending_feature(root)
             if pending:
-                return _page(
+                return _render(
                     _("title_confirm_feature"),
                     f"<pre>{_md(pending / 'CONFIRMATION.md')}</pre>"
                     f"<form method=post action=/feature/build>"
@@ -321,7 +346,7 @@ def create_studio_app(
                     f"</b><p>{_('failed_hint')}</p>{rows}</div>"
                 )
             no_features = f"<p class=muted>{_('first_version')}</p>"
-            return _page(
+            return _render(
                 _("title_product"),
                 f"<pre>{_md(report)}</pre>{acceptance}{gallery}{retry_block}"
                 f"<h2>{_('h_features')}</h2>"
@@ -341,7 +366,7 @@ def create_studio_app(
                 f"<button class=secondary>{_('btn_undo')}</button></form>",
             )
         if confirmation.exists():
-            return _page(
+            return _render(
                 _("title_confirm_plan"),
                 f"<pre>{_md(confirmation)}</pre>"
                 f"<form method=post action=/build><button>{_('btn_start_building')}"
@@ -361,7 +386,7 @@ def create_studio_app(
         current = (
             fdr.read_text(encoding="utf-8") if fdr.exists() else template_for(lang)
         )
-        return _page(
+        return _render(
             _("title_describe"),
             f"{question_block}"
             f"<form method=post action=/fdr>"
@@ -391,7 +416,7 @@ def create_studio_app(
 
     @app.get("/acceptance", response_class=HTMLResponse)
     def acceptance():
-        return _page(
+        return _render(
             _("title_acceptance"),
             f"<pre>{_md(root / 'product' / 'ACCEPTANCE.md')}</pre>"
             f"<p><a href='/'>{_('link_back')}</a></p>",
@@ -505,8 +530,10 @@ def create_studio_app(
 
 def serve_studio(repo_dir: str | Path, host: str = "127.0.0.1", port: int = 8433,
                  *, provider: str = "anthropic",
-                 lang: str = DEFAULT_LANGUAGE) -> None:
+                 lang: str = DEFAULT_LANGUAGE, mode: str | None = None) -> None:
     import uvicorn
 
-    uvicorn.run(create_studio_app(repo_dir, provider=provider, lang=lang),
-                host=host, port=port, log_level="warning")
+    uvicorn.run(
+        create_studio_app(repo_dir, provider=provider, lang=lang, mode=mode),
+        host=host, port=port, log_level="warning",
+    )

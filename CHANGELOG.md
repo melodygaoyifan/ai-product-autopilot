@@ -4,6 +4,32 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.55.0 — Studio modes: different users, different depths of the same UI
+- `avs studio --mode founder|engineer|enterprise`. The editions system
+  (doc 24, ADR-U26/U27) already encodes who is at the keyboard; the Studio
+  now reads it — no flag needed, the mode resolves from the workspace's
+  `.mas/edition.yaml` (solo→founder, engineer→engineer,
+  enterprise→enterprise), and `--mode` overrides per launch.
+- Founder mode is the existing UI unchanged, and stays the default: with no
+  edition and no flag, the page is byte-for-byte what it was.
+- Engineer mode appends a build-internals card to every page: each task
+  with its CLI-usable ID and verbatim recorded state (`spec_blocked`, not a
+  euphemism), the workspace profile, and the command equivalent of every
+  button (`retry-task`, `preview`, `walkthrough`, `verify`).
+- Enterprise mode appends a governance card read from the resolved edition:
+  substrate rung, WIP limit, gate-owner rule, never-batched gates, and the
+  attestation-ledger entry count — with "no ledger yet" stated rather than
+  omitted, because a missing ledger must not read as attested-and-clean.
+- The mode contract is the editions' own rule read UI-side (invariant
+  14.21): a mode may only ADD visibility. Tested structurally — every form
+  action and link the founder page renders must appear in every other mode.
+  An unknown `--mode` is a loud startup error, same policy as a missing
+  i18n string; a corrupted edition file falls back to founder rather than
+  taking the Studio down.
+- `__init__.__version__` synced (it had been stranded at 0.12.0 since the
+  packaging split; nothing reads it, but a wrong number is a wrong number).
+- Suite: 1071 → 1092.
+
 ## v0.54.1 — packaging: every runtime resource now ships in the wheel
 - **0.54.0 was broken for pip users and is yanked.** Publishing it and then
   installing it FROM PyPI is what found this: `avs init --profile web` — the
