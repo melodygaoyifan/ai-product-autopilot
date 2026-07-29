@@ -28,6 +28,8 @@ from ai_venture_studio.product.market import (
     GatePL1Decision,
     GatePL1Entry,
     gate_pl1_entry,
+    ProbeFetchError,
+    fetch_probe,
     record_probe,
 )
 from ai_venture_studio.product.opportunity import (
@@ -164,6 +166,8 @@ __all__ = [
     "load_kill_registry",
     "match_killed",
     "prd_lint",
+    "ProbeFetchError",
+    "fetch_probe",
     "record_probe",
     "sizing_calc",
     "validate_handoff_at_dor",

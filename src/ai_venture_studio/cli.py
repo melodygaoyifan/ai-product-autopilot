@@ -1525,6 +1525,65 @@ def opportunity_cmd(
     _run_stage(opportunity_spec(workspace), user_input, workspace, provider)
 
 
+@app.command("probe")
+def probe_cmd(
+    url: str = typer.Argument(..., help="https URL of one public page"),
+    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    method: str = typer.Option("competitor_probe", help="Evidence method tag"),
+    out: str = typer.Option(
+        "", help="Append the evidence entry to this YAML file "
+                 "(default: print it for you to paste into --evidence)"
+    ),
+):
+    """Fetch one public page and record it as a probe (quarantined).
+
+    The bytes are snapshotted to .mas/evidence/ and you get a hash + locator
+    back — never the page content, which is what keeps a hostile page from
+    reaching a privileged session. Only locators that a source declared in
+    .mas/signal-sources.yaml already has standing for can be probed, and the
+    fetch is yours: no agent can call this.
+    """
+    from pathlib import Path as _Path
+
+    import yaml
+
+    from ai_venture_studio.product.market import ProbeFetchError, fetch_probe
+    from ai_venture_studio.product.sources import (
+        SignalSourceError,
+        load_signal_sources,
+    )
+
+    mas_dir = _Path(repo_dir).resolve() / ".mas"
+    try:
+        sources = load_signal_sources(mas_dir)
+        entry, findings = fetch_probe(
+            url, sources=sources, mas_dir=mas_dir, method=method
+        )
+    except (ProbeFetchError, SignalSourceError, ValueError, OSError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+    for finding in findings:
+        console.print(f"[yellow]{finding.rule}: {finding.message}[/yellow]")
+    payload = {"evidence": [entry]}
+    if out:
+        path = _Path(out)
+        existing = yaml.safe_load(path.read_text()) if path.exists() else None
+        merged = (existing or {}).get("evidence", []) + [entry]
+        path.write_text(
+            yaml.safe_dump({"evidence": merged}, sort_keys=False,
+                           allow_unicode=True),
+            encoding="utf-8",
+        )
+        console.print(f"appended to {path} ({len(merged)} probe(s))")
+    else:
+        console.print(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True))
+    if findings:
+        # Contaminated evidence is usable only with the flag attached, so the
+        # exit code says "read this before citing it" rather than "failed".
+        raise typer.Exit(code=3)
+
+
 @app.command("market")
 def market_cmd(
     candidate: str = typer.Argument(..., help="Candidate id or statement from "

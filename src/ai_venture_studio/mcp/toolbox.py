@@ -57,9 +57,17 @@ class MCPToolBox:
         self.allowed = set(allowed) & VOTER_TOOL_REGISTRY
         self.budget = budget
         self.calls_made = 0
+        # ADR-U03 taint isolation was implemented on both sides — TaintGuard
+        # and the host's authorize() branch — and never connected, so a run
+        # that consumed research kept its L1+ surface in practice. One guard
+        # per toolbox: the unit of taint is the run, which is what a toolbox
+        # instance already scopes.
+        from ai_venture_studio.harness.taint_guard import TaintGuard
+
+        self.taint = TaintGuard(session=voter)
         self._host = MCPHost(
             self.root, sorted(self.allowed), voter=voter, timeout_s=timeout_s,
-            risk_ceiling=risk_ceiling,
+            risk_ceiling=risk_ceiling, taint=self.taint,
         )
         self._started = False
 
