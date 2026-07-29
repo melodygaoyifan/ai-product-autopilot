@@ -269,6 +269,11 @@ def _write_outcomes(root: Path, outcomes) -> None:
                        allow_unicode=True),
         encoding="utf-8",
     )
+    # Outcomes are written on every autopilot exit path, which makes this the
+    # one place guaranteed to run after the spending stops.
+    from ai_venture_studio import spend
+
+    spend.flush(root)
 
 
 def _resume_outcomes(root: Path) -> list[TaskOutcome]:

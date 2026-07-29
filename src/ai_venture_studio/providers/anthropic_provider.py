@@ -49,6 +49,22 @@ class AnthropicProvider(Provider):
                 if not transient or attempt == 3:
                     raise
                 time.sleep(2 ** (attempt + 1))
+        # Meter here, where usage exists. The chat() contract still returns
+        # str — threading a usage object through the writers, critics,
+        # implementer and verifier would touch every call site for no gain,
+        # and this adapter already owns retries and empty-response
+        # diagnostics. Recording never raises; the ledger is written later by
+        # whoever knows the workspace (spend.flush).
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            from ai_venture_studio import spend
+
+            spend.record(
+                model,
+                getattr(usage, "input_tokens", None),
+                getattr(usage, "output_tokens", None),
+            )
+
         text = "".join(
             block.text for block in response.content if block.type == "text"
         )

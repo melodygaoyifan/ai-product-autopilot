@@ -52,9 +52,25 @@ class _ChatCompletionsProvider(Provider):
             if response.status_code == 400 and "max_tokens" in response.text:
                 continue
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            body = response.json()
+            _record_usage(self.name, model, body.get("usage") or {})
+            return body["choices"][0]["message"]["content"]
         response.raise_for_status()
         raise ProviderError(f"{self.name}: both token params rejected for {model}")
+
+
+def _record_usage(provider: str, model: str, usage: dict) -> None:
+    """Meter at the adapter, same as the anthropic path. OpenAI-compatible
+    bodies report prompt_tokens/completion_tokens."""
+    if not usage:
+        return
+    from ai_venture_studio import spend
+
+    spend.record(
+        model,
+        usage.get("prompt_tokens") or usage.get("input_tokens"),
+        usage.get("completion_tokens") or usage.get("output_tokens"),
+    )
 
 
 @register

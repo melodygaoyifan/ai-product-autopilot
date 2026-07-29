@@ -473,6 +473,21 @@ def run_build(
     finalize_build_bookkeeping. Default: build in place, all-inclusive."""
     started = time.monotonic()
     repo = Path(repo_dir).resolve()
+
+    # A build is the most expensive thing here — a spec, an implementer, a
+    # review, and up to three fix iterations per task. Check the cap before
+    # spending, not after, and flush what this task spends on the way out so
+    # the next task's check sees it.
+    from ai_venture_studio import spend
+
+    # Flush first, then gate: run_build is called once per task, so this
+    # persists the previous task's spend and the check below sees it. A cap
+    # that only notices at the end of a seven-task run is not a cap.
+    spend.flush(repo)
+    cost = spend.cost_gate(repo)
+    if not cost.passed:
+        return BuildResult(slug=slug, status="error", detail=cost.reasons[0])
+
     if in_branch:
         import tempfile
 

@@ -40,5 +40,15 @@ class GoogleProvider(Provider):
             timeout=120,
         )
         response.raise_for_status()
-        parts = response.json()["candidates"][0]["content"]["parts"]
+        body = response.json()
+        usage = body.get("usageMetadata") or {}
+        if usage:
+            from ai_venture_studio import spend
+
+            spend.record(
+                model,
+                usage.get("promptTokenCount"),
+                usage.get("candidatesTokenCount"),
+            )
+        parts = body["candidates"][0]["content"]["parts"]
         return "".join(part.get("text", "") for part in parts)

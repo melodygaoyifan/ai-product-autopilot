@@ -1579,6 +1579,68 @@ def opportunity_cmd(
     _run_stage(opportunity_spec(workspace), user_input, workspace, provider)
 
 
+@app.command("cost")
+def cost_cmd(
+    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    month: str = typer.Option(None, help="YYYY-MM (default: this month)"),
+):
+    """What this workspace has spent, and whether the cap still allows work.
+
+    Prices come from `.mas/cost-model.yaml` — never constants in code, because
+    prices rot. A call whose model has no price is counted as UNPRICED and
+    named, never as zero: a total that hides unpriced calls understates, and a
+    cap compared against it silently stops working the day you switch models.
+    """
+    from ai_venture_studio.observability import load_cost_model
+    from ai_venture_studio.spend import (
+        cost_gate,
+        current_month,
+        priced,
+        read_entries,
+    )
+
+    root = Path(repo_dir).resolve()
+    window = month or current_month()
+    entries = read_entries(root, month=window)
+    records = priced(entries, load_cost_model(root / ".mas"))
+    result = cost_gate(root, month=window)
+
+    console.print(f"month {window}: {len(entries)} call(s)")
+    by_model: dict[str, tuple[int, int, float, int]] = {}
+    for entry, record in zip(entries, records):
+        calls, tokens, usd, unpriced = by_model.get(entry.model, (0, 0, 0.0, 0))
+        by_model[entry.model] = (
+            calls + 1,
+            tokens + entry.input_tokens + entry.output_tokens,
+            usd + (record.cost_usd or 0.0),
+            unpriced + (1 if record.cost_usd is None else 0),
+        )
+    if by_model:
+        table = Table("model", "calls", "tokens", "usd", "unpriced")
+        for model_name, (calls, tokens, usd, unpriced) in sorted(by_model.items()):
+            table.add_row(
+                model_name, str(calls), f"{tokens:,}",
+                f"{usd:.2f}+" if unpriced else f"{usd:.2f}",
+                str(unpriced),
+            )
+        console.print(table)
+
+    if not result.configured:
+        console.print(f"[yellow]{result.note}[/yellow]")
+        return
+    prefix = "≥" if result.is_floor else ""
+    console.print(
+        f"spend {prefix}${result.spent_usd:.2f} of ${result.cap_usd:.2f} cap"
+    )
+    if result.note:
+        console.print(f"[yellow]{result.note}[/yellow]")
+    if not result.passed:
+        for reason in result.reasons:
+            console.print(f"[red]{reason}[/red]")
+        raise typer.Exit(code=3)
+    console.print("[green]within cap[/green]")
+
+
 @app.command("mvp")
 def mvp_cmd(
     slice_file: str = typer.Argument(

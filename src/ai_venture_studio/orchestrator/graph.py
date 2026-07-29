@@ -69,6 +69,17 @@ def dor_gate_node(state: ReviewState, *, repo_dir: str) -> dict[str, Any]:
 
     policy = load_policy(repo_dir)  # PolicyError is fatal, by design
     reasons = []
+
+    # Cost gate (doc 09 §10): the cap is only worth anything BEFORE the spend,
+    # which is what Gate 1 is for. Silent unless the operator configured a cap;
+    # `cap_check` used to have no caller at all, so the cap was a number in a
+    # file nothing read.
+    from ai_venture_studio.spend import cost_gate
+
+    cost = cost_gate(repo_dir)
+    if not cost.passed:
+        reasons.extend(cost.reasons)
+
     if not diff.files:
         reasons.append("empty diff — nothing to review")
     if diff.changed_lines > policy.max_reviewable_lines:
@@ -329,6 +340,14 @@ def _append_voter_logs(state: ReviewState, outputs: list[VoterOutput]) -> None:
 def post_node(
     state: ReviewState, *, mirror: YamlMirror, repo_dir: str = "."
 ) -> dict[str, Any]:
+    # Persist whatever this review spent, on every exit path including the
+    # Gate 1 bail: a run that stopped early still burned the calls it made,
+    # and a ledger that only records happy paths undercounts the months that
+    # matter most.
+    from ai_venture_studio import spend
+
+    spend.flush(repo_dir)
+
     if not state.get("dor_pass"):
         mirror.write("dor_fail", {"reasons": state.get("dor_reasons", [])})
         return {"artifacts_dir": str(mirror.dir)}
