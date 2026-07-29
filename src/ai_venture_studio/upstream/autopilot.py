@@ -21,6 +21,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from ai_venture_studio.providers import get_provider
+from ai_venture_studio.upstream import progress
 from ai_venture_studio.upstream.discover import approve_brief, run_discovery
 from ai_venture_studio.upstream.fdr import Assessment, assess_fdr
 from ai_venture_studio.upstream.plan import approve_plan, load_plan, run_planning
@@ -37,6 +38,14 @@ class TaskOutcome(BaseModel):
     status: str  # built | spec_blocked | build_failed | error
     review_verdict: str | None = None
     detail: str = ""
+    # The diagnosis, not just the verdict. `BuildResult` has always carried
+    # these; the outcome record dropped them, so every failed task in
+    # outcomes.yaml, in the bench scoreboard and in the founder's report read
+    # "build gate still failing after max iterations" with the cause discarded
+    # one stack frame away. Optional so older outcomes.yaml files still load.
+    iterations: int = 0
+    files_written: list[str] = Field(default_factory=list)
+    test_summary: str = ""
 
 
 class AutopilotResult(BaseModel):
@@ -161,14 +170,19 @@ def run_autopilot(
             )
         ordered = []
     for task in ordered:
+        # Each of these steps is minutes long and, until now, silent: the task
+        # simply stayed `pending` from here until it finished or died.
+        progress.step(root, task.id, "spec", f"working out how to build: {task.title}")
         spec = run_spec_stage(
             root, f"{task.description} (task:{task.id})", provider=provider,
             source_contract=fdr_text,
         )
         if spec.status != "proposed":
+            reasons = "; ".join(spec.block_reasons) or "blocked (no reasons recorded)"
+            progress.step(root, task.id, "spec", f"blocked: {reasons[:160]}")
             outcomes.append(
                 TaskOutcome(task_id=task.id, title=task.title, status="spec_blocked",
-                            detail="; ".join(spec.block_reasons) or "blocked (no reasons recorded)")
+                            detail=reasons)
             )
             continue
         approve_spec(root, spec.slug)
@@ -181,6 +195,7 @@ def run_autopilot(
         verdict = None
         detail = built.detail
         if built.status == "built":
+            progress.step(root, task.id, "review", "checking the code that was written")
             review = _review_head(root, provider)
             verdict = review.verdict.value if review else None
             # Fix loop: critical/high findings get ONE bounded repair
@@ -189,6 +204,11 @@ def run_autopilot(
                 f for f in (review.findings if review else [])
                 if f.severity.value in ("critical", "high")
             ]
+            if serious:
+                progress.step(
+                    root, task.id, "fix",
+                    f"fixing {len(serious)} serious issue(s) the review found",
+                )
             if serious and _fix_iteration(root, provider, model, serious):
                 auto_approvals.append(
                     f"fix iteration ({spec.slug}): {len(serious)} serious review "
@@ -202,6 +222,9 @@ def run_autopilot(
             TaskOutcome(
                 task_id=task.id, title=task.title,
                 status=built.status, review_verdict=verdict, detail=detail,
+                iterations=built.iterations,
+                files_written=built.files_written,
+                test_summary=built.test_summary,
             )
         )
         # Persist immediately: a crash after this point must not lose the

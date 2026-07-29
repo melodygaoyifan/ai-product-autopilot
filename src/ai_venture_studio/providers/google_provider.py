@@ -4,7 +4,12 @@ import os
 
 import httpx
 
-from ai_venture_studio.providers.base import Provider, ProviderError, register
+from ai_venture_studio.providers.base import (
+    Provider,
+    ProviderError,
+    record_stop_reason,
+    register,
+)
 
 
 @register
@@ -50,5 +55,9 @@ class GoogleProvider(Provider):
                 usage.get("promptTokenCount"),
                 usage.get("candidatesTokenCount"),
             )
-        parts = body["candidates"][0]["content"]["parts"]
+        candidate = body["candidates"][0]
+        # Gemini spells it finishReason / "MAX_TOKENS"; the shared reason set in
+        # providers/base.py carries both spellings.
+        record_stop_reason(candidate.get("finishReason"))
+        parts = candidate["content"]["parts"]
         return "".join(part.get("text", "") for part in parts)

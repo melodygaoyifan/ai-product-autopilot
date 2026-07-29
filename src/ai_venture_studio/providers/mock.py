@@ -11,7 +11,7 @@ import re
 
 import yaml
 
-from ai_venture_studio.providers.base import Provider, register
+from ai_venture_studio.providers.base import Provider, record_stop_reason, register
 
 _PLANTED = [
     (re.compile(r"except\s*(Exception)?\s*:\s*pass"), "Swallowed exception", "P9", "high"),
@@ -44,7 +44,18 @@ class MockProvider(Provider):
             model=model, system=system, user=messages[0]["content"], max_tokens=max_tokens
         )
 
+    #: Tests set this to reproduce a response cut off at the output cap. Every
+    #: mock reply resets the thread's stop reason, so a test that sets it gets
+    #: exactly one truncated call — the same shape as the real failure, where a
+    #: model returns a partial answer once and a complete one on retry.
+    truncate_next: bool = False
+
     def complete(self, *, model: str, system: str, user: str, max_tokens: int = 4096) -> str:
+        if type(self).truncate_next:
+            type(self).truncate_next = False
+            record_stop_reason("max_tokens")
+        else:
+            record_stop_reason("end_turn")
         from ai_venture_studio.compound import COMPOUND_MARKER
         from ai_venture_studio.leader import LEADER_MARKER
         from ai_venture_studio.maintenance.review import ROOTCAUSE_MARKER, TRIAGE_MARKER

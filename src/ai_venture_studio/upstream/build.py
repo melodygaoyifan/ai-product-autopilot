@@ -19,13 +19,14 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from ai_venture_studio.providers import get_provider
+from ai_venture_studio.providers import get_provider, last_response_truncated
 from ai_venture_studio.testing import (
     _pytest_in_docker,
     _pytest_in_subprocess,
     _run,
     docker_available,
 )
+from ai_venture_studio.upstream import progress
 from ai_venture_studio.upstream.spec import Spec, load_spec
 from ai_venture_studio.upstream.workspace import load_project
 from ai_venture_studio.yamlx import extract_mapping
@@ -36,6 +37,14 @@ MAX_ITERATIONS = 3
 _MAX_FILES = 12
 _MAX_FILE_LINES = 500
 _FORBIDDEN_PREFIXES = (".git", ".mas", "specs")
+
+# The prompt below permits 12 files of 500 lines — 6000 lines of code — and the
+# old 16384-token cap could not carry a third of that, so a task working at the
+# top of its own stated envelope was cut off mid-file by construction. 32000 is
+# the ceiling an Opus-class model accepts; asking for more is a 400 at request
+# time, which would trade a silent failure for a loud one on every single build.
+# The guard in the build loop covers whatever still overruns.
+_IMPLEMENTER_MAX_TOKENS = 32000
 
 
 class BuildResult(BaseModel):
@@ -280,6 +289,19 @@ def _stale_import_note(repo: Path) -> str:
         "Resubmit those files to use the existing names, or add the missing "
         "names additively to the module they import from."
     )
+
+
+def _why_no_files(raw: str, kept: list[str]) -> str:
+    """The distinguishing evidence for an empty submission, as a suffix.
+
+    `kept` non-empty means the batch WAS files and every one of them was
+    discarded (weakened skeletons, dropped shared names) — a different bug from
+    a model that emitted `files: []` or narrated instead. Without this the three
+    read identically in the outcome record."""
+    if kept:
+        return " — every file was discarded: " + "; ".join(kept[:3])
+    opening = " ".join(raw.split())[:200]
+    return f" — response began: {opening!r}" if opening else " — response was empty"
 
 
 def _write_files(
@@ -787,13 +809,50 @@ def _run_build_inner(
     written: list[str] = []
     report = None
     for iteration in range(1, MAX_ITERATIONS + 1):
+        progress.step(
+            repo, slug, "build", f"writing the code (attempt {iteration}/{MAX_ITERATIONS})"
+        )
         raw = provider_impl.complete(
             model=model,
             system=_SYSTEM,
             user=base_user
             + (f"\n\n<test_failure>\n{feedback}\n</test_failure>" if feedback else ""),
-            max_tokens=16384,
+            max_tokens=_IMPLEMENTER_MAX_TOKENS,
         )
+        if last_response_truncated():
+            # A response that ran out of output budget is a PARTIAL file set,
+            # and partial YAML usually still parses: the last file's block
+            # scalar simply ends. Writing it produced a half-finished source
+            # file on disk whose real failure showed up two iterations later as
+            # an unrelated test error, with nothing anywhere naming the cause.
+            # So: never write a truncated batch, and say so.
+            progress.step(
+                repo, slug, "build",
+                f"response truncated at the output cap (attempt {iteration}) — "
+                "asking for fewer files",
+            )
+            if iteration == MAX_ITERATIONS:
+                detail = (
+                    f"implementer response truncated at the {_IMPLEMENTER_MAX_TOKENS}-token "
+                    f"output cap on every attempt ({len(raw)} chars received); nothing "
+                    "written. This task asks for more code than one response can carry — "
+                    "split it into smaller tasks"
+                )
+                if bookkeeping and written:
+                    preserved = _preserve_failed_attempt(repo, slug)
+                    _reset_workspace(repo, pre_existing)
+                    detail += f" (failed attempt preserved at {preserved}; workspace reset)"
+                return BuildResult(
+                    slug=slug, status="error", iterations=iteration, detail=detail
+                )
+            feedback = (
+                "YOUR LAST RESPONSE WAS CUT OFF at the output limit, so none of "
+                "it was used. Return FEWER files this time — the smallest set "
+                "that makes the skeleton tests pass — and keep every file "
+                "complete. Never abbreviate a file body or write a placeholder "
+                "comment in place of code."
+            )
+            continue
         try:
             data = extract_mapping(raw, ("files",))
             written, kept = _write_files(
@@ -823,7 +882,15 @@ def _run_build_inner(
             continue
         if not written:
             if iteration == MAX_ITERATIONS:
-                detail = "implementer returned no files"
+                # "implementer returned no files" was the whole story this
+                # failure told, three times across the bench runs, and it
+                # names a symptom with at least three different causes: an
+                # empty `files:` list, a batch entirely discarded as weakened
+                # skeletons, or a model that narrated instead of answering.
+                # The voter seat already preserves the response opening for
+                # exactly this reason (voters/base.py); the implementer now
+                # does too.
+                detail = f"implementer returned no files{_why_no_files(raw, kept)}"
                 if bookkeeping:
                     preserved = _preserve_failed_attempt(repo, slug)
                     _reset_workspace(repo, pre_existing)
@@ -841,6 +908,10 @@ def _run_build_inner(
             continue
         from ai_venture_studio.testing import combine_reports, run_js_tests
 
+        progress.step(
+            repo, slug, "build",
+            f"running your tests ({len(written)} file(s) written)",
+        )
         report = combine_reports(_run_tests(repo), run_js_tests(repo))
         python_skeletons = any(s.path.endswith(".py") for s in spec.test_skeletons)
         if report.status == "passed" or (
@@ -848,12 +919,20 @@ def _run_build_inner(
         ):
             # skipped = JS tests exist but no node runtime; the skip is
             # visible in the report and review still judges the diff.
+            if project.profile == "web":
+                progress.step(repo, slug, "build", "checking that it actually starts up")
             boot_failure = _boot_gate(repo) if project.profile == "web" else None
             if boot_failure is None:
+                progress.step(repo, slug, "build", "tests pass — saving the code")
                 break
+            progress.step(repo, slug, "build", "it did not start up — fixing")
             feedback = boot_failure
             continue
         feedback = report.detail or report.summary
+        progress.step(
+            repo, slug, "build",
+            f"tests failed ({' '.join(report.summary.split())[:120]}) — fixing",
+        )
         stale = _stale_import_note(repo)
         if stale:
             feedback += "\n\n" + stale
@@ -865,7 +944,15 @@ def _run_build_inner(
                 + ". Make the CODE pass the skeleton as written."
             )
     else:
-        detail = "build gate still failing after max iterations; nothing committed"
+        # The cause travels WITH the generic sentence. `test_summary` has always
+        # held the real reason, but every consumer that reads only `detail` — the
+        # bench result rows, the founder's report, outcomes.yaml — showed the
+        # generic half alone, which is why "why does it always fail" had no
+        # answer in the record.
+        cause = " ".join((feedback or "").split())[:240]
+        detail = "build gate still failing after max iterations; nothing committed" + (
+            f" — last failure: {cause}" if cause else ""
+        )
         if bookkeeping:
             # bookkeeping=True means we built IN the shared workspace (the
             # worktree path preserves + discards in the run_build wrapper).

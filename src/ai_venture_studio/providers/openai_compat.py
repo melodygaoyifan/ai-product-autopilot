@@ -10,7 +10,12 @@ import os
 
 import httpx
 
-from ai_venture_studio.providers.base import Provider, ProviderError, register
+from ai_venture_studio.providers.base import (
+    Provider,
+    ProviderError,
+    record_stop_reason,
+    register,
+)
 
 
 class _ChatCompletionsProvider(Provider):
@@ -54,7 +59,11 @@ class _ChatCompletionsProvider(Provider):
             response.raise_for_status()
             body = response.json()
             _record_usage(self.name, model, body.get("usage") or {})
-            return body["choices"][0]["message"]["content"]
+            choice = body["choices"][0]
+            # OpenAI-compatible bodies say finish_reason: "length" for the
+            # ran-out-of-budget case.
+            record_stop_reason(choice.get("finish_reason"))
+            return choice["message"]["content"]
         response.raise_for_status()
         raise ProviderError(f"{self.name}: both token params rejected for {model}")
 

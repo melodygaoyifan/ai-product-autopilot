@@ -313,9 +313,17 @@ def run_case(
             tasks_total=len(result.outcomes),
             tasks_built=len(built),
             clean_reviews=len(clean),
+            # 200 chars cut the diagnosis mid-word in the scoreboard ("does not
+            # match any EAR"), and the row is the durable record of the run —
+            # the workspace it points at is gitignored and has been lost before.
+            # A failing row now carries the whole reason plus the test summary
+            # the outcome kept; a built row stays terse.
             outcomes=[
                 {"task_id": o.task_id, "title": o.title, "status": o.status,
-                 "review": o.review_verdict, "detail": o.detail[:200]}
+                 "review": o.review_verdict,
+                 "detail": o.detail if o.status != "built" else o.detail[:200],
+                 **({"test_summary": o.test_summary} if o.test_summary else {}),
+                 **({"iterations": o.iterations} if o.iterations else {})}
                 for o in result.outcomes
             ],
             preserved_workspace=preserved,

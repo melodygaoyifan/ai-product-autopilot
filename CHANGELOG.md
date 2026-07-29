@@ -4,6 +4,54 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## Unreleased — a run that says what it is doing, and a failure that says why
+
+Diagnosed from the durable bench scoreboard (`benchmarks/results/`), where
+`build_failed` and `error` rows dominate runs 4–11. Every one of them named a
+symptom the system already knew the cause of and had discarded.
+
+- **A cut-off response is no longer indistinguishable from a complete one.**
+  `stop_reason` was recorded only when the response text came back *empty* —
+  the one case where nothing is at stake. A response truncated at the output
+  cap returns partial YAML that usually still *parses* (a block scalar simply
+  ends), so a half-written source file reached disk and its real failure
+  surfaced an iteration or two later as an unrelated test error. All four
+  adapters now record why the model stopped (`stop_reason` / `finish_reason` /
+  `finishReason`) into a thread-local — thread-local because voters and
+  parallel lane builds run concurrently.
+- **The implementer refuses a truncated batch instead of writing it.** The
+  build loop feeds the truncation back as named feedback ("return FEWER
+  files"), and a task truncated on every attempt fails with the cap, the
+  bytes received, and the remedy — split the task — rather than a generic
+  test error. The implementer's cap also rose 16384 → 32000: the prompt
+  permits 12 files of 500 lines and the old cap could not carry a third of
+  that, so a task at the top of its own stated envelope was cut off by
+  construction. 32000 is the Opus-class ceiling; more would 400 at request
+  time. The planner gained the same guard (a truncated plan loses whole tasks
+  silently, and `dag_check` cannot see it — a truncated plan is internally
+  consistent) plus 4096 → 8192.
+- **`build gate still failing after max iterations` now says what failed.**
+  `BuildResult.test_summary` always held the reason; `TaskOutcome` dropped it,
+  so outcomes.yaml, the bench scoreboard and the founder's report all showed
+  the generic half alone. The cause now travels with the sentence, the outcome
+  carries `iterations` / `files_written` / `test_summary`, and the bench row
+  stops truncating a failure's detail mid-word.
+- **`implementer returned no files` distinguishes its three causes** — an
+  empty `files:` list, a batch discarded wholesale as weakened skeletons, or a
+  model that narrated instead of answering — by keeping the response opening,
+  the way the voter seat already does.
+- **A task in flight is observable.** New `upstream/progress.py`: an
+  append-only step journal (`.mas/progress.jsonl`) written as each step
+  actually starts. A task used to sit at `pending` through spec, five charter
+  critics, up to three build iterations and six review voters — most of a
+  run's wall-clock, indistinguishable from frozen. `avs create` now narrates
+  live (it printed nothing at all between start and a report an hour away),
+  the Studio's per-task line shows the current step, and a failed module
+  prints its cause in the summary. Observed, never predicted: no percentages
+  and no ETAs, because the system genuinely does not know whether iteration 2
+  of 3 will be the last. The journal is a record and never an input — an
+  unwritable one cannot fail a build.
+
 ## v0.56.0 — per-mode UIs: each persona gets its organizing surface
 
 Researched before built: the design canon (doc 24's persona constraints,

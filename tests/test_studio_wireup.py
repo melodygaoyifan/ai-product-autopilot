@@ -181,7 +181,7 @@ def test_every_backend_route_is_reachable_from_some_rendered_state(studio):
 
 def test_status_payload_matches_what_the_building_page_js_reads(studio):
     """The building page's script reads s.running / s.built / s.total and
-    t.id / t.title / t.state per task — the JSON contract, pinned."""
+    t.id / t.title / t.state / t.step per task — the JSON contract, pinned."""
     client, root = studio
     (root / "product").mkdir(exist_ok=True)
     (root / "product" / "plan.yaml").write_text(yaml.safe_dump({
@@ -190,13 +190,16 @@ def test_status_payload_matches_what_the_building_page_js_reads(studio):
     }), encoding="utf-8")
     data = client.get("/status").json()
     assert set(data) == {"total", "built", "running", "tasks"}
-    assert all(set(t) == {"id", "title", "state"} for t in data["tasks"])
+    # `step` is the in-flight narration: what this task is doing right now,
+    # rendered only while it is still pending.
+    assert all(set(t) == {"id", "title", "state", "step"} for t in data["tasks"])
     page_src = client.get("/").text  # editor state — no script, but the
     # building page's JS is source-checked here so a rename fails loudly:
     from ai_venture_studio import studio as studio_mod
     import inspect
 
     src = inspect.getsource(studio_mod)
-    for token in ("s.running", "s.built", "s.total", "t.state", "t.title", "'task-'+t.id"):
+    for token in ("s.running", "s.built", "s.total", "t.state", "t.title",
+                  "t.step", "'task-'+t.id"):
         assert token in src, f"building-page JS no longer reads {token}"
     assert page_src  # the walk above already covers rendering

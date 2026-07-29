@@ -9,10 +9,44 @@ surfaced in the YAML mirror so the substitution is visible, not silent.
 from __future__ import annotations
 
 import abc
+import threading
 
 
 class ProviderError(RuntimeError):
     pass
+
+
+# Why a thread-local instead of a return value: the `chat()` contract returns
+# `str`, and widening it to carry metadata would touch every writer, critic,
+# implementer and verifier call site. The reason a caller needs it is narrow
+# and after-the-fact ("was what I just got the WHOLE answer?"), so the adapter
+# records it and whoever cares asks. Thread-local because voters and parallel
+# lane builds run concurrently — a module global would report one thread's
+# truncation to another.
+_local = threading.local()
+
+# A response that hit the output cap is a PARTIAL answer wearing the shape of a
+# complete one. That is the dangerous case: truncated YAML usually still parses
+# (a block scalar simply ends), so a half-written source file reaches disk and
+# the failure surfaces three iterations later as an unrelated test error.
+TRUNCATION_REASONS = frozenset({"max_tokens", "length", "MAX_TOKENS"})
+
+
+def record_stop_reason(stop_reason: str | None) -> None:
+    """Called by every adapter on every successful response. Recording
+    unconditionally is the point: the old code kept `stop_reason` only when the
+    text came back empty, which is the one case where nothing is at stake."""
+    _local.stop_reason = stop_reason
+
+
+def last_stop_reason() -> str | None:
+    return getattr(_local, "stop_reason", None)
+
+
+def last_response_truncated() -> bool:
+    """True when the most recent response on THIS thread stopped because it ran
+    out of output budget rather than because the model was finished."""
+    return last_stop_reason() in TRUNCATION_REASONS
 
 
 class Provider(abc.ABC):
