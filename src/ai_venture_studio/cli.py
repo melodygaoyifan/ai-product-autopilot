@@ -748,7 +748,16 @@ def create(
 
 @app.command()
 def studio(
-    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    # Positional, like init/create — every doc writes `avs studio myteam`,
+    # and the option form made that documented invocation an error.
+    repo_dir: str = typer.Argument(".", help="Workspace directory"),
+    # `--repo-dir` was the only way in before, and the CLI surface is a
+    # versioned contract (CONTRIBUTING): it keeps working rather than
+    # breaking whatever already scripted it.
+    repo_dir_opt: str = typer.Option(
+        None, "--repo-dir", hidden=True,
+        help="Deprecated: pass the workspace positionally instead.",
+    ),
     port: int = typer.Option(8433, help="Port"),
     profile: str = typer.Option(None, help="Profile (only needed for a new workspace)"),
     lang: str = typer.Option(
@@ -768,6 +777,18 @@ def studio(
     from ai_venture_studio.studio_modes import StudioModeError
     from ai_venture_studio.upstream import init_workspace
 
+    if repo_dir_opt is not None:
+        if repo_dir not in (".", repo_dir_opt):
+            console.print(
+                "[red]workspace given twice: "
+                f"{repo_dir!r} and --repo-dir {repo_dir_opt!r}[/red]"
+            )
+            raise typer.Exit(code=2)
+        console.print(
+            "[yellow]--repo-dir is deprecated for `studio`; "
+            "pass the workspace positionally: avs studio <dir>[/yellow]"
+        )
+        repo_dir = repo_dir_opt
     root = Path(repo_dir).resolve()
     if not (root / ".mas" / "project.yaml").exists():
         if not profile:

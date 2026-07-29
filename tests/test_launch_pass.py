@@ -90,6 +90,37 @@ def test_launch_post_survives_the_backstops():
     assert spam == [], [f.model_dump() for f in spam]
 
 
+def test_show_hn_draft_survives_the_backstops():
+    """The Show HN draft is a committed artifact under the same gates as
+    the launch post — an edit that overclaims fails CI before it can be
+    posted. Posting itself stays human (ADR-U19)."""
+    text = (REPO / "launch" / "show-hn.md").read_text()
+
+    unsubstantiated = check_substantiation(text, _register(), tol=0.02)
+    assert unsubstantiated == [], [f.model_dump() for f in unsubstantiated]
+
+    draft = Draft(id="show-hn", channel="content_geo", text=text,
+                  ai_generated=True, advertising=True)
+    disclosure = disclosure_lint(draft, ComplianceProfile())
+    assert disclosure == [], [f.model_dump() for f in disclosure]
+    brand = brand_and_safety_scan(draft, ComplianceProfile(), BrandConfig())
+    assert brand == [], [f.model_dump() for f in brand]
+
+    page = Page(
+        path="/launch/show-hn",
+        title="Show HN: An AI venture studio whose README cannot overclaim",
+        text=text, author_name="Melody Gao",
+        author_identity_url="https://github.com/melodygaoyifan",
+        canonical_url="https://github.com/melodygaoyifan/ai-venture-studio/blob/main/launch/show-hn.md",
+        published_at="2026-07-28", reviewer="melody",
+        claim_ledger=_platform_ledger(),
+    )
+    geo = geo_extractability_check(page)
+    assert geo == [], [f.model_dump() for f in geo]
+    spam = spam_policy_check([page])
+    assert spam == [], [f.model_dump() for f in spam]
+
+
 def test_launch_experiment_pin_holds_and_ledger_lints():
     text = (REPO / "launch" / "experiment.yaml").read_text()
     design = load_design(text)

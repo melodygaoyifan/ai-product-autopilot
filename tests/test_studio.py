@@ -251,3 +251,98 @@ def test_default_flow_reaches_confirmation_in_english(studio_en):
     response = client.post("/fdr", data={"fdr": english_fdr}, follow_redirects=True)
     assert "Start building" in response.text
     assert (root / "product" / "CONFIRMATION.md").exists()
+
+
+# --- the CLI surface the docs promise (v0.56.1) ------------------------------
+
+
+def test_studio_accepts_the_workspace_positionally_like_the_docs_show(tmp_path):
+    """Every doc writes `avs studio myteam --profile web`, and README's
+    founder quickstart is that exact line — but repo_dir was an Option, so
+    the documented invocation died with "unexpected extra argument". The
+    docs were right; the signature was wrong."""
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+
+    served = {}
+
+    def fake_serve(root, **kwargs):
+        served["root"] = str(root)
+        served.update(kwargs)
+
+    import ai_venture_studio.studio as studio_mod
+
+    original = studio_mod.serve_studio
+    studio_mod.serve_studio = fake_serve
+    try:
+        result = CliRunner().invoke(
+            app, ["studio", str(tmp_path / "myteam"), "--profile", "web"]
+        )
+    finally:
+        studio_mod.serve_studio = original
+
+    assert result.exit_code == 0, result.output
+    assert served["root"].endswith("myteam")
+
+
+def test_studio_still_defaults_to_the_current_directory(tmp_path):
+    """The positional gains a default, so `avs studio` inside an existing
+    workspace keeps working — that is the returning-user path."""
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "ws", "ws", "web")
+    served = {}
+
+    import ai_venture_studio.studio as studio_mod
+
+    original = studio_mod.serve_studio
+    studio_mod.serve_studio = lambda r, **kw: served.update(root=str(r))
+    try:
+        result = CliRunner().invoke(app, ["studio", str(root)])
+    finally:
+        studio_mod.serve_studio = original
+
+    assert result.exit_code == 0, result.output
+    assert served["root"] == str(root)
+
+
+def test_the_old_repo_dir_flag_keeps_working_with_a_deprecation_notice(tmp_path):
+    """The CLI surface is a versioned contract: `--repo-dir` was the only
+    way in before v0.56.1, so it still works — loudly deprecated, not
+    silently removed."""
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+
+    served = {}
+    import ai_venture_studio.studio as studio_mod
+
+    original = studio_mod.serve_studio
+    studio_mod.serve_studio = lambda r, **kw: served.update(root=str(r))
+    try:
+        result = CliRunner().invoke(
+            app, ["studio", "--repo-dir", str(tmp_path / "old"),
+                  "--profile", "web"]
+        )
+    finally:
+        studio_mod.serve_studio = original
+
+    assert result.exit_code == 0, result.output
+    assert served["root"].endswith("old")
+    assert "deprecated" in result.output.lower()
+
+
+def test_giving_the_workspace_twice_is_refused_not_guessed(tmp_path):
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+
+    result = CliRunner().invoke(
+        app, ["studio", str(tmp_path / "a"), "--repo-dir", str(tmp_path / "b")]
+    )
+    assert result.exit_code == 2
+    assert "twice" in result.output
