@@ -307,6 +307,48 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "策略文件无效 / POLICY ERROR",
         "en": "POLICY ERROR",
     },
+    # --- in-flight and failure pages (v0.57.1) --------------------------
+    "title_working": {"zh": "正在处理 / Working…", "en": "Working on it…"},
+    "working_lead": {
+        "zh": "已经在做了，请不要重复提交。",
+        "en": "Already working on this — no need to submit again.",
+    },
+    "working_hint": {
+        "zh": "这一步要调用模型，通常需要几分钟。这个页面会自动刷新。",
+        "en": "This step calls the model and usually takes a few minutes. "
+              "This page refreshes itself.",
+    },
+    "working_fdr": {
+        "zh": "正在读你的需求并生成计划。",
+        "en": "Reading your requirements and making the plan.",
+    },
+    "working_correct": {
+        "zh": "正在处理你的修正。",
+        "en": "Working through your correction.",
+    },
+    "working_feature": {
+        "zh": "正在检查这个新功能。",
+        "en": "Checking the new feature.",
+    },
+    "title_failed": {
+        "zh": "这一步没成功 / That step did not finish",
+        "en": "That step did not finish",
+    },
+    "failed_lead": {
+        "zh": "这一步没有做完。",
+        "en": "That step stopped before it finished.",
+    },
+    "failed_hint": {
+        "zh": "你的需求和已有成果都还在，什么都没丢。常见原因：模型的 API key "
+              "没设置或额度用完了。可以修好后重试。",
+        "en": "Nothing was lost — your requirements and anything already built "
+              "are still here. The usual causes are a missing or exhausted "
+              "model API key. Fix that and try again.",
+    },
+    "failed_detail": {
+        "zh": "技术细节 / Technical detail",
+        "en": "Technical detail",
+    },
 }
 
 

@@ -200,6 +200,36 @@ def create_studio_app(
             return cookie
         return default_mode
 
+    # The three handlers below run LLM calls for minutes. `/build` and
+    # `/retry` already refused to start a second worker; these did not, and a
+    # button that looks dead for six minutes is a button people press twice —
+    # two autopilots on one workspace race on git and on the same files. The
+    # flag is in-process because the Studio is one localhost process.
+    thinking: dict[str, str] = {}
+
+    def _thinking_page(request: Request, what: str) -> HTMLResponse:
+        return _render(
+            request, _("title_working"),
+            f"<div class=card><b class=warn>{_('working_lead')}</b>"
+            f"<p>{html.escape(what)}</p>"
+            f"<p class=muted>{_('working_hint')}</p></div>"
+            "<script>setTimeout(()=>location.href='/',15000)</script>",
+        )
+
+    def _failure_page(request: Request, exc: Exception) -> HTMLResponse:
+        """A founder should never meet a stack trace, and should never be
+        told nothing either: plain language first, the real error one click
+        away, and the workspace left where they can retry."""
+        return _render(
+            request, _("title_failed"),
+            f"<div class=card><b class=bad>{_('failed_lead')}</b>"
+            f"<p>{_('failed_hint')}</p>"
+            f"<details><summary class=muted>{_('failed_detail')}</summary>"
+            f"<pre>{html.escape(f'{type(exc).__name__}: {exc}')}</pre>"
+            "</details></div>"
+            f"<p><a href='/'>{_('link_back')}</a></p>",
+        )
+
     def _render(request: Request, title: str, body: str) -> HTMLResponse:
         """Every page: the visible mode strip, the page body, then the
         mode's read-only cards. Founder mode appends no cards, so the
@@ -438,6 +468,8 @@ def create_studio_app(
 
     @app.post("/fdr")
     async def save_fdr(request: Request):
+        if "fdr" in thinking:
+            return _thinking_page(request, thinking["fdr"])
         form = await request.form()
         (root / "FDR.md").write_text(str(form.get("fdr", "")), encoding="utf-8")
         for stale in ("FDR-QUESTIONS.md",):
@@ -446,11 +478,18 @@ def create_studio_app(
 
         from ai_venture_studio.upstream.autopilot import run_autopilot
 
-        # LLM calls block for minutes — off the event loop (sweep finding),
-        # or the progress page can't even poll while the assessor runs.
-        await run_in_threadpool(
-            run_autopilot, root, root / "FDR.md", yes=False, provider=provider
-        )
+        thinking["fdr"] = _("working_fdr")
+        try:
+            # LLM calls block for minutes — off the event loop (sweep
+            # finding), or the progress page can't even poll while the
+            # assessor runs.
+            await run_in_threadpool(
+                run_autopilot, root, root / "FDR.md", yes=False, provider=provider
+            )
+        except Exception as exc:  # noqa: BLE001 — a founder gets a page, not a 500
+            return _failure_page(request, exc)
+        finally:
+            thinking.pop("fdr", None)
         return RedirectResponse("/", status_code=303)
 
     @app.get("/acceptance", response_class=HTMLResponse)
@@ -485,6 +524,8 @@ def create_studio_app(
 
     @app.post("/correct")
     async def correct(request: Request):
+        if "correct" in thinking:
+            return _thinking_page(request, thinking["correct"])
         form = await request.form()
         complaint = str(form.get("complaint", "")).strip()
         if complaint:
@@ -492,9 +533,15 @@ def create_studio_app(
 
             from ai_venture_studio.upstream.correction import run_correction
 
-            result = await run_in_threadpool(
-                run_correction, root, complaint, provider=provider
-            )
+            thinking["correct"] = _("working_correct")
+            try:
+                result = await run_in_threadpool(
+                    run_correction, root, complaint, provider=provider
+                )
+            except Exception as exc:  # noqa: BLE001 — a page, never a 500
+                return _failure_page(request, exc)
+            finally:
+                thinking.pop("correct", None)
             (root / "product" / "CORRECTION-LOG.md").open("a", encoding="utf-8").write(
                 f"- {result.status}: {complaint[:120]} → {result.detail}\n"
             )
@@ -523,6 +570,8 @@ def create_studio_app(
 
     @app.post("/feature")
     async def feature(request: Request):
+        if "feature" in thinking:
+            return _thinking_page(request, thinking["feature"])
         form = await request.form()
         fdr_text = str(form.get("fdr", "")).strip()
         if fdr_text:
@@ -532,9 +581,15 @@ def create_studio_app(
 
             from ai_venture_studio.upstream.autopilot import run_feature
 
-            await run_in_threadpool(
-                run_feature, root, fdr_path, provider=provider, yes=False
-            )
+            thinking["feature"] = _("working_feature")
+            try:
+                await run_in_threadpool(
+                    run_feature, root, fdr_path, provider=provider, yes=False
+                )
+            except Exception as exc:  # noqa: BLE001 — a page, never a 500
+                return _failure_page(request, exc)
+            finally:
+                thinking.pop("feature", None)
         return RedirectResponse("/", status_code=303)
 
     @app.post("/feature/build")

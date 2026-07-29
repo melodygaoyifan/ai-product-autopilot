@@ -360,3 +360,108 @@ def test_the_readme_founder_demo_is_the_recorded_real_run(tmp_path):
     assert (repo / "docs" / "media" / "studio-flow.gif").exists()
     for phrase in ("One real run, unedited", "partly built"):
         assert phrase in readme, f"the honest caption lost {phrase!r}"
+
+
+# --- long POSTs: no 500s, no double-submit (v0.57.1) -------------------------
+
+
+def _erroring_studio(tmp_path, target="run_autopilot"):
+    from fastapi.testclient import TestClient
+
+    import ai_venture_studio.upstream.autopilot as ap
+    from ai_venture_studio.studio import create_studio_app
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "boom", "boom", "web")
+
+    def boom(*a, **k):
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    original = getattr(ap, target)
+    setattr(ap, target, boom)
+    client = TestClient(
+        create_studio_app(root, spawn=lambda r: 1, provider="mock"),
+        raise_server_exceptions=False,
+    )
+    return client, root, (ap, target, original)
+
+
+def test_a_failing_step_shows_a_page_not_an_internal_server_error(tmp_path):
+    """Observed live: a founder pressed the plan button and got a bare
+    "Internal Server Error", with the traceback in a terminal they were not
+    reading. Plain language first, the real error one click away."""
+    client, _root, (module, name, original) = _erroring_studio(tmp_path)
+    try:
+        response = client.post(
+            "/fdr", data={"fdr": "# x\nsomething\n"}, follow_redirects=True
+        )
+    finally:
+        setattr(module, name, original)
+
+    assert response.status_code == 200
+    assert "Internal Server Error" not in response.text
+    assert "did not finish" in response.text
+    assert "Nothing was lost" in response.text
+    # the real error stays reachable, one click away, for whoever can use it
+    assert "<details>" in response.text
+    assert "ANTHROPIC_API_KEY is not set" in response.text
+
+
+def test_the_failure_page_keeps_the_workspace_retryable(tmp_path):
+    client, root, (module, name, original) = _erroring_studio(tmp_path)
+    try:
+        client.post("/fdr", data={"fdr": "# keep me\nplease\n"},
+                    follow_redirects=True)
+    finally:
+        setattr(module, name, original)
+    assert (root / "FDR.md").read_text().startswith("# keep me")
+    # and the in-flight flag is released, so a retry is possible
+    assert "Working on it" not in client.get("/").text
+
+
+def test_a_second_submit_while_thinking_does_not_start_a_second_run(tmp_path):
+    """A button that looks dead for minutes is a button people press twice,
+    and two autopilots on one workspace race on git and on the same files.
+    /build and /retry already guarded; the LLM handlers did not."""
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    import ai_venture_studio.upstream.autopilot as ap
+    from ai_venture_studio.studio import create_studio_app
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "race", "race", "web")
+    started = threading.Event()
+    release = threading.Event()
+    runs = []
+
+    def slow(*a, **k):
+        runs.append(1)
+        started.set()
+        release.wait(timeout=10)
+
+    original = ap.run_autopilot
+    ap.run_autopilot = slow
+    client = TestClient(
+        create_studio_app(root, spawn=lambda r: 1, provider="mock"),
+        raise_server_exceptions=False,
+    )
+    try:
+        first = threading.Thread(
+            target=lambda: client.post("/fdr", data={"fdr": "# a\nb\n"})
+        )
+        first.start()
+        assert started.wait(timeout=10), "the first run never started"
+
+        second = client.post("/fdr", data={"fdr": "# a\nb\n"},
+                             follow_redirects=True)
+        assert "Working on it" in second.text
+        assert "no need to submit again" in second.text
+        release.set()
+        first.join(timeout=10)
+    finally:
+        release.set()
+        ap.run_autopilot = original
+
+    assert len(runs) == 1, f"{len(runs)} concurrent autopilot runs on one workspace"
