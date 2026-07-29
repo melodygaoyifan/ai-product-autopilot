@@ -380,15 +380,33 @@ def persist_manifest(
 
 
 def render_manifest(
-    manifest: ContextManifest, repo_dir: str | pathlib.Path
+    manifest: ContextManifest,
+    repo_dir: str | pathlib.Path,
+    *,
+    kinds: set[str] | None = None,
+    tag: str = "context",
+    skip: set[str] | None = None,
 ) -> tuple[str, dict[str, str]]:
     """The writer's context block, plus the `sources_read` receipts it would
     report. Returned together so the caller can verify the receipts against
-    the manifest without trusting the model to report them."""
+    the manifest without trusting the model to report them.
+
+    `kinds` renders only those entry kinds — the build stage asks for
+    `{"code"}` because it already renders the spec, constraints, and module
+    invariants itself and does not want them twice. `skip` drops paths the
+    caller has already rendered under another heading. Files are never
+    truncated here: a receipt is a hash of what the writer actually saw, so
+    a partial render would make the grounding receipt a lie. Size is the
+    manifest's job — the token budget drops optional code first by rank.
+    """
     root = pathlib.Path(repo_dir).resolve()
     blocks = []
     receipts: dict[str, str] = {}
     for entry in manifest.entries:
+        if kinds is not None and entry.kind not in kinds:
+            continue
+        if skip and entry.path in skip:
+            continue
         path = root / entry.path
         try:
             text = path.read_text(encoding="utf-8")
@@ -396,7 +414,7 @@ def render_manifest(
             continue
         receipts[entry.path] = content_hash(text)
         blocks.append(
-            f'<context path="{entry.path}" kind="{entry.kind}" '
-            f'required="{str(entry.required).lower()}">\n{text}\n</context>'
+            f'<{tag} path="{entry.path}" kind="{entry.kind}" '
+            f'required="{str(entry.required).lower()}">\n{text}\n</{tag}>'
         )
     return "\n\n".join(blocks), receipts

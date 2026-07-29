@@ -56,15 +56,32 @@ def init_workspace(directory: str | Path, name: str, profile: str) -> Path:
     )
 
     constraints = "\n".join(f"- {c}" for c in profile_data.get("constraints", []))
-    (root / "CLAUDE.md").write_text(
-        f"# {name} — project constraints\n\n"
+    profile_section = (
         f"Domain profile: **{profile}** ({profile_data.get('description', '')}).\n"
         f"These constraints bind every spec and every implementation; the\n"
         f"review-stage Context voter enforces them as findings.\n\n"
         f"## Profile constraints\n\n{constraints}\n\n"
-        f"## Stack\n\n{profile_data.get('stack_hint', '')}\n",
-        encoding="utf-8",
+        f"## Stack\n\n{profile_data.get('stack_hint', '')}\n"
     )
+    claude_md = root / "CLAUDE.md"
+    if claude_md.exists():
+        # An existing CLAUDE.md is the operator's own constraints file and is
+        # the single most load-bearing document in the workspace — every
+        # spec, build, and review reads it. Overwriting it silently (which
+        # this did) destroys context nothing else can reconstruct, so the
+        # profile section is appended under its own heading instead.
+        existing = claude_md.read_text(encoding="utf-8")
+        if f"## avs profile: {profile}" not in existing:
+            claude_md.write_text(
+                existing.rstrip("\n")
+                + f"\n\n## avs profile: {profile}\n\n{profile_section}",
+                encoding="utf-8",
+            )
+    else:
+        claude_md.write_text(
+            f"# {name} — project constraints\n\n{profile_section}",
+            encoding="utf-8",
+        )
     gitignore = root / ".gitignore"
     if not gitignore.exists():
         gitignore.write_text(

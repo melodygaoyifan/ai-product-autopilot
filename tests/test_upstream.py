@@ -112,3 +112,57 @@ def test_end_to_end_init_spec_approve_build(tmp_path, monkeypatch):
     )
     assert review is not None
     assert state["dor_pass"]
+
+
+# --- brownfield safety: init must not destroy an existing CLAUDE.md ----------
+
+
+def test_init_appends_to_an_existing_claude_md_instead_of_clobbering_it(tmp_path):
+    """CLAUDE.md is the operator's own constraints file and every spec,
+    build, and review reads it. init used to write_text over it
+    unconditionally, which silently destroyed context nothing else can
+    reconstruct — the first thing a brownfield adopter would lose."""
+    from ai_venture_studio.upstream import init_workspace
+
+    root = tmp_path / "existing"
+    root.mkdir()
+    hand_written = (
+        "# Payments service\n\n"
+        "## House rules\n\n"
+        "- never log a card number\n"
+        "- all money is integer cents\n"
+    )
+    (root / "CLAUDE.md").write_text(hand_written, encoding="utf-8")
+
+    init_workspace(root, "existing", "web")
+
+    after = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "never log a card number" in after, "hand-written constraints lost"
+    assert "all money is integer cents" in after
+    assert after.startswith("# Payments service")  # their doc, still theirs
+    assert "## avs profile: web" in after  # profile appended, not merged in
+
+
+def test_init_still_writes_claude_md_when_there_is_none(tmp_path):
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "fresh", "fresh", "web")
+    text = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    assert text.startswith("# fresh — project constraints")
+    assert "Domain profile: **web**" in text
+
+
+def test_appending_the_profile_section_is_idempotent(tmp_path):
+    """Re-initializing after a .mas wipe must not stack duplicate profile
+    sections onto the operator's file."""
+    from ai_venture_studio.upstream import init_workspace
+
+    root = tmp_path / "twice"
+    root.mkdir()
+    (root / "CLAUDE.md").write_text("# mine\n\n- rule one\n", encoding="utf-8")
+    init_workspace(root, "twice", "web")
+    import shutil
+
+    shutil.rmtree(root / ".mas")
+    init_workspace(root, "twice", "web")
+    assert (root / "CLAUDE.md").read_text().count("## avs profile: web") == 1

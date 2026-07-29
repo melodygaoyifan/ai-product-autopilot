@@ -470,3 +470,108 @@ def test_spec_generation_is_refused_when_constraints_miss_the_prompt(
     monkeypatch.setattr(spec_mod, "_module_invariants", lambda repo: "")
     with pytest.raises(spec_mod.GroundingError, match="untrustworthy"):
         spec_mod.run_spec_stage(root, "an item store API", provider="mock")
+
+
+# --- the manifest must reach the writer, not just audit it (gap 2) -----------
+
+
+def test_manifest_code_entries_are_rendered_for_the_writer(tmp_path):
+    """The defect this closes: `files_expected` code was collected, hashed,
+    ranked and persisted — then never shown to the implementer, because the
+    manifest was assembled after the prompt purely to audit it. A task whose
+    design prose happened not to name a file was written blind to the product
+    it was extending, which is how sibling tasks drifted onto different
+    routes."""
+    from ai_venture_studio.upstream.context_assembler import assemble, render_manifest
+
+    root = tmp_path / "ws"
+    (root / "specs" / "feature").mkdir(parents=True)
+    (root / "specs" / "feature" / "spec.yaml").write_text(
+        "request: extend the store\ndesign: add an endpoint\n", encoding="utf-8"
+    )
+    (root / "CLAUDE.md").write_text("- rule\n", encoding="utf-8")
+    (root / "app").mkdir()
+    (root / "app" / "store.py").write_text(
+        "ROUTE = '/tasks'\ndef save(task): ...\n", encoding="utf-8"
+    )
+
+    manifest = assemble(root, "feature", task_id="t1",
+                        files_expected=["app/*.py"])
+    assert any(e.kind == "code" and e.path == "app/store.py"
+               for e in manifest.entries), "code neighborhood not collected"
+
+    block, receipts = render_manifest(
+        manifest, root, kinds={"code"}, tag="existing_file"
+    )
+    assert "ROUTE = '/tasks'" in block, "the writer still cannot see the code"
+    assert '<existing_file path="app/store.py"' in block
+    assert "app/store.py" in receipts
+    # kinds filter holds: the spec/constraints are rendered elsewhere in the
+    # build prompt and must not appear twice.
+    assert "- rule" not in block
+
+
+def test_render_manifest_skips_paths_already_rendered(tmp_path):
+    from ai_venture_studio.upstream.context_assembler import assemble, render_manifest
+
+    root = tmp_path / "ws2"
+    (root / "specs" / "f").mkdir(parents=True)
+    (root / "specs" / "f" / "spec.yaml").write_text("request: x\n", encoding="utf-8")
+    (root / "app").mkdir()
+    (root / "app" / "a.py").write_text("A = 1\n", encoding="utf-8")
+    (root / "app" / "b.py").write_text("B = 2\n", encoding="utf-8")
+
+    manifest = assemble(root, "f", task_id="t", files_expected=["app/*.py"])
+    block, _ = render_manifest(manifest, root, kinds={"code"},
+                              tag="existing_file", skip={"app/a.py"})
+    assert "B = 2" in block
+    assert "A = 1" not in block, "skip= did not drop the already-rendered file"
+
+
+def test_the_build_prompt_carries_manifest_code(tmp_path, monkeypatch):
+    """End-to-end at the prompt boundary: run_build must put files_expected
+    code in front of the implementer even when the spec's design text never
+    names them."""
+    import shutil
+
+    if shutil.which("git") is None:
+        import pytest
+
+        pytest.skip("git not on PATH")
+
+    from ai_venture_studio.upstream import init_workspace
+    from ai_venture_studio.upstream.build import _related_sources, _task_manifest
+    from ai_venture_studio.upstream.context_assembler import render_manifest
+    from ai_venture_studio.upstream.spec import Spec
+
+    root = init_workspace(tmp_path / "prod", "prod", "web")
+    (root / "app").mkdir(exist_ok=True)
+    (root / "app" / "existing.py").write_text(
+        "ROUTE = '/tasks'  # the neighbour's route\n", encoding="utf-8"
+    )
+    spec_dir = root / "specs" / "slice"
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    (spec_dir / "spec.yaml").write_text(
+        "request: add listing (task:t1)\ndesign: add a listing endpoint\n",
+        encoding="utf-8",
+    )
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "plan.yaml").write_text(
+        "status: locked\nbrief_title: x\ntasks:\n"
+        "- id: t1\n  title: listing\n  estimate_hours: 1\n"
+        "  files_expected: ['app/*.py']\n",
+        encoding="utf-8",
+    )
+    spec = Spec(slug="slice", title="listing", profile="web",
+                request="add listing (task:t1)",
+                design="add a listing endpoint", criteria=["it lists"],
+                test_skeletons=[])
+
+    # design prose names no file, so the old path saw nothing:
+    assert _related_sources(root, spec) == ""
+
+    manifest, err = _task_manifest(root, "slice", spec)
+    assert err == "", err
+    block, _ = render_manifest(manifest, root, kinds={"code"},
+                               tag="existing_file")
+    assert "the neighbour's route" in block

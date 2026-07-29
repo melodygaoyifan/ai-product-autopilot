@@ -520,10 +520,16 @@ def run_build(
     )
 
 
-def _grounding_gate(repo: Path, slug: str, spec: Spec, prompt: str) -> str:
-    """Assemble the task's Context Manifest, record it, and verify the
-    required contract reached the prompt. Returns "" when clean, else the
-    blocking detail.
+def _task_manifest(repo: Path, slug: str, spec: Spec):
+    """Assemble and record the task's Context Manifest *before* the prompt is
+    built, so the code neighborhoods it collects can actually reach the
+    writer. Returns (manifest, "") or (None, blocking_detail).
+
+    This ordering is the fix for a real defect: the manifest used to be
+    assembled after the prompt purely to audit it, so `files_expected` code
+    was hashed, ranked, persisted — and never shown to the implementer, which
+    is how sibling tasks drifted apart (one task's route was /tasks while its
+    neighbour's spec said /api/tasks).
 
     Overflow is Planning's problem, not a compression exercise: a task whose
     required context does not fit is reported as such rather than silently
@@ -533,7 +539,6 @@ def _grounding_gate(repo: Path, slug: str, spec: Spec, prompt: str) -> str:
         ContextOverflow,
         assemble,
         persist_manifest,
-        verify_prompt_grounding,
     )
 
     files_expected: list[str] = []
@@ -554,10 +559,20 @@ def _grounding_gate(repo: Path, slug: str, spec: Spec, prompt: str) -> str:
             repo, slug, task_id=slug, files_expected=files_expected
         )
     except ContextOverflow as exc:
-        return (
+        return None, (
             f"{exc.code}: {exc} — split proposal: {'; '.join(exc.split_proposal)}"
         )
     persist_manifest(manifest, repo, slug)
+    return manifest, ""
+
+
+def _grounding_gate(repo: Path, slug: str, manifest, prompt: str) -> str:
+    """Verify the required contract reached the prompt. Returns "" when
+    clean, else the blocking detail."""
+    from ai_venture_studio.upstream.context_assembler import (
+        verify_prompt_grounding,
+    )
+
     violations = verify_prompt_grounding(manifest, prompt)
     if not violations:
         return ""
@@ -660,7 +675,27 @@ def _run_build_inner(
     provider_impl = get_provider(provider)
     claude_md = repo / "CLAUDE.md"
     constraints = claude_md.read_text(encoding="utf-8") if claude_md.exists() else ""
+
+    # Assemble the manifest FIRST so its code neighborhoods reach the writer.
+    # Before this, the manifest was built after the prompt purely to audit it,
+    # and the implementer's only view of existing code was a regex over the
+    # spec's own design prose — so a task whose design text happened not to
+    # name a file was written blind to the product it was extending.
+    manifest, manifest_error = _task_manifest(repo, slug, spec)
+    if manifest_error:
+        return BuildResult(slug=slug, status="error", detail=manifest_error)
+
     existing = _related_sources(repo, spec)
+    from ai_venture_studio.upstream.context_assembler import render_manifest
+
+    # `skip` the paths _related_sources already rendered: the same file under
+    # two headings reads as two files to the model.
+    already = set(re.findall(r'<existing_file path="([^"]+)"', existing))
+    manifest_code, _receipts = render_manifest(
+        manifest, repo, kinds={"code"}, tag="existing_file", skip=already
+    )
+    if manifest_code:
+        existing = (existing + "\n\n" if existing else "") + manifest_code
     fixture_blocks = []
     for rel in ["conftest.py", "tests/conftest.py"] + sorted(
         str(q.relative_to(repo)) for q in repo.glob("tests/helpers*.py")
@@ -722,7 +757,7 @@ def _run_build_inner(
     # whose content never reached the writer is a contract violation
     # (§11.18.3) — unrecoverable, not a quality note — because the artifact
     # would be authored blind to something a later gate enforces.
-    grounding = _grounding_gate(repo, slug, spec, base_user)
+    grounding = _grounding_gate(repo, slug, manifest, base_user)
     if grounding:
         return BuildResult(slug=slug, status="error", detail=grounding)
 
