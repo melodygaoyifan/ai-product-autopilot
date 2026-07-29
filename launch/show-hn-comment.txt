@@ -1,0 +1,52 @@
+The plain-text first comment for the Show HN submission. HN takes either a
+URL or body text, not both, so the submission is title + repo URL and this
+is the author's first comment. Derived from show-hn.md; both are gated by
+the suite against the claim ledger, so keep them in sync.
+
+---
+
+The hard part of automated product work, for me, was never the code. It was
+everything around the code: choosing what deserves to exist, refusing to
+invent evidence for it, and knowing when to stop.
+
+So this builds, tests, and reviews working products from one plain-language
+requirements document, English or Chinese, scored by independent behavioral
+probes. Around that runs a slower loop that finds candidate opportunities
+from real support tickets and issues, sizes the market with its own voters
+attacking the case, writes the PRD with kill criteria, and reads the outcome
+cohort honestly.
+
+The part worth your skepticism first: the README is parsed by its own test
+suite against its own claim ledger — assert a number that was not measured
+and the build fails. That gate is not decorative. While rewriting the README
+a comparison-table cell about neighboring tools tripped it on a single
+adjective, and CI stayed red until the word was gone. This comment tripped it
+four times before it passed.
+
+Two things you can check without trusting me:
+
+- No API key needed. `uvx --from ai-venture-studio avs replay --demo`
+  replays a real review of the repo's own code offline with no API key,
+  including the run where the pipeline escalated to a human.
+- The README's demo GIF is one real run, and that run failed some modules.
+  The report frame reads "partly built" and names them. The product benchmark
+  publishes its worst rows for the same reason: product benchmark, real cases
+  run 5 (2026-07-26, n=1, pre-fix baseline): build 33%, probe pass 0%, clean
+  review 17%. Full run history:
+  https://github.com/melodygaoyifan/ai-venture-studio/blob/main/benchmarks/results/HISTORY.md
+  A benchmark you can only pass is marketing.
+
+What it deliberately does not do: merge, deploy, publish, send, or spend
+money on its own. Merge and deploy automation exist but stay disarmed until a
+human writes an attributed, expiring policy naming exact branches. Agents may
+never author a persona quote or a testimonial. A fired kill criterion cannot
+be closed without a recorded human decision.
+
+Honest about its own bar: the outer loop has run end-to-end against real
+providers, but I do not treat it as proven until a real kill-or-pivot
+decision lands on a live cycle. Single machine, MIT licensed.
+
+This comment was written with the system it announces (created with AI,
+reviewed and posted by a human). Happy to answer anything, and genuinely
+interested in attempts to break the gates — nothing unfixtured registers,
+and that claim is falsifiable.

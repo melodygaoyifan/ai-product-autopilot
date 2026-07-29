@@ -121,6 +121,34 @@ def test_show_hn_draft_survives_the_backstops():
     assert spam == [], [f.model_dump() for f in spam]
 
 
+def test_show_hn_first_comment_survives_the_backstops():
+    """The HN submission is title + repo URL, so the description ships as
+    the author's first comment. It is the same kind of outbound artifact as
+    the post and is gated identically — this is what stops an edit made in
+    launch-day haste from asserting past the ledger."""
+    text = (REPO / "launch" / "show-hn-comment.txt").read_text()
+
+    unsubstantiated = check_substantiation(text, _register(), tol=0.02)
+    assert unsubstantiated == [], [f.model_dump() for f in unsubstantiated]
+
+    draft = Draft(id="show-hn-comment", channel="content_geo", text=text,
+                  ai_generated=True, advertising=True)
+    assert disclosure_lint(draft, ComplianceProfile()) == []
+    assert brand_and_safety_scan(draft, ComplianceProfile(), BrandConfig()) == []
+
+    page = Page(
+        path="/launch/show-hn-comment",
+        title="Show HN: An AI venture studio whose README cannot overclaim",
+        text=text, author_name="Melody Gao",
+        author_identity_url="https://github.com/melodygaoyifan",
+        canonical_url="https://github.com/melodygaoyifan/ai-venture-studio",
+        published_at="2026-07-28", reviewer="melody",
+        claim_ledger=_platform_ledger(),
+    )
+    assert geo_extractability_check(page) == []
+    assert spam_policy_check([page]) == []
+
+
 def test_launch_experiment_pin_holds_and_ledger_lints():
     text = (REPO / "launch" / "experiment.yaml").read_text()
     design = load_design(text)
