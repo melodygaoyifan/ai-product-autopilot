@@ -346,3 +346,17 @@ def test_giving_the_workspace_twice_is_refused_not_guessed(tmp_path):
     )
     assert result.exit_code == 2
     assert "twice" in result.output
+
+
+def test_the_readme_founder_demo_is_the_recorded_real_run(tmp_path):
+    """The GIF is the founder section's demo, and its caption must keep
+    saying the run was real and partial — a demo edited into a victory lap
+    is the exact failure this repo argues against."""
+    import pathlib
+
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    readme = (repo / "README.md").read_text(encoding="utf-8")
+    assert "docs/media/studio-flow.gif" in readme
+    assert (repo / "docs" / "media" / "studio-flow.gif").exists()
+    for phrase in ("One real run, unedited", "partly built"):
+        assert phrase in readme, f"the honest caption lost {phrase!r}"

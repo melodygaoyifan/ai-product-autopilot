@@ -59,15 +59,24 @@ Profiles: `web` | `miniprogram` | `app`. Returning later is just
 `avs studio` from inside the folder. (Wrong Python environment? `uvx --from
 ai-venture-studio avs studio myteam --profile web` sidesteps it.)
 
-<img src="docs/media/studio-en.png" alt="Founder Studio, English: the FDR entry screen — describe your product in your own words, and the system checks it and makes the plan before building anything" width="720">
+<img src="docs/media/studio-flow.gif" alt="The founder flow, recorded from one real run: an empty FDR form, the same form filled in with plain-language answers, the plan returned for confirmation, live per-task build progress, the plain-language build report, and finally the working task list the run produced" width="760">
+
+*One real run, unedited — a live provider, no mock, nothing composited.
+Plain language in; a plan comes back for confirmation; modules build with
+live per-task progress; the report says in your own words what works and
+what doesn't; the last frame is the product that run actually produced.
+That report reads "partly built" because some modules failed — it names
+them, keeps the rest working, and offers a retry per module. This is what
+a real run looks like, which is the only kind of demo this repo will ship
+([single screen](docs/media/studio-en.png) · [Chinese UI](docs/media/studio.png)).*
 
 English is the default (`--lang en`); `--lang zh` gives the original bilingual UI for
-微信小程序 founders ([Chinese screenshot](docs/media/studio.png)). The page
+微信小程序 founders. The page
 header switches the view — **Founder**, **Engineer**, **Enterprise** — and
 deeper views only add read-only detail.
 
 Your entire input is an **FDR**: six questions answered in your own words.
-The one behind the screenshot above:
+The one that produced the run above:
 
 ```markdown
 ## 1. Who is this for?
@@ -176,7 +185,7 @@ is in [claims/platform.yaml](claims/platform.yaml).
 - **Perf-lane calibration**: 5 of 5 seeded defects caught (catch rate 100%)
   at the 3x relative-detection factor, loopback low-parity environment,
   2026-07-26 ([manifest](benchmarks/perf_seeded/calibration.yaml)).
-- **1112 hermetic tests** (`uv run pytest`, no network, no keys); every PR
+- **1118 hermetic tests** (`uv run pytest`, no network, no keys); every PR
   in this repo was reviewed by avs itself, and five of those reviews caught
   real bugs.
 
