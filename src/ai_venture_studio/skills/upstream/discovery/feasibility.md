@@ -4,7 +4,8 @@ description: Judges buildability against the repo's actual capabilities and cons
 provider: anthropic
 model: claude-sonnet-5
 taxonomy_slice: [U0]
-tools: [repo_capability_probe]
+tools: [read_file, grep, list_files]
+tool_budget: 8
 risk_ceiling: 0
 timeout_s: 120
 max_retries: 3

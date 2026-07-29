@@ -171,3 +171,84 @@ def test_new_classes_may_be_added_and_builtins_kept_on_omission(tmp_path):
     assert classes["user_data_taint"] == load_taint_classes(tmp_path / "nowhere")[
         "user_data_taint"
     ]
+
+
+# --- charter seats get the tools they declare (gap 4) ------------------------
+
+
+def test_charter_frontmatter_tools_are_honored_not_discarded():
+    """load_voter_charters used to read the frontmatter only for `name`, so
+    ~40 product and upstream seats declared tools, were told in their charter
+    to go read things, and were handed nothing."""
+    from ai_venture_studio.product.stage_engine import load_voter_charter_specs
+
+    seats = {s.name: s for s in load_voter_charter_specs("market")}
+    assert seats["competitive"].tools == ["read_file", "grep"]
+    assert seats["sizing"].tool_budget >= 1
+
+
+def test_unknown_tool_names_are_dropped_rather_than_passed_through():
+    """feasibility.md declared `repo_capability_probe`, a tool that exists
+    nowhere. Charter rosters must still vote, so an unknown name is filtered
+    out instead of aborting or reaching the ToolBox."""
+    from ai_venture_studio.paths import skills_root
+    from ai_venture_studio.product.stage_engine import load_voter_charter_specs
+    from ai_venture_studio.tools.voter_tools import VOTER_TOOL_REGISTRY
+
+    for sub in ("discovery", "spec", "planning"):
+        for seat in load_voter_charter_specs(sub, skills_root() / "upstream"):
+            assert set(seat.tools) <= VOTER_TOOL_REGISTRY, seat.name
+
+
+def test_the_seats_that_judge_existing_code_can_actually_read_it():
+    """interface-impact judges declared interfaces against contracts the
+    outside world already holds, and feasibility judges buildability against
+    the repo — neither can do that blind."""
+    from ai_venture_studio.paths import skills_root
+    from ai_venture_studio.product.stage_engine import load_voter_charter_specs
+
+    spec_seats = {s.name: s for s in
+                  load_voter_charter_specs("spec", skills_root() / "upstream")}
+    assert "symbol_refs" in spec_seats["interface-impact"].tools
+    disc = {s.name: s for s in
+            load_voter_charter_specs("discovery", skills_root() / "upstream")}
+    assert disc["feasibility"].tools, "feasibility still has no way to look"
+
+
+def test_a_tool_declaring_seat_runs_an_investigation_loop(tmp_path):
+    """The seat asks for a tool, gets a <tool_result>, then votes — and the
+    budget is enforced at the ToolBox, not in the prompt."""
+    from ai_venture_studio.product.stage_engine import CharterSeat, _charter_vote
+
+    (tmp_path / "app.py").write_text("ROUTE = '/tasks'\n", encoding="utf-8")
+    calls = []
+
+    class FakeProvider:
+        def complete(self, *, model, system, user, max_tokens):
+            calls.append(user)
+            if "tool_result" not in user:
+                return "tool_request:\n  tool: read_file\n  args: {path: app.py}"
+            return "findings:\n  - severity: major\n    problem: p\n    evidence: e"
+
+    seat = CharterSeat(name="t", system="s", tools=["read_file"], tool_budget=3)
+    raw = _charter_vote(seat, "artifact", str(tmp_path),
+                        provider_impl=FakeProvider(), voter_model="m")
+    assert "findings:" in raw
+    assert any("ROUTE = '/tasks'" in c for c in calls), "tool result never fed back"
+
+
+def test_a_seat_with_no_tools_keeps_the_single_shot_path(tmp_path):
+    from ai_venture_studio.product.stage_engine import CharterSeat, _charter_vote
+
+    shots = []
+
+    class FakeProvider:
+        def complete(self, *, model, system, user, max_tokens):
+            shots.append(user)
+            return "findings: []"
+
+    seat = CharterSeat(name="t", system="s", tools=[])
+    _charter_vote(seat, "artifact", str(tmp_path),
+                  provider_impl=FakeProvider(), voter_model="m")
+    assert len(shots) == 1
+    assert "tool_request" not in shots[0]

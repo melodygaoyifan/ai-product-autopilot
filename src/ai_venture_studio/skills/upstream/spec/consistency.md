@@ -4,7 +4,8 @@ description: Finds criteria that contradict each other or the design
 provider: anthropic
 model: claude-sonnet-5
 taxonomy_slice: [U3]
-tools: []
+tools: [read_file, grep]
+tool_budget: 6
 risk_ceiling: 0
 timeout_s: 120
 max_retries: 3

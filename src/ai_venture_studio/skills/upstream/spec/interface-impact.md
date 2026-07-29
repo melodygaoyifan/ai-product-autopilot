@@ -4,7 +4,8 @@ description: Judges declared interfaces against the contracts the outside world 
 provider: anthropic
 model: claude-sonnet-5
 taxonomy_slice: [U3]
-tools: []
+tools: [read_file, grep, symbol_refs]
+tool_budget: 8
 risk_ceiling: 0
 timeout_s: 120
 max_retries: 3

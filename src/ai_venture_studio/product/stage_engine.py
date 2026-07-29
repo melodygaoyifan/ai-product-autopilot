@@ -134,21 +134,138 @@ def load_voter_charters(
     stage_subdir: str, skills_root: pathlib.Path | None = None
 ) -> list[tuple[str, str]]:
     """(name, system_prompt) per charter file; the frontmatter contract is
-    honored for identity, the body becomes the seat's system prompt."""
+    honored for identity, the body becomes the seat's system prompt.
+
+    Kept for callers that only need the prompt. `load_voter_charter_specs`
+    below also carries the declared tools, which is what lets a charter seat
+    actually look at the repo instead of being told to and given nothing.
+    """
+    return [(c.name, c.system) for c in load_voter_charter_specs(
+        stage_subdir, skills_root)]
+
+
+class CharterSeat(BaseModel):
+    """A charter voter's identity, prompt, and declared tool contract."""
+
+    name: str
+    system: str
+    tools: list[str] = Field(default_factory=list)
+    tool_budget: int = 6
+
+
+def load_voter_charter_specs(
+    stage_subdir: str, skills_root: pathlib.Path | None = None
+) -> list[CharterSeat]:
+    """Charter seats with their `tools:` frontmatter honored.
+
+    This used to read the frontmatter only for `name` and drop everything
+    else, so ~40 product and upstream seats declared `tools: [read_file,
+    grep]`, were instructed to go read things, and were handed nothing. An
+    unknown tool name is dropped with the seat recorded rather than silently
+    accepted — the review-side SpecValidator aborts startup on one, but a
+    charter roster must still be able to vote.
+    """
+    from ai_venture_studio.tools.voter_tools import VOTER_TOOL_REGISTRY
+
     root = (skills_root or _default_skills_root()) / stage_subdir
-    voters = []
+    seats: list[CharterSeat] = []
     for path in sorted(root.glob("*.md")):
         text = path.read_text()
         match = _FRONTMATTER.match(text)
         name = path.stem
+        declared: list[str] = []
+        budget = 6
         if match:
             meta = yaml.safe_load(match.group(1)) or {}
             name = str(meta.get("name", name))
+            raw_tools = meta.get("tools") or []
+            if isinstance(raw_tools, list):
+                declared = [
+                    str(t) for t in raw_tools if str(t) in VOTER_TOOL_REGISTRY
+                ]
+            budget = int(meta.get("tool_budget", 6))
             text = text[match.end():]
-        voters.append(
-            (name, f"You are a {PRODUCT_VOTER_MARKER}.\n\n{text}{_VOTER_CONTRACT}")
+        seats.append(CharterSeat(
+            name=name,
+            system=f"You are a {PRODUCT_VOTER_MARKER}.\n\n{text}{_VOTER_CONTRACT}",
+            tools=declared,
+            tool_budget=max(1, min(budget, 25)),
+        ))
+    return seats
+
+
+_TOOL_PREAMBLE = """
+
+You may inspect the workspace before judging. To use a tool, reply with ONLY:
+tool_request:
+  tool: <{tools}>
+  args: {{...}}
+You will receive a <tool_result> and may request again until your budget of
+{budget} calls runs out. When you are ready — or out of budget — reply with the
+findings YAML. Ground every finding in what you actually read: an unverifiable
+finding is dropped by the verifier seat anyway.
+"""
+
+
+def _charter_vote(
+    seat: CharterSeat,
+    context_text: str,
+    workspace: str,
+    *,
+    provider_impl,
+    voter_model: str,
+) -> str:
+    """One charter seat's raw response, after any tool turns it asks for.
+
+    Seats that declare no tools take the original single-shot path
+    unchanged. Seats that do declare tools get a real investigation loop with
+    the budget enforced at the ToolBox boundary — the same protocol the
+    review voters use, deliberately not a second dialect.
+    """
+    if not seat.tools:
+        return provider_impl.complete(
+            model=voter_model, system=seat.system, user=context_text,
+            max_tokens=2048,
         )
-    return voters
+
+    from ai_venture_studio.tools.voter_tools import ToolBox, ToolBudgetExceeded
+    from ai_venture_studio.voters.base import Voter
+
+    toolbox = ToolBox(workspace, seat.tools, budget=seat.tool_budget)
+    system = seat.system + _TOOL_PREAMBLE.format(
+        tools="|".join(seat.tools), budget=seat.tool_budget
+    )
+    transcript = context_text
+    for _ in range(seat.tool_budget + 1):
+        raw = provider_impl.complete(
+            model=voter_model, system=system, user=transcript, max_tokens=2048
+        )
+        request = Voter._tool_request(raw)
+        if request is None:
+            return raw
+        try:
+            result = toolbox.call(
+                str(request.get("tool", "")), request.get("args") or {}
+            )
+        except ToolBudgetExceeded:
+            transcript += (
+                "\n\nTool budget exhausted. Reply with your findings YAML now, "
+                "based on what you have read."
+            )
+            return provider_impl.complete(
+                model=voter_model, system=system, user=transcript,
+                max_tokens=2048,
+            )
+        transcript += (
+            f"\n\n<tool_result tool={request.get('tool')} "
+            f"remaining_calls={toolbox.remaining}>\n{result}\n</tool_result>"
+        )
+    # Budget spent without a verdict: ask once more, plainly.
+    return provider_impl.complete(
+        model=voter_model, system=system,
+        user=transcript + "\n\nReply with the findings YAML now.",
+        max_tokens=2048,
+    )
 
 
 def run_critique_roster(
@@ -176,7 +293,8 @@ def run_critique_roster(
     from ai_venture_studio.product.voter_gate import registry_status
 
     mas_dir = pathlib.Path(workspace) / ".mas"
-    for voter_name, system in load_voter_charters(skills_subdir, skills_root):
+    for seat in load_voter_charter_specs(skills_subdir, skills_root):
+        voter_name, system = seat.name, seat.system
         status = registry_status(mas_dir, stage_name, voter_name)
         if status == "failed":
             # §11.19: no agent registers without passing its fixture gate —
@@ -185,8 +303,9 @@ def run_critique_roster(
             continue
         if status == "unregistered":
             unregistered.append(voter_name)  # loads, but the report says so
-        raw = provider_impl.complete(
-            model=voter_model, system=system, user=context_text, max_tokens=2048
+        raw = _charter_vote(
+            seat, context_text, workspace,
+            provider_impl=provider_impl, voter_model=voter_model,
         )
         try:
             found = extract_mapping(raw, ("findings",)).get("findings") or []
