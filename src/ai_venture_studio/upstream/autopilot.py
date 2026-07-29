@@ -548,10 +548,18 @@ def run_feature(
     from ai_venture_studio.upstream.workspace import load_project as _lp2
 
     blocks_note = catalog_summary(_lp2(root).profile)
+    # The planner used to see a 200-path file list and filename-token matches,
+    # which is not enough to integrate with a product: it could not tell which
+    # module owns what, what the HTTP surface already is, or where the tests
+    # live. The derived map answers all three from the code itself.
+    from ai_venture_studio.upstream.comprehend import comprehend_repo, render_summary
+
+    codebase = render_summary(comprehend_repo(root))
     raw = provider_impl.complete(
         model=model,
         system=_FEATURE_PLANNER_SYSTEM,
         user=(f"<blocks>\n{blocks_note}\n</blocks>\n\n" if blocks_note else "")
+        + f"<codebase_map>\n{codebase}\n</codebase_map>\n\n"
         + f"<existing_tree>\n{_file_tree(root)}\n</existing_tree>\n\n"
         f"<likely_touched_files>\n"
         + ("\n".join(f"- {p}" for p in radius) or "(none matched)")

@@ -467,6 +467,11 @@ def init(
         help="Seed FDR.md from a product-bench case (e.g. 01-groupbuy-api) — "
              "templates are the same fixtures the benchmark runs, so a "
              "template that rots fails CI, not you (doc 25 §73.2)"),
+    adopt: bool = typer.Option(
+        False, "--adopt",
+        help="Adopt an EXISTING codebase: read it first (avs map), write the "
+             "derived deps baseline, and keep your CLAUDE.md. Use this "
+             "instead of a plain init on a repo you did not build here."),
 ):
     """Create a greenfield workspace: profile constraints, CLAUDE.md, specs/."""
     from ai_venture_studio.upstream import init_workspace
@@ -499,6 +504,40 @@ def init(
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
+
+    if adopt:
+        # Read before writing anything else: on a repo the system did not
+        # build, the map IS the onboarding step. Without it the planner and
+        # the feature flow guess from filenames.
+        import yaml as _yaml
+
+        from ai_venture_studio.upstream.comprehend import (
+            comprehend_repo,
+            derive_deps,
+            render_summary,
+            write_map,
+        )
+
+        result = comprehend_repo(root)
+        write_map(result, root)
+        console.print(render_summary(result))
+        deps_path = root / ".mas" / "deps.yaml"
+        if not deps_path.exists() and result.modules:
+            deps_path.write_text(
+                _yaml.safe_dump(derive_deps(result), sort_keys=False,
+                                allow_unicode=True),
+                encoding="utf-8",
+            )
+            console.print(
+                f"\ndeps baseline written to {deps_path} — what the code does "
+                "today, not a design; existing violations are the baseline that "
+                "must only shrink"
+            )
+        if not result.total_files:
+            console.print(
+                "[yellow]no source files found — check the directory; an empty "
+                "map means later stages are working blind[/yellow]"
+            )
     if from_bench:
         import yaml as _yaml
 
@@ -1538,6 +1577,57 @@ def opportunity_cmd(
         sort_keys=False, allow_unicode=True,
     )
     _run_stage(opportunity_spec(workspace), user_input, workspace, provider)
+
+
+@app.command("map")
+def map_cmd(
+    repo_dir: str = typer.Argument(".", help="Repository to read"),
+    write_deps: bool = typer.Option(
+        False, "--write-deps",
+        help="Also write .mas/deps.yaml from the imports that actually exist, "
+             "as the brownfield baseline the arch check compares against",
+    ),
+):
+    """Read an existing codebase and write .mas/codebase-map.yaml.
+
+    Languages, entry points, modules with their sizes, the import edges that
+    actually exist, the HTTP surface, and where the tests live — derived from
+    the code, no LLM and no network. This is what the planner and the
+    feature flow read so they stop guessing from filenames.
+    """
+    from ai_venture_studio.upstream.comprehend import (
+        comprehend_repo,
+        derive_deps,
+        render_summary,
+        write_map,
+    )
+
+    root = Path(repo_dir).resolve()
+    result = comprehend_repo(root)
+    path = write_map(result, root)
+    console.print(render_summary(result))
+    console.print(f"\nmap written to {path}")
+    if write_deps:
+        import yaml as _yaml
+
+        deps_path = root / ".mas" / "deps.yaml"
+        if deps_path.exists():
+            console.print(
+                f"[yellow]{deps_path} already exists — not overwriting a graph "
+                "you may have tightened by hand[/yellow]"
+            )
+        else:
+            deps_path.write_text(
+                _yaml.safe_dump(derive_deps(result), sort_keys=False,
+                                allow_unicode=True),
+                encoding="utf-8",
+            )
+            console.print(
+                f"deps baseline written to {deps_path} — this is what the code "
+                "does today, not a design; tighten it as you learn the shape"
+            )
+    if not result.total_files:
+        raise typer.Exit(code=3)  # nothing readable is a finding, not a pass
 
 
 @app.command("probe")
