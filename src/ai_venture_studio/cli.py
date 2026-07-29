@@ -1579,6 +1579,84 @@ def opportunity_cmd(
     _run_stage(opportunity_spec(workspace), user_input, workspace, provider)
 
 
+@app.command("mvp")
+def mvp_cmd(
+    slice_file: str = typer.Argument(
+        ..., help="YAML describing the slice (see `avs mvp --help` for the shape)"
+    ),
+):
+    """Check whether a first slice is minimum AND viable.
+
+    The question this answers is not "is it small" — the tier and the budget
+    already bound that — but "does this slice, on its own, tell us whether the
+    thing is worth building". When the slice contains an AI-shaped capability
+    it also checks the five things an AI MVP may not skip: a named simpler
+    alternative, a declared cost of being wrong, a wrong-answer fallback, an
+    eval set written first, and a quality metric paired to every volume metric.
+
+    The file shape:
+
+    \b
+    hypothesis: founders cannot tell whether a long build is progressing
+    increments:
+      - a per-task progress panel on the building page
+    success_signal: 3 of 3 reporters confirm it resolves the uncertainty
+    not_now: [dark mode, shareable links]
+    cheapest_test: show the 3 reporters a clickable mockup
+    ai_feature:            # optional; auto-detected from your words too
+      capability: summarize the ticket into one line
+      why_not_deterministic: a keyword rule missed 40% of the tickets we tried
+      cost_of_being_wrong: recoverable
+      fallback_behavior: below confidence, show the raw ticket and say why
+      autonomy_rung: suggest
+      eval_cases: 25
+      volume_metric: tickets summarized
+      quality_metric: edit rate on the summary
+    """
+    import yaml as _yaml
+
+    from ai_venture_studio.product.mvp import (
+        AIFeature,
+        MVPSlice,
+        detect_ai_feature,
+        gate_mvp_entry,
+    )
+
+    try:
+        raw = _yaml.safe_load(Path(slice_file).read_text(encoding="utf-8")) or {}
+        slice_ = MVPSlice(**{k: v for k, v in raw.items() if k != "ai_feature"})
+        feature = AIFeature(**raw["ai_feature"]) if raw.get("ai_feature") else None
+    except (OSError, _yaml.YAMLError, ValueError, TypeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+
+    # Detected from the founder's own words, so an AI slice cannot skip the AI
+    # contract just by omitting the section.
+    trigger = detect_ai_feature(
+        slice_.hypothesis, " ".join(slice_.increments), slice_.success_signal
+    )
+    if trigger and feature is None:
+        console.print(
+            f"[yellow]this slice reads as AI-shaped ({trigger!r}) but declares "
+            "no ai_feature section — an AI slice carries five more "
+            "obligations[/yellow]"
+        )
+        feature = AIFeature(capability=trigger)
+
+    result = gate_mvp_entry(slice_, feature)
+    for finding in result["findings"]:
+        console.print(f"[red]✗ {finding['rule']}[/red]: {finding['message']}")
+    if result["passed"]:
+        console.print("[green]✓ minimum and viable[/green] — this slice can "
+                      "answer its own question")
+        return
+    console.print(
+        f"\n{len(result['findings'])} finding(s). An MVP that cannot be read is "
+        "a demo with a deadline."
+    )
+    raise typer.Exit(code=1)
+
+
 @app.command("map")
 def map_cmd(
     repo_dir: str = typer.Argument(".", help="Repository to read"),
@@ -1776,7 +1854,31 @@ def prd_cmd(
     is `prd-approve`."""
     from pathlib import Path as _Path
 
+    import yaml as _yaml
+
     from ai_venture_studio.product.stages import prd_spec
+
+    # Gate PL1 `test_first` means "do not build yet, run this test" — the
+    # canon calls it the most common correct outcome. It was a recorded string
+    # with no downstream wiring: a founder could record test_first and walk
+    # straight into a PRD, a handoff, and a build with nothing objecting.
+    gate_pl1 = _Path(workspace) / ".mas" / "product" / "gate-pl1.yaml"
+    if gate_pl1.exists():
+        try:
+            decision = _yaml.safe_load(gate_pl1.read_text(encoding="utf-8")) or {}
+        except _yaml.YAMLError:
+            decision = {}
+        if str(decision.get("outcome", "")) == "test_first":
+            named = str(decision.get("named_test", "")).strip() or "(unnamed)"
+            console.print(
+                f"[yellow]Gate PL1 recorded `test_first`, not `pursue`.[/yellow]\n"
+                f"The named test was: [b]{named}[/b]\n"
+                "Run that test first. If it already moved you, re-record the "
+                "gate with `avs market-approve --outcome pursue "
+                "--scope-tier thin --decider <you>`; a decision the evidence "
+                "changed is a new decision, not an edited one."
+            )
+            raise typer.Exit(code=3)
 
     parts = []
     for rel in ("market/market.md", "product/opportunities.md"):
@@ -1833,6 +1935,23 @@ def prd_approve_cmd(
     gate = root / ".mas" / "product" / "gate-pl2.yaml"
     gate.parent.mkdir(parents=True, exist_ok=True)
     gate.write_text(_yaml.safe_dump(decision.model_dump(), sort_keys=False))
+    # The scope tier decided here has to reach the planner, or it is a field
+    # two artifacts validate and nothing acts on: `handoff.py` carries it,
+    # `plan.py` reads it from project.yaml, and until now the only writer of
+    # project.yaml was `init`. So a `thin` decided at PL1/PL2 had no effect on
+    # any plan (this repo's own launch/gate-pl2.yaml says thin).
+    project_path = root / ".mas" / "project.yaml"
+    if project_path.exists():
+        project = _yaml.safe_load(project_path.read_text(encoding="utf-8")) or {}
+        if project.get("scope_tier") != prd.scope_tier:
+            project["scope_tier"] = prd.scope_tier
+            project_path.write_text(
+                _yaml.safe_dump(project, sort_keys=False), encoding="utf-8"
+            )
+            console.print(
+                f"scope tier [b]{prd.scope_tier}[/b] carried into the build "
+                "(the planner reads it at Gate U2)"
+            )
     console.print(f"[green]Gate PL2 recorded[/green]; handoff at {path} "
                   "(validated at Discovery's DoR)")
 

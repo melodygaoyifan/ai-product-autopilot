@@ -297,3 +297,91 @@ def test_dor_rejects_garbage_files(tmp_path):
     path.write_text("just some text")
     with pytest.raises(HandoffError, match="mapping"):
         validate_handoff_at_dor(path, prd_document_text="x")
+
+
+def test_gate_pl2_carries_the_scope_tier_into_the_build(tmp_path):
+    """The tier decided at PL1/PL2 has to reach the planner. handoff.py
+    carried it, plan.py read it from project.yaml, and nothing bridged them —
+    so a `thin` decided in the outer loop had no effect on any plan (this
+    repo's own launch/gate-pl2.yaml says thin)."""
+    import shutil
+
+    import pytest
+    import yaml as _yaml
+    from typer.testing import CliRunner
+
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+
+    from ai_venture_studio.cli import app
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "ws", "ws", "web")  # defaults to standard
+    (root / "product").mkdir(exist_ok=True)
+    prd = {
+        "prd": {
+            "id": "PRD-1", "problem_statement": "p", "scope_tier": "thin",
+            "non_goals": ["a", "b"], "kill_criteria": ["k"],
+            "outcomes": [],
+            "demand_hypotheses": [{
+                "id": "H-1",
+                "statement": "founders will use a progress panel",
+                "falsifier": "under 30% open it within 30 days",
+                "check": {"stage": "P4", "method": "cohort", "window_days": 30},
+            }],
+            "evidence_refs": [],
+        }
+    }
+    (root / "product" / "prd.yaml").write_text(_yaml.safe_dump(prd))
+    (root / "product" / "prd.md").write_text("# PRD\n\nbody\n")
+
+    result = CliRunner().invoke(app, [
+        "prd-approve", "--workspace", str(root), "--decider", "melody",
+    ])
+    assert result.exit_code == 0, result.output
+    project = _yaml.safe_load((root / ".mas" / "project.yaml").read_text())
+    assert project["scope_tier"] == "thin", "the tier never reached the builder"
+
+
+def test_a_recorded_test_first_decision_blocks_the_prd(tmp_path):
+    """Gate PL1 `test_first` means "do not build yet, run this test" — the
+    canon calls it the most common correct outcome. It was a recorded string
+    with no downstream wiring: a founder could record it and walk straight
+    into a PRD, a handoff, and a build with nothing objecting."""
+    import yaml as _yaml
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+
+    root = tmp_path / "ws"
+    gate_dir = root / ".mas" / "product"
+    gate_dir.mkdir(parents=True)
+    (gate_dir / "gate-pl1.yaml").write_text(_yaml.safe_dump({
+        "outcome": "test_first",
+        "named_test": "show 3 reporters a clickable mockup",
+        "decider": "melody",
+    }))
+
+    result = CliRunner().invoke(app, ["prd", "--workspace", str(root)])
+    assert result.exit_code == 3, result.output
+    assert "test_first" in result.output
+    assert "clickable mockup" in result.output  # the named test is quoted back
+
+
+def test_a_pursue_decision_does_not_block_the_prd(tmp_path):
+    """The gate must only stop the build-first path, not every path."""
+    import yaml as _yaml
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+
+    root = tmp_path / "ws"
+    gate_dir = root / ".mas" / "product"
+    gate_dir.mkdir(parents=True)
+    (gate_dir / "gate-pl1.yaml").write_text(_yaml.safe_dump({
+        "outcome": "pursue", "scope_tier": "thin", "decider": "melody",
+    }))
+    result = CliRunner().invoke(app, ["prd", "--workspace", str(root)])
+    # it proceeds past the tier gate and fails later on missing inputs, which
+    # is a different exit code than the test_first refusal
+    assert result.exit_code != 3

@@ -63,6 +63,15 @@ from ai_venture_studio.product.reconcile import (
     falsified_ids,
     propagate_invalidations,
 )
+from ai_venture_studio.product.mvp import (
+    AIFeature,
+    MVPFinding,
+    MVPSlice,
+    ai_mvp_lint,
+    detect_ai_feature,
+    gate_mvp_entry,
+    mvp_lint,
+)
 from ai_venture_studio.product.prd import (
     GATE_PL2_RUBRIC,
     PRD,
@@ -168,6 +177,13 @@ __all__ = [
     "prd_lint",
     "ProbeFetchError",
     "fetch_probe",
+    "AIFeature",
+    "MVPFinding",
+    "MVPSlice",
+    "ai_mvp_lint",
+    "detect_ai_feature",
+    "gate_mvp_entry",
+    "mvp_lint",
     "record_probe",
     "sizing_calc",
     "validate_handoff_at_dor",

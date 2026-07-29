@@ -232,3 +232,16 @@ def test_thin_caps_the_planning_budget():
     assert budget_check(tasks, _TIER_BUDGET_CAP["thin"]), "24h passed a thin cap"
     assert budget_check([Task(id="t1", title="x", estimate_hours=6)],
                         _TIER_BUDGET_CAP["thin"]) == []
+
+
+def test_the_thin_tier_task_cap_bites_deterministically():
+    """"EXACTLY 1-3 tasks" was planner-prompt text only, so the model could
+    ignore it and nothing noticed."""
+    from ai_venture_studio.upstream.plan import Task, tier_check
+
+    four = [Task(id=f"t{i}", title="x", estimate_hours=1) for i in range(4)]
+    assert tier_check(four, "thin"), "a 4-task thin plan passed"
+    assert tier_check(four[:3], "thin") == []
+    # wider tiers have no task cap
+    assert tier_check(four, "standard") == []
+    assert tier_check(four, "deep") == []

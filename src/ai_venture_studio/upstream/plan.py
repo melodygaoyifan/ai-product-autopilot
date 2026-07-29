@@ -96,6 +96,23 @@ def review_train_check(tasks: list[Task]) -> list[str]:
     return issues
 
 
+def tier_check(tasks: list[Task], scope_tier: str) -> list[str]:
+    """A thin tier that plans like a standard one is not thin.
+
+    "EXACTLY 1-3 tasks" was planner-prompt text only, which makes it advisory:
+    the model can ignore it and nothing notices. Same reasoning as the budget
+    cap — the tier has to bite deterministically or it is a suggestion.
+    """
+    cap = _TIER_TASK_CAP.get(scope_tier)
+    if cap is None or len(tasks) <= cap:
+        return []
+    return [
+        f"scope_tier {scope_tier!r} allows at most {cap} task(s); the plan has "
+        f"{len(tasks)} — cut to one working slice and add the rest with "
+        "`avs add`, or plan at a wider tier"
+    ]
+
+
 def budget_check(tasks: list[Task], budget_hours: float) -> list[str]:
     total = sum(t.estimate_hours for t in tasks)
     if total > budget_hours:
@@ -213,6 +230,8 @@ _TIER_RULES = {
 # A thin slice that estimates like a full build is not thin. The tier caps
 # the budget so budget_check bites instead of the guidance being advisory.
 _TIER_BUDGET_CAP = {"thin": 10.0}
+# ...and a thin tier that plans twelve tasks is not thin either.
+_TIER_TASK_CAP = {"thin": 3}
 
 
 def planner_system(scope_tier: str = "standard") -> str:
@@ -309,6 +328,7 @@ def run_planning(
         dag_issues = (
             dag_check(tasks) + lane_check(tasks)
             + budget_check(tasks, budget) + review_train_check(tasks)
+            + tier_check(tasks, scope_tier)
         )
         # Charter roster (doc 13 §25.1): Completeness, DependencyRealism,
         # RiskSequencing, ParallelizationSafety, EstimateSanity — the
