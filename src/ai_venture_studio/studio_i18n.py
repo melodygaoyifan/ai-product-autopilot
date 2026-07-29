@@ -308,6 +308,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "POLICY ERROR",
     },
     # --- in-flight and failure pages (v0.57.1) --------------------------
+    # --- cost transparency (v0.60) --------------------------------------
+    "h_cost": {"zh": "花了多少 / What this cost", "en": "What this cost"},
+    "cost_what": {"zh": "这个产品到目前", "en": "This product so far"},
+    "cost_own_key": {
+        "zh": "这笔费用由你自己的 API key 承担 — 系统从不代你花钱。",
+        "en": "Billed to your own API key — the framework never spends money "
+              "on your behalf.",
+    },
     "title_working": {"zh": "正在处理 / Working…", "en": "Working on it…"},
     "working_lead": {
         "zh": "已经在做了，请不要重复提交。",

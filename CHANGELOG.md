@@ -52,6 +52,20 @@ symptom the system already knew the cause of and had discarded.
   of 3 will be the last. The journal is a record and never an input — an
   unwritable one cannot fail a build.
 
+Shipping alongside it, the other half of the same question — the run also says
+what it *cost*:
+
+- The founder's `BUILD-REPORT.md` gains a "What this cost" section, appended
+  as arithmetic rather than prompted, so the number is never model prose. It
+  names the typical and worst run once there is more than one to compare, and
+  states plainly that the spend is on the operator's own API key.
+- The Studio's product page carries the same line, read from the same ledger
+  `avs cost` reads — the Studio stays a veneer, never a second source.
+- `avs create` prints it when the run ends.
+
+The cap stays off by default. Transparency is the always-on behaviour; the
+limit only exists if somebody wrote a number, and says so when it fires.
+
 ## v0.59.1 — cost transparency is the point; the cap is opt-in and secondary
 
 Correcting v0.59.0's emphasis. The founder signal asked to SEE the number —

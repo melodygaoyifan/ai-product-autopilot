@@ -812,6 +812,13 @@ def create(
         if o.status != "built" and o.detail:
             console.print(f"      [dim]why: {o.detail}[/dim]")
     console.print(f"报告 / report: {result.report_path}")
+    # What it cost, unprompted. The founder signal asked to SEE this number,
+    # and a figure you must know to go looking for does not answer it.
+    from ai_venture_studio import spend
+
+    cost = spend.summarize_workspace(root)
+    if cost.calls:
+        console.print(f"[dim]{spend.render_plain(cost, what='This workspace')}[/dim]")
     if result.status != "completed":
         raise typer.Exit(code=1)
 

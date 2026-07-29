@@ -87,6 +87,11 @@ def run_autopilot(
     root = Path(workspace).resolve()
     fdr_text = Path(fdr_path).read_text(encoding="utf-8")
     provider_impl = get_provider(provider)
+    # Stamped before the first model call so "what did THIS run cost" is
+    # answerable from the ledger without threading a label through every seat.
+    import datetime as _dt
+
+    run_started_at = _dt.datetime.now(_dt.UTC).isoformat()
 
     assessment = assess_fdr(fdr_text, provider=provider, model=model)
     if not assessment.ready:
@@ -246,7 +251,30 @@ def run_autopilot(
         max_tokens=2048,
     )
     report_path = root / "product" / "BUILD-REPORT.md"
-    report_path.write_text(report, encoding="utf-8")
+    # What it cost, in the report the founder actually reads. The signal this
+    # answers asked to SEE the number — "how much will a typical month of
+    # builds cost me? I'm scared to leave autopilot running" — and a figure
+    # you have to know to go looking for does not answer it. Appended rather
+    # than prompted, so the number is arithmetic and never model prose.
+    from ai_venture_studio import spend
+
+    spend.flush(root)
+    cost_line = spend.render_plain(
+        spend.summarize_workspace(root, since=run_started_at), what="This build"
+    )
+    shape = spend.typical_and_projected(root)
+    cost_block = f"\n\n---\n\n## 花了多少 / What this cost\n\n{cost_line}\n"
+    if shape.get("runs_seen", 0) > 1:
+        cost_block += (
+            f"\nTypical run so far: ${shape['typical_run_usd']:.2f}; "
+            f"the most expensive one was ${shape['worst_run_usd']:.2f}. "
+            f"This month: ${shape['month_to_date_usd']:.2f}.\n"
+        )
+    cost_block += (
+        "\nThis is billed to your own API key — the framework never spends "
+        "money on your behalf.\n"
+    )
+    report_path.write_text(report + cost_block, encoding="utf-8")
 
     built_count = sum(1 for o in outcomes if o.status == "built")
     status = "completed" if built_count == len(outcomes) and outcomes else "failed"

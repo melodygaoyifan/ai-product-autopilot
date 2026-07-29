@@ -388,3 +388,67 @@ def test_the_cap_message_reads_as_the_operators_own_limit(tmp_path):
     reason = spend.cost_gate(root).reasons[0]
     assert "YOU set" in reason
     assert "your key and your budget" in reason
+
+
+# --- cost reaches the surfaces people actually look at ----------------------
+
+
+def test_the_studio_product_page_shows_what_it_cost(tmp_path):
+    """A number you have to know to go looking for does not answer "I'm
+    scared to leave autopilot running"."""
+    import shutil
+
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+    from fastapi.testclient import TestClient
+
+    from ai_venture_studio.studio import create_studio_app
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "prod", "prod", "web")
+    (root / ".mas" / "cost-model.yaml").write_text(yaml.safe_dump({"prices": SONNET}))
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "BUILD-REPORT.md").write_text("# done", encoding="utf-8")
+    spend.record("claude-sonnet-5", 1_000_000, 0)  # $3.00
+    spend.flush(root)
+
+    page = TestClient(
+        create_studio_app(root, spawn=lambda r: 1, provider="mock")
+    ).get("/").text
+    assert "What this cost" in page
+    assert "$3.00" in page
+    assert "your own API key" in page  # whose money it is, said plainly
+
+
+def test_the_studio_omits_the_cost_card_when_nothing_was_spent(tmp_path):
+    import shutil
+
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+    from fastapi.testclient import TestClient
+
+    from ai_venture_studio.studio import create_studio_app
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "quiet", "quiet", "web")
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "BUILD-REPORT.md").write_text("# done", encoding="utf-8")
+    page = TestClient(
+        create_studio_app(root, spawn=lambda r: 1, provider="mock")
+    ).get("/").text
+    assert "What this cost" not in page
+
+
+def test_the_build_report_gets_a_cost_section(tmp_path):
+    """Appended as arithmetic, never prompted — the number must not be model
+    prose."""
+    root = _workspace(tmp_path, prices=SONNET)
+    (root / "product").mkdir(parents=True, exist_ok=True)
+    spend.record("claude-sonnet-5", 1_000_000, 0)
+    spend.flush(root)
+
+    summary = spend.summarize_workspace(root)
+    line = spend.render_plain(summary, what="This build")
+    assert "$3.00" in line
+    # the section the autopilot appends is built from exactly this line
+    assert line.startswith("This build: $3.00")

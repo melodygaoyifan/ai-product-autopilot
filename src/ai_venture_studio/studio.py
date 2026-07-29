@@ -422,9 +422,20 @@ def create_studio_app(
                     f"</b><p>{_('failed_hint')}</p>{rows}</div>"
                 )
             no_features = f"<p class=muted>{_('first_version')}</p>"
+            # Cost, in the founder's register, on the page they land on. Read
+            # from the same ledger `avs cost` reads; the Studio stays a veneer.
+            from ai_venture_studio import spend
+
+            spent = spend.summarize_workspace(root)
+            cost_card = (
+                f"<div class=card><b>{_('h_cost')}</b>"
+                f"<p>{html.escape(spend.render_plain(spent, what=_('cost_what')))}</p>"
+                f"<p class=muted>{_('cost_own_key')}</p></div>"
+                if spent.calls else ""
+            )
             return _render(
                 request, _("title_product"),
-                f"<pre>{_md(report)}</pre>{acceptance}{gallery}{retry_block}"
+                f"<pre>{_md(report)}</pre>{acceptance}{cost_card}{gallery}{retry_block}"
                 f"<h2>{_('h_features')}</h2>"
                 f"{feature_cards or no_features}"
                 f"<h2>{_('h_something_wrong')}</h2>"
