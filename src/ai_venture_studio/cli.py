@@ -779,7 +779,18 @@ def create(
         )
         return
 
-    result = run_autopilot(root, fdr_path, provider=provider, yes=yes)
+    # Narrate the run. `avs create` printed nothing between "start" and a report
+    # that can be an hour away — the exact complaint the launch PRD is built on
+    # ("stared at the terminal for 40 minutes with no idea whether it was
+    # progressing or stuck"). The Studio grew a per-task panel in v0.34; the
+    # terminal never did.
+    from ai_venture_studio.upstream import progress
+
+    progress.set_sink(lambda line: console.print(f"[dim]{line}[/dim]"))
+    try:
+        result = run_autopilot(root, fdr_path, provider=provider, yes=yes)
+    finally:
+        progress.set_sink(None)
     if result.status == "needs_answers":
         console.print("[yellow]还需要一些信息 / A few answers needed:[/yellow]")
         for i, q in enumerate(result.assessment.questions, 1):
@@ -795,6 +806,11 @@ def create(
     for o in result.outcomes:
         verdict = f" · review: {o.review_verdict}" if o.review_verdict else ""
         console.print(f"  {o.task_id} {o.title}: {o.status}{verdict}")
+        # A failed module names its cause here. The summary line used to stop at
+        # the status, so the one question a founder actually has — why? — was
+        # answerable only by opening outcomes.yaml.
+        if o.status != "built" and o.detail:
+            console.print(f"      [dim]why: {o.detail}[/dim]")
     console.print(f"报告 / report: {result.report_path}")
     if result.status != "completed":
         raise typer.Exit(code=1)

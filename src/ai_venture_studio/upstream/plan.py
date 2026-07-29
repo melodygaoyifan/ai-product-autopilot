@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from ai_venture_studio.providers import get_provider
+from ai_venture_studio.providers import get_provider, last_response_truncated
 from ai_venture_studio.upstream.discover import load_brief
 from ai_venture_studio.upstream.workspace import load_project
 from ai_venture_studio.yamlx import extract_mapping
@@ -26,6 +26,11 @@ from ai_venture_studio.yamlx import extract_mapping
 PLANNER_MARKER = "task planner in a greenfield product system"
 
 MAX_REVISIONS = 2
+
+# A 7-task plan carries a description, a lane, an estimate and file globs per
+# task; 4096 output tokens is a tight fit for the wide end of that and buys
+# nothing, since the planner runs once per feature.
+_PLANNER_MAX_TOKENS = 8192
 
 
 class Task(BaseModel):
@@ -299,18 +304,39 @@ def run_planning(
             system=planner_system(scope_tier),
             user=f"<brief>\n{brief_yaml}</brief>"
             + (f"\n\n<revision_feedback>\n{feedback}\n</revision_feedback>" if feedback else ""),
-            max_tokens=4096,
+            max_tokens=_PLANNER_MAX_TOKENS,
         )
+        if last_response_truncated():
+            # A plan cut off at the output cap loses whole tasks silently: the
+            # YAML still parses, the missing tasks simply are not there, and
+            # nothing downstream can tell a 3-task plan from a 7-task plan that
+            # lost 4. dag_check cannot catch it either — the truncated plan is
+            # internally consistent.
+            feedback = (
+                "YOUR LAST RESPONSE WAS CUT OFF at the output limit, so the plan "
+                "was incomplete and was discarded. Return the SAME plan with "
+                "shorter descriptions — every task, fewer words each."
+            )
+            tasks, dag_issues, critics = [], ["planner response truncated at the output cap"], []
+            continue
         try:
             data = extract_mapping(raw, ("tasks",))
             tasks = [Task.model_validate(t) for t in data.get("tasks", [])]
         except Exception as exc:  # noqa: BLE001 — parse/schema failure feeds revision
+            # Keep the opening of what the model actually said: "unparseable
+            # planner output" alone cannot distinguish a schema slip from a
+            # model that answered in prose, and the plan is where ~42% of MAS
+            # failures enter.
+            opening = " ".join(str(raw).split())[:160]
             feedback = (
                 f"Your previous response failed to parse ({type(exc).__name__}). "
                 "Respond with ONLY the YAML schema given, double-quoting every "
                 "string value."
             )
-            tasks, dag_issues, critics = [], ["unparseable planner output"], []
+            tasks, dag_issues, critics = [], [
+                f"unparseable planner output ({type(exc).__name__}); response "
+                f"began: {opening!r}"
+            ], []
             continue
         for task in tasks:
             if not task.files_expected:

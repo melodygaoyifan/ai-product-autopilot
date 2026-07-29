@@ -133,12 +133,19 @@ def _task_states(root: Path) -> list[dict]:
         for o in yaml.safe_load(outcomes_path.read_text(encoding="utf-8")) or []:
             if o.get("status") != "built" and o.get("task_id"):
                 failed[o["task_id"]] = str(o.get("status", "failed"))
+    # `pending` covers everything from "not started" to "on its third build
+    # attempt", which is most of a run's wall-clock. The step journal is the
+    # difference between the two — still a read of a file the CLI writes.
+    from ai_venture_studio.upstream import progress as progress_journal
+
+    steps = progress_journal.latest_by_task(root)
     return [
         {
             "id": t["id"],
             "title": t.get("title", t["id"]),
             "state": "built" if t["id"] in built_ids
             else failed.get(t["id"], "pending"),
+            "step": str(steps.get(t["id"], {}).get("detail", "")),
         }
         for t in plan.get("tasks", [])
     ]
@@ -167,7 +174,14 @@ def _task_list_html(tasks: list[dict]) -> str:
         f"<li id='task-{html.escape(t['id'])}'>"
         f"{_STATE_ICON.get(t['state'], '❌')} {html.escape(t['title'])}"
         f"{'' if t['state'] in _STATE_ICON else ' <span class=bad>(' + html.escape(t['state']) + ')</span>'}"
-        f"</li>"
+        # The step only means anything while the task is still in flight; on a
+        # built task it is stale narration of something already finished.
+        + (
+            f" <span class=muted>— {html.escape(t['step'])}</span>"
+            if t.get("step") and t["state"] == "pending"
+            else ""
+        )
+        + "</li>"
         for t in tasks
     )
 
@@ -321,7 +335,8 @@ def create_studio_app(
                 "  for(const t of s.tasks){\n"
                 "    const li=document.getElementById('task-'+t.id);\n"
                 "    if(li)li.textContent=(ICONS[t.state]||'❌')+' '+t.title\n"
-                "      +(ICONS[t.state]?'':' ('+t.state+')');\n"
+                "      +(ICONS[t.state]?'':' ('+t.state+')')\n"
+                "      +((t.step&&t.state==='pending')?' — '+t.step:'');\n"
                 "  }\n"
                 "}catch(e){}setTimeout(poll,5000)}\n"
                 "poll();\n"

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import os
 
-from ai_venture_studio.providers.base import Provider, ProviderError, register
+from ai_venture_studio.providers.base import (
+    Provider,
+    ProviderError,
+    record_stop_reason,
+    register,
+)
 
 
 @register
@@ -49,6 +54,12 @@ class AnthropicProvider(Provider):
                 if not transient or attempt == 3:
                     raise
                 time.sleep(2 ** (attempt + 1))
+        # Record why the model stopped on EVERY response, not only the empty
+        # ones. `stop_reason == "max_tokens"` means the text below is a partial
+        # answer, and a partial answer that parses is worse than one that
+        # doesn't — see providers/base.py.
+        record_stop_reason(getattr(response, "stop_reason", None))
+
         # Meter here, where usage exists. The chat() contract still returns
         # str — threading a usage object through the writers, critics,
         # implementer and verifier would touch every call site for no gain,
