@@ -4,6 +4,98 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.59.1 — cost transparency is the point; the cap is opt-in and secondary
+
+Correcting v0.59.0's emphasis. The founder signal asked to SEE the number —
+"how much will a typical month of builds cost me? I'm scared to leave
+autopilot running" — not to be stopped, and users spend their own keys.
+
+- `summarize` / `by_model` / `summarize_workspace`: calls, tokens and money
+  for a run, a month, or a model.
+- `render_plain` is the founder-facing sentence, in the register that asked:
+  no token counts, no model names. "at least $X" when unpriced calls make the
+  figure a floor, and "unknown, here is how to fix it" when no prices are
+  configured — printing "$0.00" would be a lie about someone's money.
+- `read_entries(since=…)` answers "what did THIS run cost" without threading
+  attribution through every call site.
+- `typical_and_projected` reports the MEDIAN run beside the worst run,
+  because agentic spend has a fat tail and one runaway loop makes an average
+  useless. Runs are inferred from ledger gaps, stated as the heuristic it is.
+- The cap message now reads as the operator's own standing decision: it is
+  off by default and only exists because somebody wrote a number.
+
+## v0.59.0 — the cost gate: spend is measured, and the cap is real
+
+observability.py could price a call, total a month, and compare against a cap
+— and none of it was reachable, because nothing ever *recorded* a call.
+
+- Recording at the provider adapters, where usage exists; `Provider.chat`
+  still returns `str`. Recording never raises: a metering failure must not
+  take down the work being metered.
+- Persisting to append-only `.mas/spend.jsonl`, flushed on every review exit
+  path including the Gate 1 bail, and between build tasks. Lock-guarded,
+  because voters run in a thread pool. A truncated row is skipped, not fatal.
+- Gating before the spend — Gate 1 refuses a review, `run_build` refuses a
+  task — with the previous task's spend flushed first, so a cap cannot be
+  discovered only at the end of a seven-task run. `avs cost` reports a month.
+- Unpriced calls are never counted as zero (the total reports as a floor);
+  an unconfigured cap says it checked nothing rather than passing silently.
+
+## v0.58.0 — the MVP contract, and the AI delta on top of it
+
+The system could make a build smaller but never asked whether the slice, on
+its own, tells you if the thing is worth building. Doc 13 specified exactly
+that rule and it had never been implemented.
+
+- `avs mvp` + `product/mvp.py`: doc 13's rule (a hypothesis the increments
+  can actually settle, matched on 4-char stems plus CJK bigrams so
+  "progressing" agrees with "progress" and a Chinese FDR is not silently
+  exempt), plus the canon requirements the schemas let default to empty and
+  a refusal of "build it and see" as a cheapest test. `thin` IS the MVP tier.
+- The AI delta, fired by AI-shaped language in the founder's own words:
+  a named simpler alternative, a declared cost of being wrong (irreversible
+  may not act; expensive may suggest but not take), a wrong-answer fallback,
+  >= 20 eval cases authored first, and a quality metric paired to every
+  volume metric. These hold at every tier.
+- Gate PL2 carries scope_tier into the build (nothing bridged handoff and
+  planner before); `test_first` blocks `avs prd` instead of being a string
+  nothing read; the thin task cap became deterministic.
+
+## v0.57.1 — a founder never meets "Internal Server Error"
+
+Found by watching a real founder hit it. `/fdr`, `/feature` and `/correct`
+run LLM calls for minutes and had neither an in-flight guard nor error
+handling, while `/build` and `/retry` had both.
+
+- A failure renders a page: what stopped, that nothing was lost, the likely
+  cause in plain language, the real exception one click away.
+- A second submit while thinking returns "working on it" rather than racing
+  two autopilots over one workspace.
+
+## v0.57.0 — the six gaps from the research/comprehension audit
+
+- `avs init` no longer overwrites an existing CLAUDE.md.
+- The Context Manifest reaches the writer instead of only auditing the
+  prompt — `render_manifest` was dead code, and its absence is why sibling
+  tasks drifted onto different routes.
+- `avs map` / `avs init --adopt`: the brownfield entry path. Languages,
+  entry points, modules, real import edges, HTTP surface and test locations
+  derived from the code; `--write-deps` emits the baseline
+  `arch_contract_check` never had.
+- Charter voters get the tools they declare (~40 seats ran tool-less);
+  the phantom `repo_capability_probe` is gone.
+- `--tier thin` reaches the planner.
+- `avs probe`: the quarantined fetch the docstrings had promised, plus
+  ADR-U03 taint isolation finally wired to the host.
+
+## v0.56.1 — the founder demo is a recorded real run
+
+`docs/media/studio-flow.gif`: seven frames from one real build against a live
+provider. That run failed some modules, so the report frame reads "partly
+built" and the caption says so; a test pins the honesty phrases. Also fixes
+`avs studio <dir>` — the positional form every doc showed was the one form
+that could not work — keeping `--repo-dir` behind a deprecation notice.
+
 ## v0.56.0 — per-mode UIs: each persona gets its organizing surface
 
 Researched before built: the design canon (doc 24's persona constraints,

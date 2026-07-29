@@ -162,9 +162,9 @@ def test_the_gate_refuses_once_the_cap_is_reached(tmp_path):
     result = spend.cost_gate(root)
     assert result.passed is False
     assert result.reasons and "cap" in result.reasons[0]
-    # the way out is named, and it is a human's decision
+    # the way out is named, and the limit is attributed to whoever set it
     assert "monthly_cap_usd" in result.reasons[0]
-    assert "human" in result.reasons[0]
+    assert "YOU set" in result.reasons[0]
 
 
 def test_an_unpriced_call_is_never_counted_as_zero(tmp_path):
@@ -253,3 +253,138 @@ def test_pricing_matches_the_observability_model(tmp_path):
     model = CostModel(prices=SONNET)
     assert spend.priced(entries, model)[0].cost_usd == \
         estimate_cost("claude-sonnet-5", 1_000_000, 1_000_000, model).cost_usd
+
+
+# --- transparency: the primary surface --------------------------------------
+#
+# The cap is opt-in and secondary. What the founder signal actually asked for
+# was to SEE the number: "how much will a typical month of builds cost me?
+# I'm scared to leave autopilot running."
+
+
+def test_a_summary_reports_calls_tokens_and_money(tmp_path):
+    root = _workspace(tmp_path, prices=SONNET)
+    spend.record("claude-sonnet-5", 1_000_000, 100_000)  # $3.00 + $1.50
+    spend.flush(root)
+    summary = spend.summarize_workspace(root)
+    assert summary.calls == 1
+    assert summary.total_tokens == 1_100_000
+    assert summary.usd == pytest.approx(4.5)
+    assert summary.is_floor is False
+
+
+def test_the_founder_line_says_at_least_when_the_number_is_a_floor(tmp_path):
+    """Overstating certainty about someone's money is the failure mode here."""
+    root = _workspace(tmp_path, prices=SONNET)
+    spend.record("claude-sonnet-5", 1_000_000, 0)
+    spend.record("gpt-5", 500_000, 50_000)  # unpriced
+    spend.flush(root)
+    line = spend.render_plain(spend.summarize_workspace(root), what="This build")
+    assert "at least $3.00" in line
+    assert "no price configured" in line
+    assert "higher" in line
+
+
+def test_the_founder_line_is_plain_when_everything_is_priced(tmp_path):
+    root = _workspace(tmp_path, prices=SONNET)
+    spend.record("claude-sonnet-5", 1_000_000, 0)
+    spend.flush(root)
+    line = spend.render_plain(spend.summarize_workspace(root), what="This build")
+    assert line == "This build: $3.00 across 1 model call(s)."
+    assert "token" not in line.lower()  # founder register: no token counts
+
+
+def test_with_no_prices_configured_it_says_unknown_rather_than_zero(tmp_path):
+    """"$0.00" would be a lie; "unknown, here's how to fix it" is not."""
+    root = _workspace(tmp_path)  # no price table at all
+    spend.record("claude-sonnet-5", 1_000_000, 0)
+    spend.flush(root)
+    line = spend.render_plain(spend.summarize_workspace(root))
+    assert "unknown" in line
+    assert "cost-model.yaml" in line
+    assert "$0.00" not in line
+
+
+def test_nothing_recorded_says_so(tmp_path):
+    assert "nothing recorded" in spend.render_plain(
+        spend.summarize_workspace(_workspace(tmp_path))
+    )
+
+
+def test_per_model_rollup_answers_which_seat_cost_what(tmp_path):
+    root = _workspace(tmp_path, prices=SONNET)
+    spend.record("claude-sonnet-5", 1_000_000, 0)
+    spend.record("claude-sonnet-5", 1_000_000, 0)
+    spend.record("gpt-5", 10, 10)
+    spend.flush(root)
+    rollup = spend.by_model(
+        spend.read_entries(root), spend.load_cost_model(root / ".mas")
+    )
+    assert rollup["claude-sonnet-5"].calls == 2
+    assert rollup["claude-sonnet-5"].usd == pytest.approx(6.0)
+    assert rollup["gpt-5"].unpriced_calls == 1
+
+
+def test_since_answers_what_this_run_cost(tmp_path):
+    """Attribution without threading a label through every call site: note the
+    time, ask afterwards."""
+    import datetime as dt
+    import json as _json
+
+    root = _workspace(tmp_path, prices=SONNET)
+    path = root / ".mas" / spend.LEDGER_FILE
+    early = dt.datetime(2026, 7, 29, 9, 0, tzinfo=dt.UTC)
+    late = dt.datetime(2026, 7, 29, 12, 0, tzinfo=dt.UTC)
+    path.write_text("\n".join(_json.dumps(row) for row in [
+        {"at": early.isoformat(), "model": "claude-sonnet-5",
+         "input_tokens": 1_000_000, "output_tokens": 0},
+        {"at": late.isoformat(), "model": "claude-sonnet-5",
+         "input_tokens": 2_000_000, "output_tokens": 0},
+    ]) + "\n")
+    this_run = spend.summarize_workspace(root, since=late.isoformat())
+    assert this_run.calls == 1
+    assert this_run.usd == pytest.approx(6.0)
+
+
+def test_typical_uses_the_median_and_names_the_worst_case(tmp_path):
+    """Agentic spend has a fat tail — one runaway loop makes an average
+    useless, so the typical case and the worst case are reported separately."""
+    import datetime as dt
+    import json as _json
+
+    root = _workspace(tmp_path, prices=SONNET)
+    base = dt.datetime(2026, 7, 29, 8, 0, tzinfo=dt.UTC)
+    rows = []
+    # three cheap runs, then one expensive one, each separated by hours
+    for run, tokens in enumerate([1_000_000, 1_000_000, 1_000_000, 9_000_000]):
+        rows.append({
+            "at": (base + dt.timedelta(hours=run * 3)).isoformat(),
+            "model": "claude-sonnet-5",
+            "input_tokens": tokens, "output_tokens": 0,
+        })
+    (root / ".mas" / spend.LEDGER_FILE).write_text(
+        "\n".join(_json.dumps(r) for r in rows) + "\n"
+    )
+    shape = spend.typical_and_projected(root)
+    assert shape["runs_seen"] == 4
+    assert shape["typical_run_usd"] == pytest.approx(3.0)   # median, not mean
+    assert shape["worst_run_usd"] == pytest.approx(27.0)    # named separately
+    assert "heuristic" in shape["note"]  # the run-splitting is stated as one
+
+
+def test_typical_on_an_empty_ledger_does_not_invent_a_number(tmp_path):
+    shape = spend.typical_and_projected(_workspace(tmp_path))
+    assert shape["runs_seen"] == 0
+    assert "no spend recorded" in shape["note"]
+
+
+def test_the_cap_message_reads_as_the_operators_own_limit(tmp_path):
+    """The framework never decides to spend (ADR-U20); it should not sound
+    like it decided to stop either. The cap is off by default and only exists
+    because somebody wrote a number."""
+    root = _workspace(tmp_path, cap=1.0, prices=SONNET)
+    spend.record("claude-sonnet-5", 1_000_000, 0)
+    spend.flush(root)
+    reason = spend.cost_gate(root).reasons[0]
+    assert "YOU set" in reason
+    assert "your key and your budget" in reason
