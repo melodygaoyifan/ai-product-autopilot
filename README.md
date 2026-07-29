@@ -106,6 +106,15 @@ The two of us stop tracking work in chat messages.
 - **You confirm intent in plain language before anything is built**, and get
   a build report in your language after — including every automated approval
   the machine made on your behalf.
+- **You can see what it is doing while it does it.** Each module narrates its
+  own steps as they start — working out how to build it, writing the code
+  (attempt 2 of 3), running your tests, checking that it actually starts up —
+  in the terminal and in the Studio. No percentages and no ETA: the system
+  does not know whether attempt 2 will be the last one, and a made-up number
+  is worse than an honest step.
+- **A module that fails says why.** Not "the build gate failed" but the test
+  that failed, or that the model's answer was cut off and the task needs
+  splitting. Every attempt is kept for inspection.
 - Real persistence out of the box (local SQLite; Supabase and WeChat Cloud
   微信云开发 are guided options with credentials in a vault that never
   enters prompts).
