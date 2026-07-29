@@ -187,11 +187,45 @@ def dag_check(tasks: list[Task]) -> list[str]:
     return issues
 
 
-_PLANNER_SYSTEM = f"""You are the {PLANNER_MARKER}. Decompose the approved
+# Scope tiers (SCOPE_TIERS in product/prd.py) reach the builder here. The
+# vocabulary existed in the PRD and at the outer→inner handoff and then went
+# nowhere: a human could decide "thin" at Gate PL1 and the planner would
+# still decompose into a dozen tasks. thin NARROWS standard — same stages,
+# same gates, fewer tasks — never a different pipeline.
+_TIER_RULES = {
+    "thin": (
+        "- EXACTLY 1-3 tasks. This is a THIN slice: the goal is one thing "
+        "working end to end today, not a complete product.\n"
+        "- Task t1 MUST be a single user-visible action working end to end "
+        "(storage + endpoint + the minimal screen to exercise it), so the "
+        "product boots and does one real thing when t1 lands.\n"
+        "- Everything else the brief asks for is deferred: name it in the "
+        "task descriptions as out of scope for now. The founder adds the "
+        "next slice with `avs add` once they have seen this one run.\n"
+    ),
+    "standard": "- 3-12 tasks; each is one `avs spec` + `build` cycle (<= 2 days).\n",
+    "deep": (
+        "- 3-12 tasks; each is one `avs spec` + `build` cycle (<= 2 days).\n"
+        "- Sequence the riskiest and most architecturally load-bearing task "
+        "first, so a wrong assumption surfaces while it is still cheap.\n"
+    ),
+}
+# A thin slice that estimates like a full build is not thin. The tier caps
+# the budget so budget_check bites instead of the guidance being advisory.
+_TIER_BUDGET_CAP = {"thin": 10.0}
+
+
+def planner_system(scope_tier: str = "standard") -> str:
+    return _PLANNER_SYSTEM_TEMPLATE.format(
+        tier_rules=_TIER_RULES.get(scope_tier, _TIER_RULES["standard"]).rstrip("\n")
+    )
+
+
+_PLANNER_SYSTEM_TEMPLATE = f"""You are the {PLANNER_MARKER}. Decompose the approved
 brief's scope_now into a task DAG a solo developer can execute.
 
 Rules:
-- 3-12 tasks; each is one `avs spec` + `build` cycle (<= 2 days).
+{{tier_rules}}
 - depends_on lists task ids that must land first; no cycles.
 - lane groups tasks that touch the same surface (e.g. api, ui, infra) —
   tasks in one lane run serially, lanes run in parallel.
@@ -227,6 +261,10 @@ def run_planning(
             "`avs brief-approve` before planning"
         )
     provider_impl = get_provider(provider)
+    project_raw = yaml.safe_load(
+        (Path(repo_dir) / ".mas" / "project.yaml").read_text(encoding="utf-8")
+    ) or {}
+    scope_tier = str(project_raw.get("scope_tier", "standard"))
     brief_yaml = yaml.safe_dump(
         brief.model_dump(include={"title", "problem", "scope_now", "success_metrics"}),
         sort_keys=False, allow_unicode=True,
@@ -239,7 +277,7 @@ def run_planning(
     for revision in range(MAX_REVISIONS + 1):
         raw = provider_impl.complete(
             model=planner_model,
-            system=_PLANNER_SYSTEM,
+            system=planner_system(scope_tier),
             user=f"<brief>\n{brief_yaml}</brief>"
             + (f"\n\n<revision_feedback>\n{feedback}\n</revision_feedback>" if feedback else ""),
             max_tokens=4096,
@@ -262,11 +300,12 @@ def run_planning(
                 task.files_expected = blast_radius(
                     repo_dir, f"{task.title} {task.description}", cap=3
                 )
-        budget = float(
-            yaml.safe_load(
-                (Path(repo_dir) / ".mas" / "project.yaml").read_text(encoding="utf-8")
-            ).get("budget_hours", 60)
-        )
+        budget = float(project_raw.get("budget_hours", 60))
+        cap = _TIER_BUDGET_CAP.get(scope_tier)
+        if cap is not None:
+            # Tiers narrow, never widen: a thin slice cannot buy itself more
+            # hours than the workspace budget already allows.
+            budget = min(budget, cap)
         dag_issues = (
             dag_check(tasks) + lane_check(tasks)
             + budget_check(tasks, budget) + review_train_check(tasks)

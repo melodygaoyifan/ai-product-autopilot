@@ -452,6 +452,10 @@ def init(
     directory: str = typer.Argument(..., help="Workspace directory to create"),
     name: str = typer.Option(None, help="Project name (defaults to directory name)"),
     profile: str = typer.Option(..., help="Domain profile: web | miniprogram | app"),
+    tier: str = typer.Option(
+        "standard", help="thin | standard | deep. thin plans ONE working "
+                         "end-to-end slice first; narrows, never widens."
+    ),
     edition: str = typer.Option(
         None, help="Edition preset: enterprise | solo | engineer (doc 24; "
                    "narrowing-only, linted at init)"),
@@ -488,7 +492,13 @@ def init(
             )
             raise typer.Exit(code=2)
 
-    root = init_workspace(directory, name or Path(directory).name, profile)
+    try:
+        root = init_workspace(
+            directory, name or Path(directory).name, profile, scope_tier=tier
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
     if from_bench:
         import yaml as _yaml
 
@@ -701,6 +711,7 @@ def plan_approve(repo_dir: str = typer.Option(".", help="Workspace directory")):
 def create(
     directory: str = typer.Argument(..., help="Where your product lives (created if new)"),
     profile: str = typer.Option(..., help="web | miniprogram | app"),
+    tier: str = typer.Option("standard", help="thin | standard | deep. thin builds ONE working end-to-end slice first (fastest to something real); you add the next piece with `avs add`. Narrows, never widens."),
     fdr: str = typer.Option(None, help="Your FDR file (default: <dir>/FDR.md)"),
     yes: bool = typer.Option(False, "--yes", help="Confirm the plan and build everything"),
     provider: str = typer.Option("anthropic", help="Provider (e.g. 'mock')"),
@@ -713,7 +724,11 @@ def create(
 
     root = Path(directory).resolve()
     if not (root / ".mas" / "project.yaml").exists():
-        init_workspace(root, root.name, profile)
+        try:
+            init_workspace(root, root.name, profile, scope_tier=tier)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
     fdr_path = Path(fdr) if fdr else root / "FDR.md"
     if not fdr_path.exists() or not fdr_path.read_text(encoding="utf-8").strip():
         write_template(root)

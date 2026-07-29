@@ -166,3 +166,69 @@ def test_appending_the_profile_section_is_idempotent(tmp_path):
     shutil.rmtree(root / ".mas")
     init_workspace(root, "twice", "web")
     assert (root / "CLAUDE.md").read_text().count("## avs profile: web") == 1
+
+
+# --- the thin scope tier reaches the builder (gap 5) -------------------------
+
+
+def test_scope_tier_is_recorded_in_the_workspace(tmp_path):
+    """SCOPE_TIERS existed in the PRD and at the outer→inner handoff, and
+    `scope_tier` appeared nowhere in the build path: a human could decide
+    'thin' at Gate PL1 and the planner would still emit a dozen tasks."""
+    import yaml
+
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "thin", "thin", "web", scope_tier="thin")
+    data = yaml.safe_load((root / ".mas" / "project.yaml").read_text())
+    assert data["scope_tier"] == "thin"
+
+
+def test_an_unknown_tier_is_refused_at_init(tmp_path):
+    import pytest
+
+    from ai_venture_studio.upstream import init_workspace
+
+    with pytest.raises(ValueError, match="scope_tier"):
+        init_workspace(tmp_path / "bad", "bad", "web", scope_tier="turbo")
+
+
+def test_the_default_tier_is_standard_and_unchanged(tmp_path):
+    import yaml
+
+    from ai_venture_studio.upstream import init_workspace
+
+    root = init_workspace(tmp_path / "std", "std", "web")
+    data = yaml.safe_load((root / ".mas" / "project.yaml").read_text())
+    assert data["scope_tier"] == "standard"
+
+
+def test_thin_narrows_the_planner_and_standard_is_untouched():
+    """The tier has to bite where scope is actually decided — the planner
+    prompt — not merely be recorded."""
+    from ai_venture_studio.upstream.plan import planner_system
+
+    thin = planner_system("thin")
+    standard = planner_system("standard")
+    assert "EXACTLY 1-3 tasks" in thin
+    assert "end to end" in thin
+    assert "3-12 tasks" in standard
+    assert "EXACTLY 1-3" not in standard
+    # an unknown tier falls back to standard rather than inventing a policy
+    assert planner_system("turbo") == standard
+    # every tier keeps the rules that are not about scope size
+    for text in (thin, standard, planner_system("deep")):
+        assert "no cycles" in text
+        assert "NO meta-tasks" in text
+
+
+def test_thin_caps_the_planning_budget():
+    """A thin slice that estimates like a full build is not thin, so the cap
+    is enforced by budget_check rather than left to the prompt."""
+    from ai_venture_studio.upstream.plan import _TIER_BUDGET_CAP, Task, budget_check
+
+    assert _TIER_BUDGET_CAP["thin"] <= 10
+    tasks = [Task(id=f"t{i}", title="x", estimate_hours=8) for i in range(3)]
+    assert budget_check(tasks, _TIER_BUDGET_CAP["thin"]), "24h passed a thin cap"
+    assert budget_check([Task(id="t1", title="x", estimate_hours=6)],
+                        _TIER_BUDGET_CAP["thin"]) == []

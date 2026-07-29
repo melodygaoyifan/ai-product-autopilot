@@ -40,7 +40,10 @@ def load_profile(profile: str) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def init_workspace(directory: str | Path, name: str, profile: str) -> Path:
+def init_workspace(
+    directory: str | Path, name: str, profile: str,
+    scope_tier: str = "standard",
+) -> Path:
     root = Path(directory).resolve()
     root.mkdir(parents=True, exist_ok=True)
     if (root / ".mas" / "project.yaml").exists():
@@ -50,8 +53,15 @@ def init_workspace(directory: str | Path, name: str, profile: str) -> Path:
     (root / ".mas").mkdir(exist_ok=True)
     (root / "specs").mkdir(exist_ok=True)
     (root / "tests").mkdir(exist_ok=True)
+    from ai_venture_studio.product.prd import SCOPE_TIERS
+
+    if scope_tier not in SCOPE_TIERS:
+        raise ValueError(f"scope_tier must be one of {SCOPE_TIERS}")
     (root / ".mas" / "project.yaml").write_text(
-        yaml.safe_dump({"name": name, "profile": profile}, sort_keys=False),
+        yaml.safe_dump(
+            {"name": name, "profile": profile, "scope_tier": scope_tier},
+            sort_keys=False,
+        ),
         encoding="utf-8",
     )
 
