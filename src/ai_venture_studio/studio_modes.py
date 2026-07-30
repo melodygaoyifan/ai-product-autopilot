@@ -158,6 +158,9 @@ def review_timeline_body(root: Path, review_id: str,
         f"<p>{t_('review_verdict')}: <b>{html.escape(str(verdict))}</b> · "
         f"{t_('review_duration')}: {html.escape(duration)}</p>"
         f"<table>{rows}</table>"
+        f"<form method=post action='/review/{html.escape(review_id)}/evidence'>"
+        f"<button class=secondary>{t_('btn_evidence')}</button></form>"
+        f"<p class=muted>{t_('evidence_note')}</p>"
         f"<p><a href='/'>{t_('link_back')}</a></p>"
     )
 
@@ -244,8 +247,48 @@ def enterprise_panel(root: Path, t_: Callable[[str], str]) -> str:
         + _codebase_html(root, t_)
         + _edition_card(root, t_)
         + _stage_grid_html(root, t_)
+        + _deploy_reviews_html(root, t_)
         + _dwell_html(root, t_)
         + _automation_html(root, t_)
+    )
+
+
+def _deploy_reviews_html(root: Path, t_: Callable[[str], str]) -> str:
+    """Gate 5 history where the gate owner already is: the last deploy
+    recommendations, newest first, from the same mirrors `avs
+    deploy-review` writes. Grey with the command when none have run —
+    absence of deploy review must never read as reviewed-and-fine."""
+    head = f"<b>{t_('gov_deploys')}</b>"
+    base = root / ".mas" / "deploy-reviews"
+    runs = sorted(
+        (d for d in base.iterdir() if d.is_dir()),
+        key=lambda d: d.stat().st_mtime, reverse=True,
+    )[:5] if base.is_dir() else []
+    if not runs:
+        return (
+            f"<div class=card>{head}"
+            f"<p class=muted>{t_('gov_no_deploys')} "
+            f"<code>avs deploy-review main...HEAD</code></p></div>"
+        )
+    rows = ""
+    for run_dir in runs:
+        final = sorted(run_dir.glob("[0-9]*-final.yaml"))
+        verdict, branch = "…", ""
+        if final:
+            try:
+                data = yaml.safe_load(final[-1].read_text(encoding="utf-8")) or {}
+                verdict = str(data.get("verdict", "…"))
+                branch = str(data.get("branch", ""))
+            except yaml.YAMLError:
+                verdict = "?"
+        rows += (
+            f"<tr><td><code>{html.escape(run_dir.name)}</code></td>"
+            f"<td>{html.escape(verdict)}</td>"
+            f"<td class=muted>{html.escape(branch)}</td></tr>"
+        )
+    return (
+        f"<div class=card>{head}<table>{rows}</table>"
+        f"<p class=muted>{t_('gov_deploys_note')}</p></div>"
     )
 
 

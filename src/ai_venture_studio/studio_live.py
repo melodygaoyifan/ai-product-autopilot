@@ -165,7 +165,55 @@ def live_body(root: Path, t_: Callable[[str], str], profile: str) -> str:
         f"<button>{t_('btn_check_live')}</button></form></div>"
     )
 
-    return run_card + persistence_card + boundary_card + verify_card + housekeeping_card(root, t_)
+    # 5 · the incident front door lives here too: an adopted brownfield
+    # repo has no product report page, and "it broke in production" is a
+    # take-it-live concern. Same route, same triage MAS; when maintenance
+    # is below its substrate floor the refusal renders in this page's own
+    # words (the ladder reason), never a 500.
+    broken_card = (
+        f"<div class=card><b>{t_('h_broken')}</b>"
+        f"<p class=muted>{t_('inc_hint')}</p>"
+        f"<form method=post action=/incident>"
+        f"<textarea name=description style='min-height:80px' "
+        f"placeholder='{t_('inc_placeholder')}'></textarea>"
+        f"<p><button>{t_('btn_incident')}</button></p></form></div>"
+    )
+
+    return (
+        run_card + persistence_card + boundary_card + verify_card
+        + broken_card + housekeeping_card(root, t_)
+    )
+
+
+def run_housekeeping(root: Path):
+    """One sweep pass from the page — identical to `avs sweep` (harvest the
+    queues the ledgers already keep, then the rung-gated pass). With no
+    sweep.yaml this is SW0: report-only, nothing changed, clean passes
+    recorded. Raises SweepConfigError on an invalid config — the route
+    renders it, never swallows it."""
+    from ai_venture_studio.lanes.delivery import flag_lint
+    from ai_venture_studio.sweep import (
+        harvest_queues,
+        load_sweep_config,
+        run_sweep_pass,
+    )
+
+    day = dt.date.today()
+    config = load_sweep_config(root / ".mas")
+    flags_file = root / ".mas" / "flags.yaml"
+    flag_issues = (
+        flag_lint(flags_file.read_text(encoding="utf-8"), {}, today=day)
+        if flags_file.exists() else []
+    )
+    contributing = root / "CONTRIBUTING.md"
+    chores = harvest_queues(
+        root, today=day, flag_issues=flag_issues,
+        contributing_text=(
+            contributing.read_text(encoding="utf-8")
+            if contributing.exists() else ""
+        ),
+    )
+    return run_sweep_pass(root, chores, config=config, at=day.isoformat())
 
 
 def housekeeping_card(root: Path, t_: Callable[[str], str]) -> str:
@@ -174,10 +222,16 @@ def housekeeping_card(root: Path, t_: Callable[[str], str]) -> str:
     sweep_dir = root / ".mas" / "sweep"
     digests = sorted(sweep_dir.glob("digest-*.yaml")) if sweep_dir.is_dir() else []
     head = f"<b>{t_('house_head')}</b>"
+    run_form = (
+        f"<form method=post action=/live/sweep>"
+        f"<button class=secondary>{t_('btn_run_sweep')}</button></form>"
+        f"<p class=muted>{t_('house_run_note')}</p>"
+    )
     if not digests:
         return (
             f"<div class=card>{head}"
-            f"<p class=muted>{t_('house_never')} <code>avs sweep</code></p></div>"
+            f"<p class=muted>{t_('house_never')} <code>avs sweep</code></p>"
+            f"{run_form}</div>"
         )
     try:
         digest = yaml.safe_load(digests[-1].read_text(encoding="utf-8")) or {}
@@ -202,7 +256,8 @@ def housekeeping_card(root: Path, t_: Callable[[str], str]) -> str:
     return (
         f"<div class=card>{head}{body}"
         f"<p class=muted>{t_('house_note')} "
-        f"<span class=muted>({html.escape(str(digest.get('at', '')))})</span></p></div>"
+        f"<span class=muted>({html.escape(str(digest.get('at', '')))})</span></p>"
+        f"{run_form}</div>"
     )
 
 

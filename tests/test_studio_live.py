@@ -173,3 +173,58 @@ def test_live_body_hides_guide_button_without_a_cloud_catalog(tmp_path):
     assert "/live/guide" not in page
     assert "No guided cloud catalog" in page
     assert "/live/guide" in live_body(root, _t, "web")
+
+
+# --- enterprise follow-ups: incident on /live, sweep button, evidence ---------
+
+
+def test_live_page_carries_the_incident_front_door(tmp_path):
+    """Adopted brownfield repos have no product report page; the incident
+    intake must be reachable from Take-it-live too."""
+    from ai_venture_studio.studio_live import live_body
+
+    page = live_body(_workspace(tmp_path), _t, "web")
+    assert "action=/incident" in page and "Triage it" in page
+    assert "action=/live/sweep" in page  # the housekeeping check button
+
+
+def test_run_housekeeping_records_a_clean_pass(tmp_path):
+    from ai_venture_studio.studio_live import housekeeping_card, run_housekeeping
+
+    root = _workspace(tmp_path)
+    digest = run_housekeeping(root)
+    assert digest.rung == "SW0" and digest.clean_pass is True
+    assert list((root / ".mas" / "sweep").glob("digest-*.yaml"))
+    assert "clean pass" in housekeeping_card(root, _t)
+
+
+def test_evidence_route_refuses_bad_ids_and_names_missing_reviews(tmp_path):
+    from fastapi.testclient import TestClient as _TC
+
+    from ai_venture_studio import studio as studio_mod
+
+    root = _workspace(tmp_path)
+    client = _TC(studio_mod.create_studio_app(root, provider="mock"))
+    bad = client.post("/review/../../etc/evidence", follow_redirects=False)
+    assert bad.status_code in (303, 404)  # path shape refused, never served
+    missing = client.post("/review/nope123/evidence")
+    assert missing.status_code == 200 and "nope123" in missing.text
+
+
+def test_deploy_reviews_card_grey_and_populated(tmp_path):
+    import yaml as _yaml
+
+    from ai_venture_studio.studio_modes import _deploy_reviews_html
+
+    root = _workspace(tmp_path)
+    grey = _deploy_reviews_html(root, _t)
+    assert "avs deploy-review" in grey and "None yet" in grey
+
+    run_dir = root / ".mas" / "deploy-reviews" / "dep-1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "05-final.yaml").write_text(_yaml.safe_dump(
+        {"verdict": "HOLD", "branch": "release/1.2"}
+    ))
+    page = _deploy_reviews_html(root, _t)
+    assert "HOLD" in page and "release/1.2" in page
+    assert "stays disarmed" in page

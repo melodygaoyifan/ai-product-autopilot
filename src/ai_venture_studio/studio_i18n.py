@@ -352,6 +352,50 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Harvested by the sweep role from the framework's own "
               "queues; promoting it to act is always a human decision.",
     },
+    "btn_run_sweep": {
+        "zh": "现在做一次维护检查 / Run a housekeeping check",
+        "en": "Run a housekeeping check",
+    },
+    "house_run_note": {
+        "zh": "SW0 只报告，不改动任何东西；对某项采取行动永远是人的晋升决定。"
+              "/ Report-only at SW0; acting on an item is a human promotion.",
+        "en": "Report-only at rung SW0 — nothing is changed; acting on an "
+              "item is always a human promotion decision.",
+    },
+    "btn_evidence": {
+        "zh": "导出 Gate-R 证据包 / Export the Gate-R evidence bundle",
+        "en": "Export the Gate-R evidence bundle",
+    },
+    "title_evidence": {
+        "zh": "证据包 / Evidence bundle",
+        "en": "Evidence bundle",
+    },
+    "evidence_written": {
+        "zh": "证据包已写入 / Evidence bundle written",
+        "en": "Evidence bundle written",
+    },
+    "evidence_note": {
+        "zh": "逐条列出这次评审的闸门与结论 — 由人附到 CAB/变更申请上；"
+              "Studio 从不代为提交。/ Line-by-line gate record for the CAB "
+              "submission; a human attaches it, the Studio never submits.",
+        "en": "The line-by-line gate record for a CAB/change submission — "
+              "a human attaches it; the Studio never submits anything "
+              "anywhere.",
+    },
+    "gov_deploys": {
+        "zh": "部署评审（Gate 5）/ Deploy reviews (Gate 5)",
+        "en": "Deploy reviews (Gate 5)",
+    },
+    "gov_no_deploys": {
+        "zh": "还没有部署评审 — 运行：/ None yet — run:",
+        "en": "None yet — run:",
+    },
+    "gov_deploys_note": {
+        "zh": "建议，从不执行：deploy-execute 在有署名限期策略之前保持解除武装。"
+              "/ Recommendations only; deploy-execute stays disarmed.",
+        "en": "Recommendations, never executions — deploy-execute stays "
+              "disarmed until a named, expiring policy arms it.",
+    },
     "h_broken": {
         "zh": "产品出故障了？ / Is it broken?",
         "en": "Is it broken?",

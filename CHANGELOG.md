@@ -98,6 +98,18 @@ not the single example.
   the event loop (a slow URL froze every Studio page — moved to the
   threadpool), and the studio wireup drift test caught two forms that
   rendered in no walked state.
+- **The enterprise loop closes in the Studio: incidents from anywhere,
+  evidence in one click, Gate 5 on the dashboard, housekeeping on
+  demand.** The incident front door now also lives on /live (an adopted
+  brownfield repo has no product page — and the substrate ladder's
+  refusal renders in place when maintenance is below floor). The review
+  timeline gained *Export the Gate-R evidence bundle* — same artifact as
+  `avs evidence-bundle`, one click from the review it attests; a human
+  still attaches it, the Studio never submits anything. The enterprise
+  panel gained a Deploy reviews (Gate 5) card reading the same mirrors
+  `avs deploy-review` writes — recommendations, never executions. And
+  the housekeeping card gained *Run a housekeeping check*: the identical
+  sweep pass as `avs sweep`, report-only at SW0, clean passes recorded.
 - **Enterprise mode is a governance dashboard, not four dead ends.**
   Grounded in how mature enterprise consoles actually work (SonarQube's
   verdict-first gates, GitHub security overview's explicit "not enabled"

@@ -678,6 +678,44 @@ def create_studio_app(
         write_cloud_guide(root, _profile(root))
         return RedirectResponse("/live", status_code=303)
 
+    @app.post("/live/sweep")
+    async def live_sweep(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.studio_live import run_housekeeping
+
+        try:
+            await run_in_threadpool(run_housekeeping, root)
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        return RedirectResponse("/live", status_code=303)
+
+    @app.post("/review/{review_id}/evidence")
+    def review_evidence(request: Request, review_id: str):
+        """The Gate-R artifact, one click from the review it attests. Same
+        export as `avs evidence-bundle`; a human still attaches it to the
+        CAB submission — the Studio never submits anything anywhere."""
+        if not _REVIEW_ID.match(review_id):
+            return RedirectResponse("/", status_code=303)
+        from ai_venture_studio.adoption import write_evidence_bundle
+
+        try:
+            path = write_evidence_bundle(str(root), review_id)
+        except FileNotFoundError as exc:
+            return _render(
+                request, _("title_evidence"),
+                f"<div class=card><p class=bad>{html.escape(str(exc))}</p>"
+                f"</div><p><a href='/'>{_('link_back')}</a></p>",
+            )
+        return _render(
+            request, _("title_evidence"),
+            f"<div class=card><b>{_('evidence_written')}</b>"
+            f"<p><code>{html.escape(str(path))}</code></p>"
+            f"<p class=muted>{_('evidence_note')}</p></div>"
+            f"<p><a href='/review/{html.escape(review_id)}'>"
+            f"{_('link_back')}</a></p>",
+        )
+
     @app.post("/live/probe")
     async def live_probe(request: Request):
         # In the threadpool, not the event loop: a slow (or self-referential)
