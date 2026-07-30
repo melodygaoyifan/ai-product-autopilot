@@ -226,6 +226,205 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "edition 文件未通过检查 / Edition file fails lint",
         "en": "The edition file fails lint",
     },
+    # --- the production loop: take it live / it's broken / housekeeping --
+    "title_live": {
+        "zh": "上线 / Take it live",
+        "en": "Take it live",
+    },
+    "link_live": {
+        "zh": "上线（部署与检查）/ Take it live",
+        "en": "Take it live",
+    },
+    "live_run": {
+        "zh": "在服务器上运行 / Run it on a server",
+        "en": "Run it on a server",
+    },
+    "live_run_hint": {
+        "zh": "把这个文件夹放到服务器上（内网虚拟机即可），装好 Python，"
+              "运行这一条命令 — 和每次验证用的完全相同：/ Copy this folder "
+              "to the server, install Python, run this one command:",
+        "en": "Copy this folder to the server (an internal VM is fine), "
+              "install Python, and run this one command — the same one "
+              "every build verification used:",
+    },
+    "live_run_note": {
+        "zh": "PORT 环境变量决定端口；数据文件随文件夹一起走。/ PORT picks "
+              "the port; the data file travels with the folder.",
+        "en": "The PORT environment variable picks the port; the data "
+              "file travels with the folder.",
+    },
+    "live_persistence": {
+        "zh": "数据存储 / Your data",
+        "en": "Your data",
+    },
+    "live_local_db": {
+        "zh": "本地数据库已就绪：/ Local database provisioned:",
+        "en": "Local database provisioned:",
+    },
+    "live_no_services": {
+        "zh": "尚未登记任何存储服务。/ No storage service registered yet.",
+        "en": "No storage service registered yet.",
+    },
+    "live_cloud_steps": {
+        "zh": "云数据库开通步骤（SERVICES.md）/ Cloud database steps",
+        "en": "Cloud database steps (SERVICES.md)",
+    },
+    "btn_cloud_guide": {
+        "zh": "生成云数据库指南 / Write the cloud guide",
+        "en": "Write the cloud database guide",
+    },
+    "btn_cloud_guide_again": {
+        "zh": "重新生成指南 / Rewrite the guide",
+        "en": "Rewrite the guide",
+    },
+    "live_guide_effect": {
+        "zh": "会写入 SERVICES.md：按你的产品类型给出白话开通步骤，"
+              "凭据放入保管库，绝不进入代码或提示词。/ Writes SERVICES.md "
+              "with plain-language steps; credentials go to the vault.",
+        "en": "Writes SERVICES.md — plain-language setup steps for your "
+              "product type; credentials go in the vault, never into code "
+              "or prompts.",
+    },
+    "live_boundary": {
+        "zh": "谁来按部署按钮 / Who presses the deploy button",
+        "en": "Who presses the deploy button",
+    },
+    "live_boundary_note": {
+        "zh": "avs 从不自行部署上线。自动化部署的机关存在，但默认解除武装 — "
+              "由一位署名的人写下限期策略后才生效（ADR-031）。在那之前，"
+              "按钮是你的。/ avs never deploys on its own; automation stays "
+              "disarmed until a named human arms a policy.",
+        "en": "avs never deploys to production on its own. The automation "
+              "exists but stays disarmed until a named human writes an "
+              "attributed, expiring policy (ADR-031). Until then, the "
+              "button is yours — which is the point.",
+    },
+    "live_verify": {
+        "zh": "它现在在线吗？ / Is it answering right now?",
+        "en": "Is it answering right now?",
+    },
+    "live_never_checked": {
+        "zh": "还没检查过 — 填入你部署后的网址试试。/ Never checked — paste "
+              "your deployed URL.",
+        "en": "Never checked — paste the URL where you put it.",
+    },
+    "btn_check_live": {
+        "zh": "检查 / Check",
+        "en": "Check",
+    },
+    "house_head": {
+        "zh": "日常维护 / Housekeeping",
+        "en": "Housekeeping",
+    },
+    "house_never": {
+        "zh": "清扫角色还没运行过 — 运行：/ The sweep role has not run yet:",
+        "en": "The sweep role has not run yet — run:",
+    },
+    "house_unreadable": {
+        "zh": "清扫摘要无法解析。/ The sweep digest is unreadable.",
+        "en": "The sweep digest is unreadable.",
+    },
+    "house_clean": {
+        "zh": "上次清扫：无事可做（已记录，不是沉默）。/ Last sweep: clean "
+              "pass, recorded.",
+        "en": "Last sweep: nothing to tidy — a recorded clean pass, not "
+              "silence.",
+    },
+    "house_items": {
+        "zh": "项待处理 / item(s) queued",
+        "en": "item(s) queued",
+    },
+    "house_actionable": {
+        "zh": "项可自动处理（人工晋升后）/ actionable",
+        "en": "actionable within the cap",
+    },
+    "house_note": {
+        "zh": "由清扫角色从框架队列收集；升级动作永远由人晋升。/ Harvested "
+              "by the sweep role; promotion is always a human decision.",
+        "en": "Harvested by the sweep role from the framework's own "
+              "queues; promoting it to act is always a human decision.",
+    },
+    "h_broken": {
+        "zh": "产品出故障了？ / Is it broken?",
+        "en": "Is it broken?",
+    },
+    "inc_hint": {
+        "zh": "用你自己的话描述故障（什么坏了、从什么时候开始、影响谁）。"
+              "系统会分诊、找根因，并在可能时提出修复 — 修复和其他改动一样"
+              "要过评审。/ Describe the failure in your own words; it will "
+              "be triaged and root-caused.",
+        "en": "Describe the failure in your own words — what broke, since "
+              "when, who it affects. It gets triaged and root-caused; a "
+              "proposed fix re-enters review like any other change.",
+    },
+    "inc_placeholder": {
+        "zh": "例如：从今天早上开始，提交新申请的按钮点了没反应。/ e.g. since "
+              "this morning, submitting a new request does nothing.",
+        "en": "e.g. since this morning, clicking “submit a request” does "
+              "nothing and no request shows up.",
+    },
+    "btn_incident": {
+        "zh": "分诊这个故障 / Triage it",
+        "en": "Triage it",
+    },
+    "title_incident": {
+        "zh": "故障分诊 / Incident triage",
+        "en": "Incident triage",
+    },
+    "inc_head": {
+        "zh": "分诊结果 / What the triage found",
+        "en": "What the triage found",
+    },
+    "inc_hypothesis": {
+        "zh": "根因假设 / Likely cause",
+        "en": "Likely cause",
+    },
+    "inc_next": {
+        "zh": "建议动作 / Suggested next step",
+        "en": "Suggested next step",
+    },
+    "inc_v_low": {
+        "zh": "已记录 — 优先级不高，暂不需要动作。/ Logged — low priority.",
+        "en": "Logged — low priority, nothing urgent to do.",
+    },
+    "inc_v_cause": {
+        "zh": "找到了可能的原因。/ A likely cause was found.",
+        "en": "A likely cause was found.",
+    },
+    "inc_v_escalate": {
+        "zh": "需要人来看 — 系统没能自动定位原因。/ Needs a human — the "
+              "cause could not be pinned down automatically.",
+        "en": "This needs a human — the cause could not be pinned down "
+              "automatically.",
+    },
+    "btn_try_fix": {
+        "zh": "尝试修复（会进评审）/ Attempt the fix",
+        "en": "Attempt the fix",
+    },
+    "inc_fix_note": {
+        "zh": "点击即批准一次修复尝试；产出的改动会像任何 PR 一样重新进入"
+              "代码评审，绝不直接上线。/ The click approves one attempt; "
+              "the change re-enters review, never straight to production.",
+        "en": "Your click approves one fix attempt; the resulting change "
+              "re-enters code review like any PR — never straight to "
+              "production.",
+    },
+    "title_fix": {
+        "zh": "修复尝试 / Fix attempt",
+        "en": "Fix attempt",
+    },
+    "fix_head": {
+        "zh": "修复尝试结果 / How the attempt went",
+        "en": "How the attempt went",
+    },
+    "fix_branch": {
+        "zh": "分支 / branch",
+        "en": "branch",
+    },
+    "fix_files": {
+        "zh": "改动文件 / files changed",
+        "en": "files changed",
+    },
     # --- enterprise posture / trust / codebase panels -------------------
     "gov_posture": {
         "zh": "治理态势 / Governance posture",

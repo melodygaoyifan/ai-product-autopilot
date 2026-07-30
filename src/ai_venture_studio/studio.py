@@ -448,9 +448,17 @@ def create_studio_app(
             )
             return _render(
                 request, _("title_product"),
-                f"<pre>{_md(report)}</pre>{acceptance}{cost_card}{gallery}{retry_block}"
+                f"<pre>{_md(report)}</pre>{acceptance}"
+                f"<p><a href='/live'>🚀 {_('link_live')}</a></p>"
+                f"{cost_card}{gallery}{retry_block}"
                 f"<h2>{_('h_features')}</h2>"
                 f"{feature_cards or no_features}"
+                f"<h2>{_('h_broken')}</h2>"
+                f"<p class=muted>{_('inc_hint')}</p>"
+                "<form method=post action=/incident>"
+                "<textarea name=description style='min-height:80px' "
+                f"placeholder='{_('inc_placeholder')}'></textarea>"
+                f"<p><button>{_('btn_incident')}</button></p></form>"
                 f"<h2>{_('h_something_wrong')}</h2>"
                 f"<p class=muted>{_('correction_hint')}</p>"
                 + (
@@ -656,6 +664,81 @@ def create_studio_app(
         if not _build_running(root):
             _spawn_build()
         return RedirectResponse("/", status_code=303)
+
+    @app.get("/live", response_class=HTMLResponse)
+    def live(request: Request):
+        from ai_venture_studio.studio_live import live_body
+
+        return _render(request, _("title_live"), live_body(root, _, _profile(root)))
+
+    @app.post("/live/guide")
+    def live_guide():
+        from ai_venture_studio.upstream.provisioning import write_cloud_guide
+
+        write_cloud_guide(root, _profile(root))
+        return RedirectResponse("/live", status_code=303)
+
+    @app.post("/live/probe")
+    async def live_probe(request: Request):
+        # In the threadpool, not the event loop: a slow (or self-referential)
+        # URL must never freeze every other Studio page for 8 seconds.
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.studio_live import probe_live
+
+        form = await request.form()
+        await run_in_threadpool(probe_live, root, str(form.get("url", "")))
+        return RedirectResponse("/live", status_code=303)
+
+    @app.post("/incident")
+    async def incident(request: Request):
+        """It's broken → the real triage MAS. Same Incident model and
+        artifacts as `avs triage`; only the front door is a textarea."""
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.adoption import StageInactiveError, check_stage
+        from ai_venture_studio.studio_live import incident_body, incident_intake
+
+        form = await request.form()
+        description = str(form.get("description", "")).strip()
+        if not description:
+            return RedirectResponse("/", status_code=303)
+        try:
+            check_stage(str(root), "maintenance")
+        except StageInactiveError as exc:
+            return _render(
+                request, _("title_incident"),
+                f"<div class=card><p class=bad>{html.escape(str(exc))}</p>"
+                f"</div><p><a href='/'>{_('link_back')}</a></p>",
+            )
+        try:
+            incident_obj, result = await run_in_threadpool(
+                incident_intake, root, description, provider
+            )
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        return _render(
+            request, _("title_incident"), incident_body(_, incident_obj.id, result)
+        )
+
+    @app.post("/incident/fix")
+    async def incident_fix(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.studio_live import attempt_incident_fix, fix_body
+
+        form = await request.form()
+        incident_id = str(form.get("incident_id", ""))
+        # Same shape rule as review ids — the id becomes a path segment.
+        if not _REVIEW_ID.match(incident_id):
+            return RedirectResponse("/", status_code=303)
+        try:
+            attempt = await run_in_threadpool(
+                attempt_incident_fix, root, incident_id, provider
+            )
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        return _render(request, _("title_fix"), fix_body(_, attempt))
 
     @app.post("/reset")
     def reset():

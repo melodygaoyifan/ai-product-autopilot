@@ -82,6 +82,22 @@ not the single example.
   versioned JSON contracts for named integration consumers, and a
   no-node-assumed frontend stance. It reuses web's block library;
   add-only like every profile (edition_lint posture).
+- **The founder's journey no longer ends at "works in this folder" — the
+  production loop is in the Studio.** *Take it live* (`/live`): the exact
+  boot command every verification used, the persistence story (local DB /
+  the SERVICES.md cloud steps, generated on click), the deploy boundary
+  stated where the button would be (avs never deploys on its own —
+  ADR-031), an is-it-answering-now probe with a remembered last check,
+  and the sweep role's housekeeping digest in plain language. *Is it
+  broken?* on the product page: a founder sentence becomes a real
+  incident — same Incident model, same triage/root-cause MAS, same
+  artifacts as `avs triage` — reported back in plain language
+  ("A likely cause was found" / "This needs a human"), with a one-click
+  fix attempt whose click IS the human approval and whose change
+  re-enters review like any PR. Found while wiring it: the probe ran on
+  the event loop (a slow URL froze every Studio page — moved to the
+  threadpool), and the studio wireup drift test caught two forms that
+  rendered in no walked state.
 - **Enterprise mode is a governance dashboard, not four dead ends.**
   Grounded in how mature enterprise consoles actually work (SonarQube's
   verdict-first gates, GitHub security overview's explicit "not enabled"
