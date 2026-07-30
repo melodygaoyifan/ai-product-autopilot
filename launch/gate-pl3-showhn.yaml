@@ -1,0 +1,57 @@
+# Gate PL3 (ADR-U19): publishing is forbidden_autonomous, so every external
+# act carries a scoped, per-artifact human approval. This record exists
+# because the approval was given and the ATTEMPT WAS REFUSED BY THE CHANNEL.
+# A refused publish is an outcome, not an absence — the same reason a clean
+# sweep pass is recorded (doc 29) and a not_tracked attention week is a
+# recorded decision rather than a gap.
+gate: PL3
+approval:
+  scope:
+    artifact_hash: sha256:89847724918421302c4a96783b4c0429d262ae95c498c3dcef0eb762e4e8a087
+    comment_hash: sha256:cd2a256b1cc44587d23e9436ec681f6f48eace472f3ede84d8485be32218af3f
+    channel: community
+    surface: news.ycombinator.com (Show HN)
+    window_start: '2026-07-29'
+    window_end: ''
+  approver: melody
+  decision: approve
+  evidence: >-
+    operator instructed the post in-session on 2026-07-28 and chose the
+    2026-07-29 ~7am Pacific window over posting immediately, on the grounds
+    that a Show HN is effectively one shot. Approval was scoped to this
+    artifact pair and this surface; it does not generalize to any other
+    channel (ADR-U19).
+preflight:
+  claim_substantiation_check: clean
+  disclosure_lint: clean
+  brand_and_safety_scan: clean
+  geo_extractability_check: clean
+  spam_policy_check: clean
+  note: >-
+    re-verified immediately before the attempt via
+    tests/test_launch_pass.py; the comment body needed four passes to reach
+    clean, which is recorded in the launch post itself as a checkable detail.
+outcome: refused_by_channel
+published_to: null
+refusal:
+  at: '2026-07-29'
+  stated_reason: >-
+    "We're temporarily restricting Show HNs because of a massive influx,
+    mostly by users who aren't yet familiar with the site or its culture."
+    HN invited participation first, then an occasional Show HN later.
+  classification: >-
+    account standing, not artifact quality. Nothing in the draft was
+    rejected: the five backstops were clean and the submission never
+    rendered. Re-attempting from another account, or working around the
+    restriction, would be exactly the kind of channel-policy evasion
+    ADR-U21 forbids by construction.
+  reattempt_condition: >-
+    HN's own stated bar — become a known contributor first, then post an
+    occasional Show HN. No date is set here because setting one would
+    pretend the bar is time-based rather than reputational.
+verification:
+  method: playwright navigation to news.ycombinator.com/submit
+  retrieved_at: '2026-07-29'
+  result: >-
+    login wall on the first attempt (credentials never touched), then the
+    Show HN restriction notice. Not published.
