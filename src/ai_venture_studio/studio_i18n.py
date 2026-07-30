@@ -484,6 +484,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "改动文件 / files changed",
         "en": "files changed",
     },
+    "pre_head": {
+        "zh": "可以开工了吗？ / Ready to build?",
+        "en": "Ready to build?",
+    },
+    "pre_note": {
+        "zh": "一个团队今天就能用它构建软件所需的每一项 — 实时读取，"
+              "未就绪的项附上确切的修复命令。/ Every prerequisite for a "
+              "team to build software today — read live; each gap carries "
+              "its exact fix.",
+        "en": "Every prerequisite for a team to build software today — "
+              "read live from the environment, git, and the forge CLI; "
+              "each gap carries its exact fix.",
+    },
     # --- enterprise posture / trust / codebase panels -------------------
     "gov_posture": {
         "zh": "治理态势 / Governance posture",

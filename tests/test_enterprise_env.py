@@ -382,3 +382,41 @@ def test_edition_card_names_the_gate_owner(tmp_path):
     edition["gate_policy"]["gate_owner"] = "Melody Gao"
     (tmp_path / ".mas" / "edition.yaml").write_text(_yaml.safe_dump(edition))
     assert "Melody Gao" in _edition_card(tmp_path, _t)
+
+
+# --- ready-to-build preflight -------------------------------------------------
+
+
+def test_preflight_reads_live_state_and_names_fixes(tmp_path, monkeypatch):
+    from ai_venture_studio.studio_modes import build_preflight
+
+    for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+                "AVS_ANTHROPIC_MODE", "AVS_STUDIO_TOKEN"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / ".mas").mkdir()
+    rows = {r["item"]: r for r in build_preflight(tmp_path)}
+    assert set(rows) == {"model", "git identity", "forge", "governance",
+                         "substrate", "studio access"}
+    assert rows["model"]["state"] == "todo"
+    assert "mock evaluates with no key" in rows["model"]["fix"]
+    assert rows["forge"]["state"] == "todo"  # no origin remote
+    assert rows["governance"]["state"] == "todo"
+    assert "gate-owner" in rows["governance"]["fix"]
+    assert rows["substrate"]["state"] == "todo"
+    assert "localhost-only" in rows["studio access"]["found"]
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-x")
+    monkeypatch.setenv("AVS_STUDIO_TOKEN", "t")
+    rows = {r["item"]: r for r in build_preflight(tmp_path)}
+    assert rows["model"]["state"] == "ready"
+    assert "token-gated" in rows["studio access"]["found"]
+
+
+def test_preflight_card_renders_counts_and_commands(tmp_path, monkeypatch):
+    from ai_venture_studio.studio_modes import _preflight_html
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    (tmp_path / ".mas").mkdir()
+    page = _preflight_html(tmp_path, _t)
+    assert "Ready to build?" in page
+    assert "avs init . --profile enterprise-web" in page

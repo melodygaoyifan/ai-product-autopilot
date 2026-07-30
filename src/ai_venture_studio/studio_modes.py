@@ -242,7 +242,8 @@ def enterprise_panel(root: Path, t_: Callable[[str], str]) -> str:
     answer first, the security reviewer's questions second, the evidence
     below."""
     return (
-        _posture_html(root, t_)
+        _preflight_html(root, t_)
+        + _posture_html(root, t_)
         + _trust_html(root, t_)
         + _codebase_html(root, t_)
         + _edition_card(root, t_)
@@ -289,6 +290,131 @@ def _deploy_reviews_html(root: Path, t_: Callable[[str], str]) -> str:
     return (
         f"<div class=card>{head}<table>{rows}</table>"
         f"<p class=muted>{t_('gov_deploys_note')}</p></div>"
+    )
+
+
+def build_preflight(root: Path) -> list[dict]:
+    """Can this workspace's team actually build software TODAY? One row
+    per prerequisite: state ('ready' | 'todo'), what was found, and the
+    exact fix. Everything is read live — env, git config, the forge CLI's
+    own auth check — never cached, never guessed."""
+    import os
+    import subprocess
+
+    from ai_venture_studio import forge as forge_mod
+    from ai_venture_studio.secrets import env_or_file
+
+    rows: list[dict] = []
+
+    # 1 · model credential (any door counts; mock counts for evaluation).
+    mode = (os.environ.get("AVS_ANTHROPIC_MODE", "").strip().lower() or "direct")
+    has_credential = bool(
+        env_or_file("ANTHROPIC_API_KEY") or env_or_file("ANTHROPIC_AUTH_TOKEN")
+        or mode in ("bedrock", "vertex", "foundry")
+    )
+    rows.append({
+        "item": "model", "state": "ready" if has_credential else "todo",
+        "found": f"door: {mode}" if has_credential else "no credential",
+        "fix": "export ANTHROPIC_API_KEY(_FILE) — or "
+               "AVS_ANTHROPIC_MODE=bedrock|vertex|foundry; "
+               "--provider mock evaluates with no key",
+    })
+
+    # 2 · git identity — commits carry the team's name, not nothing.
+    try:
+        email = subprocess.run(
+            ["git", "config", "user.email"], cwd=root,
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        email = ""
+    rows.append({
+        "item": "git identity", "state": "ready" if email else "todo",
+        "found": email or "user.email unset",
+        "fix": 'git config user.email "you@company.com"',
+    })
+
+    # 3 · forge CLI authenticated — reviews post nowhere without it.
+    remote = forge_mod._remote_forge(str(root))
+    if remote is None:
+        rows.append({
+            "item": "forge", "state": "todo",
+            "found": "no GitHub/GitLab origin remote",
+            "fix": "git remote add origin <your forge URL>",
+        })
+    else:
+        status, note = forge_mod.auth_status(remote)
+        cli = {"github": "gh", "gitlab": "glab"}[remote]
+        rows.append({
+            "item": "forge", "state": "ready" if status == "ready" else "todo",
+            "found": note,
+            "fix": f"{cli} auth login" if status == "unauthenticated"
+                   else f"install {cli}, then {cli} auth login",
+        })
+
+    # 4 · workspace governance — profile, edition, a named gate owner.
+    project = root / ".mas" / "project.yaml"
+    edition_path = root / ".mas" / "edition.yaml"
+    owner = ""
+    if edition_path.exists():
+        try:
+            raw = yaml.safe_load(edition_path.read_text(encoding="utf-8")) or {}
+            owner = str((raw.get("gate_policy") or {}).get("gate_owner") or "")
+        except yaml.YAMLError:
+            owner = ""
+    governed = project.exists() and edition_path.exists() and bool(owner)
+    rows.append({
+        "item": "governance", "state": "ready" if governed else "todo",
+        "found": f"gate owner: {owner}" if governed else (
+            "no gate owner" if edition_path.exists()
+            else "no edition declared"
+        ),
+        "fix": 'avs init . --profile enterprise-web --edition enterprise '
+               '--gate-owner "<name>"',
+    })
+
+    # 5 · substrate declared — otherwise every stage runs ungated.
+    rows.append({
+        "item": "substrate",
+        "state": "ready" if (root / ".mas" / "substrate-profile.yaml").exists()
+        else "todo",
+        "found": "declared"
+        if (root / ".mas" / "substrate-profile.yaml").exists()
+        else "not declared (stages ungated, effective S4)",
+        "fix": "avs readiness prints a detected starter profile to save",
+    })
+
+    # 6 · Studio access posture — never a blocker (localhost-only is a
+    # valid way to build), so the guidance rides in the found text.
+    token_set = bool(env_or_file("AVS_STUDIO_TOKEN"))
+    rows.append({
+        "item": "studio access", "state": "ready",
+        "found": "token-gated (AVS_STUDIO_TOKEN set)" if token_set
+        else "localhost-only — set AVS_STUDIO_TOKEN(_FILE) to serve a team",
+        "fix": "",
+    })
+    return rows
+
+
+def _preflight_html(root: Path, t_: Callable[[str], str]) -> str:
+    rows = build_preflight(root)
+    ready = sum(1 for r in rows if r["state"] == "ready")
+    cells = ""
+    for r in rows:
+        icon = "✅" if r["state"] == "ready" else "◻️"
+        fix = (
+            f"<br><code>{html.escape(r['fix'])}</code>"
+            if r["state"] != "ready" else ""
+        )
+        cells += (
+            f"<tr><td>{icon} {html.escape(r['item'])}</td>"
+            f"<td>{html.escape(r['found'])}{fix}</td></tr>"
+        )
+    return (
+        f"<div class=card><b>{t_('pre_head')}</b> "
+        f"<span class=muted>{ready}/{len(rows)}</span>"
+        f"<p class=muted>{t_('pre_note')}</p>"
+        f"<table>{cells}</table></div>"
     )
 
 

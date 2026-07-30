@@ -187,6 +187,22 @@ def create_issue(repo_dir: str, title: str, body: str) -> tuple[str | None, str 
     return None, "no GitHub/GitLab origin remote detected; issue not created"
 
 
+def auth_status(forge: str) -> tuple[str, str]:
+    """('ready'|'unauthenticated'|'missing', note) for a forge's CLI —
+    the preflight question 'can this workspace actually talk to its
+    forge?', answered without touching the network beyond the CLI's own
+    auth check."""
+    cli = {"github": "gh", "gitlab": "glab"}.get(forge)
+    if cli is None:
+        return "missing", f"unknown forge {forge!r}"
+    ok, output = _run([cli, "auth", "status"])
+    if ok:
+        return "ready", f"{cli} authenticated"
+    if "not installed" in output:
+        return "missing", f"{cli} is not installed"
+    return "unauthenticated", f"{cli} auth status failed: {output[:120]}"
+
+
 def create_change_request(
     repo_dir: str, branch: str, title: str, body: str
 ) -> tuple[bool, str]:
