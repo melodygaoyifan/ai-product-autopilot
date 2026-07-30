@@ -10,6 +10,61 @@ from ai_venture_studio.providers.base import (
 )
 
 
+def _make_client():
+    """Direct API by default; AVS_ANTHROPIC_MODE=bedrock|vertex routes the
+    same Messages API through AWS Bedrock or GCP Vertex — the two doors most
+    enterprises actually have. Every mode errors loudly on missing
+    credentials rather than running half-armed; nothing here is a silent
+    fallback to a different provider."""
+    import anthropic
+
+    mode = os.environ.get("AVS_ANTHROPIC_MODE", "direct").strip().lower() or "direct"
+    if mode == "bedrock":
+        try:
+            return anthropic.AnthropicBedrock()
+        except Exception as exc:
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=bedrock but the Bedrock client could not "
+                f"start ({exc}). Install `anthropic[bedrock]` and provide AWS "
+                "credentials (env/instance profile) with bedrock:InvokeModel; "
+                "profiles must name Bedrock model IDs (anthropic.claude-* / "
+                "region-prefixed variants)."
+            ) from exc
+    if mode == "vertex":
+        if not (
+            os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID")
+            and os.environ.get("CLOUD_ML_REGION")
+        ):
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=vertex requires ANTHROPIC_VERTEX_PROJECT_ID "
+                "and CLOUD_ML_REGION"
+            )
+        try:
+            return anthropic.AnthropicVertex()
+        except Exception as exc:
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=vertex but the Vertex client could not "
+                f"start ({exc}). Install `anthropic[vertex]` and authenticate "
+                "with Application Default Credentials."
+            ) from exc
+    if mode != "direct":
+        raise ProviderError(
+            f"unknown AVS_ANTHROPIC_MODE {mode!r}; expected direct|bedrock|vertex"
+        )
+    # ANTHROPIC_AUTH_TOKEN covers enterprise LLM gateways (bearer auth), and
+    # the SDK honors ANTHROPIC_BASE_URL natively, so a proxy needs no code.
+    if not (
+        os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    ):
+        raise ProviderError(
+            "ANTHROPIC_API_KEY is not set (a gateway bearer token via "
+            "ANTHROPIC_AUTH_TOKEN also works; set AVS_ANTHROPIC_MODE="
+            "bedrock|vertex to route through AWS or GCP instead)"
+        )
+    return anthropic.Anthropic()
+
+
 @register
 class AnthropicProvider(Provider):
     name = "anthropic"
@@ -22,13 +77,11 @@ class AnthropicProvider(Provider):
         messages: list[dict[str, str]],
         max_tokens: int = 4096,
     ) -> str:
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            raise ProviderError("ANTHROPIC_API_KEY is not set")
         import time
 
         import anthropic
 
-        client = anthropic.Anthropic()
+        client = _make_client()
         # Transient-error resilience at the ADAPTER layer: overload/rate
         # limits retry with backoff here, so every direct .complete() call
         # site (writers, critics, implementer) inherits it — a 529 killed

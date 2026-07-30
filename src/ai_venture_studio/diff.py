@@ -124,15 +124,13 @@ def parse_unified_diff(text: str) -> ParsedDiff:
 
 
 def fetch_diff(target: str, repo_dir: str = ".") -> ParsedDiff:
-    """target is either a GitHub PR URL (fetched via `gh`) or a local git
-    revision range such as `main...HEAD`."""
-    if _PR_URL.match(target):
-        out = subprocess.run(
-            ["gh", "pr", "diff", target],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
+    """target is a GitHub PR URL (fetched via `gh`), a GitLab MR URL
+    (fetched via `glab`), or a local git revision range such as
+    `main...HEAD`."""
+    from ai_venture_studio import forge
+
+    if forge.is_change_request(target):
+        out = forge.fetch_change_diff(target)
     else:
         out = subprocess.run(
             ["git", "diff", target],

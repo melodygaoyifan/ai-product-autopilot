@@ -21,13 +21,33 @@ from ai_venture_studio.tools.base import ToolReport, tool_finding
 
 _EXCLUDED_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".mas", "mutants", "specs"}
 
-_BACKEND_PATTERNS = [
+# Decorator/registration forms are unambiguous route declarations.
+_BACKEND_DECORATOR_PATTERNS = [
     re.compile(r"@\w+\.(?:get|post|put|delete|patch|route)\(\s*['\"](/[^'\"]*)"),
     re.compile(r"add_api_route\(\s*['\"](/[^'\"]*)"),
+]
+# Hand-rolled router forms are only heuristics: the same shapes appear on
+# filesystem paths all over brownfield code (`p.startswith("/usr")`,
+# `path == "/dev/shm"`), so their matches are screened below.
+_BACKEND_HEURISTIC_PATTERNS = [
     re.compile(r"['\"](?:GET|POST|PUT|DELETE|PATCH)['\"]\s*,\s*['\"](/[^'\"]*)"),
     re.compile(r"path\s*==\s*['\"](/[^'\"]*)"),
     re.compile(r"startswith\(\s*['\"](/[^'\"]*)"),
 ]
+_BACKEND_PATTERNS = _BACKEND_DECORATOR_PATTERNS + _BACKEND_HEURISTIC_PATTERNS
+# Top-level directories of the Unix/macOS filesystem: a heuristic match whose
+# first segment is one of these is a path on disk, not an HTTP surface.
+# Adopting an existing repo (avs map) was reporting /usr/bin/env and
+# /opt/homebrew as routes, which reads as a scanner that cannot be trusted.
+_FILESYSTEM_ROOTS = {
+    "usr", "opt", "dev", "etc", "var", "tmp", "private", "home", "bin",
+    "sbin", "lib", "lib64", "proc", "sys", "srv", "mnt", "root", "boot",
+    "run", "System", "Users", "Library", "Volumes", "Applications",
+}
+
+
+def _looks_like_filesystem_path(segments: tuple) -> bool:
+    return bool(segments) and segments[0] in _FILESYSTEM_ROOTS
 _FRONTEND_PATTERNS = [
     re.compile(r"fetch\(\s*[`'\"](/[^`'\"\s?]*)"),
     re.compile(r"axios\.(?:get|post|put|delete|patch)\(\s*[`'\"](/[^`'\"\s?]*)"),
@@ -65,9 +85,14 @@ def collect_routes(root: Path) -> set[tuple]:
     routes: set[tuple] = set()
     for path in _iter_files(root, _BACKEND_SUFFIXES):
         text = path.read_text(encoding="utf-8", errors="replace")
-        for pattern in _BACKEND_PATTERNS:
+        for pattern in _BACKEND_DECORATOR_PATTERNS:
             for match in pattern.findall(text):
                 routes.add(_normalize(match))
+        for pattern in _BACKEND_HEURISTIC_PATTERNS:
+            for match in pattern.findall(text):
+                normalized = _normalize(match)
+                if not _looks_like_filesystem_path(normalized):
+                    routes.add(normalized)
     return routes
 
 

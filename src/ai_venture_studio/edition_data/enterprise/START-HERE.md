@@ -20,6 +20,16 @@ of the 12% of enterprise agent pilots that reach production (94% have a
 named owner with budget authority; 87% run automated evals on every
 change) — enforced at init, not recommended in a slide.
 
+## Your forge and your model door
+
+Reviews target GitLab MR URLs (self-managed hosts and subgroups included,
+via `glab`) as first-class citizens next to GitHub PRs — comments, HITL
+issues, fix-MRs, and policy-gated merges all follow the target's forge.
+If the network path to Anthropic is AWS or GCP rather than the public
+API, set `AVS_ANTHROPIC_MODE=bedrock|vertex`; an internal LLM gateway
+works via `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`. Details and the
+exact env table: [RUNBOOK.md § Enterprise environments](../../RUNBOOK.md#enterprise-environments-gitlab-bedrockvertex-gateways).
+
 ## Before the security questionnaire arrives
 
 Hand over [procurement/](procurement/) — the data-flow one-pager (what

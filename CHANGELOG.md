@@ -4,6 +4,34 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## Unreleased — the enterprise you actually work at: GitLab, Bedrock, a proxy
+
+Driven by adopting a real enterprise data-pipeline repo (a BigQuery spend
+optimizer living on self-managed GitLab): three assumptions broke on
+contact, all of them about the environment rather than the pipeline.
+
+- **GitLab is a first-class forge.** Every `gh` side effect — PR comments,
+  HITL issues, fix-PRs, head-branch lookup, diff acquisition, the
+  policy-gated merge — now routes through a forge seam (`forge.py`) that
+  dispatches on the target's URL shape: `/pull/<n>` → `gh` (github.com and
+  GitHub Enterprise Server), `/-/merge_requests/<n>` → `glab` (gitlab.com
+  and self-managed, subgroups included). The ADR-031 posture carries over
+  verbatim: no `--admin`, no force flags, merge reachable only through
+  `automation.evaluate_merge`. `avs review <MR-URL>` now works where
+  enterprises actually host code.
+- **The model door matches enterprise network reality.**
+  `AVS_ANTHROPIC_MODE=bedrock|vertex` routes the same Messages API through
+  AWS Bedrock or GCP Vertex; an internal LLM gateway authenticates with
+  `ANTHROPIC_AUTH_TOKEN` (+ SDK-native `ANTHROPIC_BASE_URL`). Every door
+  errors loudly on missing credentials — no silent fallback between doors.
+- **`avs map` no longer reports the filesystem as an HTTP surface.** The
+  hand-rolled-router heuristics (`path == "/..."`, `startswith("/...")`)
+  matched filesystem-path literals all over brownfield code; mapping the
+  pilot repo reported `/usr/bin/env` and `/opt/homebrew` as routes — a
+  scanner that cannot be trusted on first contact. Heuristic matches whose
+  first segment is a Unix/macOS filesystem root are now screened out;
+  decorator-declared routes are untouched.
+
 ## v0.60.0 — a run that says what it is doing, and a failure that says why
 
 Diagnosed from the durable bench scoreboard (`benchmarks/results/`), where

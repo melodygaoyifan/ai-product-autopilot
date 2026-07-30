@@ -330,7 +330,7 @@ def test_post_node_carries_banners_into_mirror_and_comment(tmp_path, monkeypatch
 
     _write_profile(tmp_path, S1)
     monkeypatch.setattr(render, "render_pr_comment", lambda *a, **k: "body\n")
-    monkeypatch.setattr(graph_mod.github, "post_pr_comment", lambda *a, **k: "offline")
+    monkeypatch.setattr(graph_mod.forge, "post_comment", lambda *a, **k: "offline")
     mirror = YamlMirror(tmp_path / ".mas" / "reviews", "rev-b")
     state = {
         "dor_pass": True,

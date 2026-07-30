@@ -168,6 +168,33 @@ Provider keys live in the environment only. If a key may have leaked,
 rotate it at the provider console and update `~/.zshrc` (or your secret
 store); nothing under `.mas/` or git should ever contain one.
 
+## Enterprise environments (GitLab, Bedrock/Vertex, gateways)
+
+**Forge.** Review targets can be GitHub PR URLs (github.com or GitHub
+Enterprise Server, via `gh`) or GitLab MR URLs (gitlab.com or self-managed,
+via `glab`) — `.../-/merge_requests/<n>` URLs dispatch to `glab`
+automatically, subgroups included. Comments, HITL issues, fix-MRs, merges
+(still policy-gated per ADR-031), and diff acquisition all follow the
+target's forge; authenticate the matching CLI (`gh auth login` /
+`glab auth login --hostname <your-host>`) first. Webhook mode (`avs serve`)
+speaks GitHub pull_request events only today — on GitLab, run reviews from
+CI or the CLI instead.
+
+**Model door.** Direct API is the default. Two more doors, selected with
+`AVS_ANTHROPIC_MODE`:
+
+| Env | Effect |
+|---|---|
+| `ANTHROPIC_API_KEY` | direct API (default) |
+| `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` | enterprise LLM gateway / proxy, bearer auth |
+| `AVS_ANTHROPIC_MODE=bedrock` | AWS Bedrock (`pip install 'anthropic[bedrock]'`, AWS credential chain) |
+| `AVS_ANTHROPIC_MODE=vertex` + `ANTHROPIC_VERTEX_PROJECT_ID` + `CLOUD_ML_REGION` | GCP Vertex (`pip install 'anthropic[vertex]'`, ADC) |
+
+Bedrock/Vertex use their own model IDs — put the platform's ID (e.g.
+`anthropic.claude-*` on Bedrock) in your profile's model fields. Every
+mode errors loudly on missing credentials; there is no silent fallback
+between doors.
+
 ## Quick-tunnel webhook (dogfood setup)
 
 For laptop-grade operation: `cloudflared tunnel --url http://localhost:8422`

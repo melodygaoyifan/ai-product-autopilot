@@ -2233,7 +2233,7 @@ def automerge_cmd(
 
     import yaml as _yaml
 
-    from ai_venture_studio import automation, github
+    from ai_venture_studio import automation, forge
 
     finals = sorted(
         (_Path(repo_dir) / ".mas" / "reviews" / review_id).glob("[0-9]*-final.yaml")
@@ -2245,7 +2245,7 @@ def automerge_cmd(
     target = str(final.get("target", ""))
     verdict = str(final.get("verdict", ""))
     test_report = final.get("test_report") or {}
-    branch = github.pr_head_branch(target) or ""
+    branch = forge.head_branch(target) or ""
 
     try:
         decision = automation.evaluate_merge(
@@ -2269,13 +2269,13 @@ def automerge_cmd(
     if dry_run:
         console.print(f"[green]merge would proceed[/green] ({target}, {method})")
         return
-    ok, output = github.merge_pr(target, method=method)
+    ok, output = forge.merge(target, method=method)
     automation.record(
         repo_dir, decision,
-        detail=f"review {review_id}: {'merged' if ok else 'gh failed'} {output[:200]}",
+        detail=f"review {review_id}: {'merged' if ok else 'merge failed'} {output[:200]}",
     )
     if not ok:
-        console.print(f"[red]gh pr merge failed: {output[:200]}[/red]")
+        console.print(f"[red]merge failed: {output[:200]}[/red]")
         raise typer.Exit(code=1)
     console.print(f"[green]merged[/green] {target}")
 
