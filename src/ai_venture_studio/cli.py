@@ -883,6 +883,12 @@ def studio(
                    " — solo→founder), else founder. Modes only add "
                    "read-only detail; the flow is the same in all three."
     ),
+    provider: str = typer.Option(
+        "anthropic",
+        help="Model provider for the flow ('mock' walks clarify→plan→build→"
+        "report offline with a canned product — the air-gapped evaluation "
+        "path; no key, no egress)",
+    ),
 ):
     """Founder Studio: the browser UI for the FDR flow (localhost only)."""
     from ai_venture_studio.studio import serve_studio
@@ -904,12 +910,17 @@ def studio(
     root = Path(repo_dir).resolve()
     if not (root / ".mas" / "project.yaml").exists():
         if not profile:
-            console.print("[red]new workspace: pass --profile web|miniprogram|app[/red]")
+            from ai_venture_studio.upstream.workspace import available_profiles
+
+            console.print(
+                "[red]new workspace: pass --profile "
+                f"{'|'.join(available_profiles())}[/red]"
+            )
             raise typer.Exit(code=2)
         init_workspace(root, root.name, profile)
     console.print(f"Studio: http://127.0.0.1:{port}  (workspace: {root})")
     try:
-        serve_studio(root, port=port, lang=lang, mode=mode)
+        serve_studio(root, port=port, provider=provider, lang=lang, mode=mode)
     except StudioModeError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc

@@ -64,6 +64,24 @@ not the single example.
   pinnable local config (`AVS_SEMGREP_CONFIG`), and playwright moved to
   an opt-in `[screenshots]` extra so the base install never wants a
   browser download a firewall will block.
+- **The Studio can be evaluated air-gapped, and its build worker no
+  longer dies silently.** `avs studio --provider mock` walks the whole
+  founder flow — clarify, plan confirmation, build with per-task
+  narration, review, report — offline with a canned product. Found by
+  driving the UI in a real browser: the Studio accepted a provider
+  internally but the CLI never exposed it, and the spawned build worker
+  didn't inherit it — a mock Studio spawned a build that wanted a real
+  key and died with its output in DEVNULL, silently returning the
+  founder to the confirm page. The worker now inherits the provider and
+  writes `.mas/build.log`, so a worker that dies before the report
+  leaves forensics.
+- **`enterprise-web` joins the profile set** — the web profile plus the
+  constraints an IT/security review actually asks about: append-only
+  audit records on every state-changing action, `/api/health` for the
+  load balancer, env-only configuration with `<VAR>_FILE` secret mounts,
+  versioned JSON contracts for named integration consumers, and a
+  no-node-assumed frontend stance. It reuses web's block library;
+  add-only like every profile (edition_lint posture).
 - **Windows can't be killed by a health check anymore.** `os.kill(pid, 0)`
   liveness probes — which on Windows *terminate* the probed process —
   went through a cross-platform `procs.pid_alive`, worker detachment

@@ -10,9 +10,17 @@ needs before the machinery is allowed to run (design doc 24 §69).
 ## Day 1
 
 ```bash
-avs init pilot --profile web --edition enterprise
+avs init pilot --profile enterprise-web --edition enterprise
 avs readiness        # which substrate rung you actually occupy — today
 ```
+
+The `enterprise-web` profile is `web` plus the constraints your IT and
+security review will ask about: append-only audit records on every
+state-changing action, `/api/health` for the load balancer, env-only
+configuration with `<VAR>_FILE` secret mounts, and versioned JSON
+contracts for integration consumers. To evaluate the whole flow with no
+key and no egress first: `avs studio pilot --profile enterprise-web
+--provider mock`.
 
 `--edition enterprise` sets `require_gate_owner: true`: workspace init
 refuses without a named human per gate class. That is the measured profile

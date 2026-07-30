@@ -278,13 +278,19 @@ def create_studio_app(
     def _spawn_build() -> int:
         if spawn is not None:
             return spawn(root)
+        # The worker inherits the Studio's provider — without this, a Studio
+        # started with --provider mock spawned a build that wanted a real
+        # key and died silently. Its output goes to .mas/build.log, not
+        # DEVNULL: a worker that dies before writing the report must leave
+        # forensics behind.
+        (root / ".mas").mkdir(exist_ok=True)
+        log = (root / ".mas" / "build.log").open("ab")
         proc = subprocess.Popen(  # noqa: S603 — fixed argv
             [sys.executable, "-m", "ai_venture_studio.cli", "create", str(root),
-             "--profile", _profile(root), "--yes"],
-            cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+             "--profile", _profile(root), "--provider", provider, "--yes"],
+            cwd=root, stdout=log, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        (root / ".mas").mkdir(exist_ok=True)
         (root / ".mas" / "build.pid").write_text(str(proc.pid), encoding="utf-8")
         return proc.pid
 
@@ -624,10 +630,11 @@ def create_studio_app(
             if spawn is not None:
                 spawn(root)
             else:
+                log = (root / ".mas" / "build.log").open("ab")
                 proc = subprocess.Popen(  # noqa: S603
                     [sys.executable, "-m", "ai_venture_studio.cli", "add", str(fdr_path),
-                     "--repo-dir", str(root), "--yes"],
-                    cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     "--repo-dir", str(root), "--provider", provider, "--yes"],
+                    cwd=root, stdout=log, stderr=subprocess.STDOUT,
                     start_new_session=True,
                 )
                 (root / ".mas" / "build.pid").write_text(str(proc.pid), encoding="utf-8")

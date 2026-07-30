@@ -239,3 +239,61 @@ def test_pid_alive_true_for_self_false_for_bogus():
     assert pid_alive(-1) is False
     # 2**22 exceeds the default pid_max on Linux and practical pids on macOS.
     assert pid_alive(2**22 + 1) in (True, False)  # never raises, never kills
+
+
+# --- enterprise-web profile ---------------------------------------------------
+
+
+def test_enterprise_web_profile_loads_and_seeds_governance(tmp_path):
+    from ai_venture_studio.upstream.workspace import (
+        available_profiles,
+        init_workspace,
+        load_profile,
+    )
+
+    assert "enterprise-web" in available_profiles()
+    data = load_profile("enterprise-web")
+    joined = " ".join(data["constraints"])
+    for must in ("audit record", "/api/health", "environment variable", "_FILE"):
+        assert must in joined
+    root = init_workspace(tmp_path / "ws", "pilot", "enterprise-web")
+    claude = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "enterprise-web" in claude and "append-only" in claude
+
+
+def test_enterprise_web_reuses_web_block_library():
+    from ai_venture_studio.upstream.blocks import list_blocks
+
+    assert list_blocks("enterprise-web") == list_blocks("web")
+
+
+# --- studio worker inherits the provider --------------------------------------
+
+
+def test_studio_build_worker_inherits_provider(tmp_path, monkeypatch):
+    """A Studio started with --provider mock spawned a build worker that
+    wanted a real key and died silently (output was DEVNULL). The worker
+    must inherit the provider and leave a build.log behind."""
+    from fastapi.testclient import TestClient as _TC
+
+    from ai_venture_studio import studio as studio_mod
+    from ai_venture_studio.upstream.workspace import init_workspace
+
+    root = init_workspace(tmp_path / "ws", "pilot", "web")
+    argv_seen = {}
+
+    class FakeProc:
+        pid = 4242
+
+    def fake_popen(argv, **kwargs):
+        argv_seen["argv"] = list(argv)
+        argv_seen["stdout_is_devnull"] = kwargs.get("stdout") == -3  # subprocess.DEVNULL
+        return FakeProc()
+
+    monkeypatch.setattr(studio_mod.subprocess, "Popen", fake_popen)
+    client = _TC(studio_mod.create_studio_app(root, provider="mock"))
+    response = client.post("/build", follow_redirects=False)
+    assert response.status_code == 303
+    argv = argv_seen["argv"]
+    assert "--provider" in argv and argv[argv.index("--provider") + 1] == "mock"
+    assert argv_seen["stdout_is_devnull"] is False
