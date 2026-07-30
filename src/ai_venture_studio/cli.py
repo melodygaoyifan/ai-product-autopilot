@@ -1318,6 +1318,52 @@ def readiness(repo_dir: str = typer.Option(".", help="Workspace directory")):
 
 
 @app.command()
+def preflight(
+    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    strict: bool = typer.Option(
+        False, "--strict",
+        help="Exit 1 when anything is not ready — lets a pipeline gate on "
+        "enterprise readiness instead of discovering it mid-build",
+    ),
+):
+    """Ready to build? The enterprise-mode preflight, in the terminal —
+    the same six live checks the Studio card renders (model credential,
+    git identity, forge auth, governance, substrate, Studio access),
+    plus the governance posture line."""
+    from ai_venture_studio.studio_modes import build_preflight, governance_posture
+
+    root = Path(repo_dir).resolve()
+    rows = build_preflight(root)
+    table = Table(show_lines=False)
+    table.add_column("")
+    table.add_column("check")
+    table.add_column("found / fix")
+    for row in rows:
+        icon = "✅" if row["state"] == "ready" else "◻️"
+        detail = row["found"]
+        if row["state"] != "ready" and row["fix"]:
+            detail += f"\n→ {row['fix']}"
+        table.add_row(icon, row["item"], detail)
+    console.print(table)
+
+    posture = governance_posture(root)
+    parts = []
+    if posture["attention"]:
+        parts.append("[red]attention: " + ", ".join(posture["attention"]) + "[/red]")
+    if posture["measured"]:
+        parts.append("measured: " + ", ".join(posture["measured"]))
+    if posture["unconfigured"]:
+        parts.append("[dim]not configured: "
+                     + ", ".join(posture["unconfigured"]) + "[/dim]")
+    console.print("posture · " + " · ".join(parts))
+
+    ready = sum(1 for r in rows if r["state"] == "ready")
+    console.print(f"{ready}/{len(rows)} ready")
+    if strict and (ready < len(rows) or posture["attention"]):
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def toolchain(
     language: str = typer.Argument(..., help="Language lane: python | java | dotnet"),
     repo_dir: str = typer.Option(".", help="Repository to run the det_tools slots in"),

@@ -98,6 +98,16 @@ not the single example.
   the event loop (a slow URL froze every Studio page — moved to the
   threadpool), and the studio wireup drift test caught two forms that
   rendered in no walked state.
+- **`avs preflight` and the enterprise journey as a fixture.** The
+  Ready-to-build check exists in the terminal too (`--strict` exits 1 on
+  any gap — a pipeline can gate on enterprise readiness before spending
+  a token), and the whole enterprise journey — adopt-with-gate-owner,
+  readiness starter, substrate declaration, posture transitions,
+  preflight truth-telling, every dashboard card — is pinned end-to-end
+  in CI against a miniature of the real pilot repo (data-pipeline
+  modules, FastAPI surface, filesystem-path traps, GitLab CI, an
+  operator-owned CLAUDE.md), so enterprise mode cannot rot against
+  exactly the kind of repo it was built for.
 - **Enterprise mode opens with "Ready to build?"** — a six-row preflight
   read live from the environment, git config, the forge CLI's own auth
   check, and the workspace: model credential (mock escape hatch named),

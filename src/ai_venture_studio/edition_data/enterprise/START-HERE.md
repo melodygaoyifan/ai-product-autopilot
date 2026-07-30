@@ -11,8 +11,15 @@ needs before the machinery is allowed to run (design doc 24 §69).
 
 ```bash
 avs init pilot --profile enterprise-web --edition enterprise
+avs preflight        # ready to build? six live checks, each gap with its fix
 avs readiness        # which substrate rung you actually occupy — today
 ```
+
+Adopting an EXISTING repo instead: `avs init . --adopt --profile <data|web|…>
+--edition enterprise --gate-owner "<name>"` — the map is read first, your
+CLAUDE.md survives, and the whole journey (adopt → readiness → substrate →
+posture → preflight) is pinned by a CI test against a realistic
+brownfield fixture, so it cannot silently rot.
 
 The `enterprise-web` profile is `web` plus the constraints your IT and
 security review will ask about: append-only audit records on every

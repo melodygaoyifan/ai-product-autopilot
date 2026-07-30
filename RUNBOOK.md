@@ -18,6 +18,7 @@ voters fall back visibly without them).
 | `avs compound [--pr]` | Weekly signal aggregation → CLAUDE.md proposal |
 | `avs serve` | Webhook mode (needs `AUTOPRODUCT_WEBHOOK_SECRET`) |
 | `avs readiness` | Substrate-ladder report (docs 18–19): active stages at the declared rung, what each missing rung unlocks |
+| `avs preflight [--strict]` | Ready to build? — the six live checks the enterprise Studio card renders (model credential, git identity, forge auth, governance, substrate, Studio access) + the posture line; `--strict` exits 1 on any gap, so a pipeline can gate on readiness |
 | `avs evidence-bundle <review-id>` | Export the Gate-R evidence bundle (unsigned v0) for CAB/change-control submission |
 | `avs toolchain <language> [--manifest seeded.yaml]` | Run a language lane's det_tools slots (skipped = loud, never clean); with a seeded-defect manifest, measure catch-rate and register (or label PROVISIONAL) |
 | `avs calibrate <language>` | Calibrate seeded-lane patterns against real scanners; per-defect report with actual slot output for each miss (run via `make calibrate`) |
