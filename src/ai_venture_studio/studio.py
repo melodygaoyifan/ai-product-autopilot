@@ -273,17 +273,63 @@ def create_studio_app(
         title="avs studio", docs_url=None, redoc_url=None, openapi_url=None
     )
 
+    # Shared-machine / corp deployment: AVS_STUDIO_TOKEN (env or *_FILE
+    # mount) gates every request. Absent token keeps the original
+    # localhost-only posture; the CLI refuses to bind non-loopback without
+    # one. This is deliberately a shared secret, not SSO — the documented
+    # upgrade path is OIDC in front (reverse proxy), not a home-grown login.
+    from ai_venture_studio.secrets import env_or_file
+
+    studio_token = env_or_file("AVS_STUDIO_TOKEN")
+
+    @app.middleware("http")
+    async def token_gate(request: Request, call_next):
+        if not studio_token:
+            return await call_next(request)
+        import hmac as _hmac
+
+        auth = request.headers.get("Authorization", "")
+        supplied = (
+            request.cookies.get("studio_token")
+            or request.query_params.get("token")
+            or (auth.removeprefix("Bearer ") if auth.startswith("Bearer ") else "")
+        )
+        if not (supplied and _hmac.compare_digest(supplied, studio_token)):
+            from fastapi.responses import PlainTextResponse
+
+            return PlainTextResponse(
+                "This Studio requires its access token. Open "
+                "/?token=<AVS_STUDIO_TOKEN> once — a cookie keeps you "
+                "signed in after that.",
+                status_code=401,
+            )
+        response = await call_next(request)
+        if request.query_params.get("token"):
+            response.set_cookie(
+                "studio_token", studio_token, httponly=True, samesite="lax"
+            )
+        return response
+
     @app.middleware("http")
     async def same_origin_guard(request: Request, call_next):
         """Localhost is not a security boundary against the browser: a
         malicious page can form-POST to 127.0.0.1 (sweep finding). POSTs
-        must come from the Studio itself."""
+        must come from the Studio itself — compared against the request's
+        OWN host, so a Studio served on a corp hostname keeps working
+        (hardcoding localhost here broke every POST behind a real name)."""
         if request.method == "POST":
             origin = request.headers.get("origin") or request.headers.get("referer") or ""
-            if origin and not origin.startswith(("http://127.0.0.1", "http://localhost")):
-                from fastapi.responses import PlainTextResponse
+            if origin:
+                from urllib.parse import urlsplit
 
-                return PlainTextResponse("cross-origin POST rejected", status_code=403)
+                origin_host = urlsplit(origin).hostname or ""
+                own_host = request.url.hostname or ""
+                if origin_host not in (own_host, "127.0.0.1", "localhost"):
+                    from fastapi.responses import PlainTextResponse
+
+                    return PlainTextResponse(
+                        "cross-origin POST rejected", status_code=403
+                    )
         return await call_next(request)
 
     def _spawn_build() -> int:

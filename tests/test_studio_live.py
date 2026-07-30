@@ -228,3 +228,70 @@ def test_deploy_reviews_card_grey_and_populated(tmp_path):
     page = _deploy_reviews_html(root, _t)
     assert "HOLD" in page and "release/1.2" in page
     assert "stays disarmed" in page
+
+
+# --- corp deployment: token gate, origin guard, bind refusal ------------------
+
+
+def test_studio_token_gates_every_request(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient as _TC
+
+    from ai_venture_studio import studio as studio_mod
+
+    monkeypatch.setenv("AVS_STUDIO_TOKEN", "corp-secret")
+    root = _workspace(tmp_path)
+    client = _TC(studio_mod.create_studio_app(root, provider="mock"))
+    assert client.get("/").status_code == 401
+    assert client.get("/?token=wrong").status_code == 401
+    first = client.get("/?token=corp-secret")
+    assert first.status_code == 200
+    assert first.cookies.get("studio_token") == "corp-secret"
+    # The cookie carries the session from here on.
+    assert client.get("/live").status_code == 200
+
+
+def test_studio_without_token_keeps_localhost_posture(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient as _TC
+
+    from ai_venture_studio import studio as studio_mod
+
+    monkeypatch.delenv("AVS_STUDIO_TOKEN", raising=False)
+    monkeypatch.delenv("AVS_STUDIO_TOKEN_FILE", raising=False)
+    client = _TC(studio_mod.create_studio_app(_workspace(tmp_path), provider="mock"))
+    assert client.get("/").status_code == 200
+
+
+def test_origin_guard_accepts_own_host_rejects_foreign(tmp_path, monkeypatch):
+    """Hardcoding localhost in the CSRF guard broke every POST the moment
+    the Studio served on a corp hostname — it must compare self-origin."""
+    from fastapi.testclient import TestClient as _TC
+
+    from ai_venture_studio import studio as studio_mod
+
+    monkeypatch.delenv("AVS_STUDIO_TOKEN", raising=False)
+    client = _TC(studio_mod.create_studio_app(_workspace(tmp_path), provider="mock"))
+    ok = client.post(
+        "/live/probe", data={"url": "http://127.0.0.1:9"},
+        headers={"origin": "http://testserver"}, follow_redirects=False,
+    )
+    assert ok.status_code == 303  # own host: allowed
+    evil = client.post(
+        "/live/probe", data={"url": "http://127.0.0.1:9"},
+        headers={"origin": "https://evil.example"}, follow_redirects=False,
+    )
+    assert evil.status_code == 403
+
+
+def test_cli_refuses_nonloopback_bind_without_token(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+
+    monkeypatch.delenv("AVS_STUDIO_TOKEN", raising=False)
+    monkeypatch.delenv("AVS_STUDIO_TOKEN_FILE", raising=False)
+    result = CliRunner().invoke(
+        app, ["studio", str(tmp_path / "w"), "--profile", "web",
+              "--host", "0.0.0.0"],
+    )
+    assert result.exit_code == 2
+    assert "AVS_STUDIO_TOKEN" in result.output

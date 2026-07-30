@@ -882,6 +882,12 @@ def studio(
         help="Deprecated: pass the workspace positionally instead.",
     ),
     port: int = typer.Option(8433, help="Port"),
+    host: str = typer.Option(
+        "127.0.0.1",
+        help="Bind address. Anything but loopback REQUIRES AVS_STUDIO_TOKEN "
+        "(env or AVS_STUDIO_TOKEN_FILE mount) — an unauthenticated Studio "
+        "never leaves the machine.",
+    ),
     profile: str = typer.Option(None, help="Profile (only needed for a new workspace)"),
     lang: str = typer.Option(
         "en", help="UI language: en (English, default) | zh (bilingual "
@@ -901,10 +907,23 @@ def studio(
         "path; no key, no egress)",
     ),
 ):
-    """Founder Studio: the browser UI for the FDR flow (localhost only)."""
+    """Founder Studio: the browser UI for the FDR flow (localhost by
+    default; non-loopback binds are token-gated)."""
+    from ai_venture_studio.secrets import env_or_file
     from ai_venture_studio.studio import serve_studio
     from ai_venture_studio.studio_modes import StudioModeError
     from ai_venture_studio.upstream import init_workspace
+
+    if host not in ("127.0.0.1", "localhost", "::1") and not env_or_file(
+        "AVS_STUDIO_TOKEN"
+    ):
+        console.print(
+            f"[red]--host {host} would expose an unauthenticated Studio. "
+            "Set AVS_STUDIO_TOKEN (or AVS_STUDIO_TOKEN_FILE) first — every "
+            "request will then require the token; for SSO put an OIDC "
+            "reverse proxy in front.[/red]"
+        )
+        raise typer.Exit(code=2)
 
     if repo_dir_opt is not None:
         if repo_dir not in (".", repo_dir_opt):
@@ -929,9 +948,11 @@ def studio(
             )
             raise typer.Exit(code=2)
         init_workspace(root, root.name, profile)
-    console.print(f"Studio: http://127.0.0.1:{port}  (workspace: {root})")
+    console.print(f"Studio: http://{host}:{port}  (workspace: {root})")
     try:
-        serve_studio(root, port=port, provider=provider, lang=lang, mode=mode)
+        serve_studio(
+            root, host=host, port=port, provider=provider, lang=lang, mode=mode
+        )
     except StudioModeError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc

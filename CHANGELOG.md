@@ -98,6 +98,17 @@ not the single example.
   the event loop (a slow URL froze every Studio page — moved to the
   threadpool), and the studio wireup drift test caught two forms that
   rendered in no walked state.
+- **The Studio can be deployed for a team, fail-closed.**
+  `AVS_STUDIO_TOKEN` (env or `_FILE` secret mount) gates every request —
+  open `/?token=…` once, a cookie keeps the session; `avs studio --host`
+  exists now and **refuses** a non-loopback bind without the token. The
+  CSRF origin guard compares against the request's own host instead of
+  hardcoded localhost (which would have rejected every form POST the
+  moment the Studio served on a corp hostname). A deployment
+  `Dockerfile` ships (non-root, git-only, fail-closed default command;
+  not yet CI-built) plus the RUNBOOK's run-it-as-a-service section
+  (docker + systemd, volume/backup note, OIDC-reverse-proxy as the SSO
+  path — the token stays a shared secret by design).
 - **The enterprise loop closes in the Studio: incidents from anywhere,
   evidence in one click, Gate 5 on the dashboard, housekeeping on
   demand.** The incident front door now also lives on /live (an adopted

@@ -233,6 +233,30 @@ opt-in extra (`pip install 'ai-venture-studio[screenshots]'`) so the
 base install never wants a browser download. `--provider mock` exercises
 the full pipeline with zero model egress.
 
+**Run it as a service.** The repo ships a `Dockerfile` (Studio by
+default, `avs serve` for webhook mode). Non-loopback Studio binds are
+fail-closed: `--host 0.0.0.0` refuses to start without
+`AVS_STUDIO_TOKEN` (env or `AVS_STUDIO_TOKEN_FILE` secret mount), and
+with it every request needs the token — open `/?token=<value>` once and
+a cookie keeps the session. The token is a shared secret by design; for
+SSO, put an OIDC reverse proxy (oauth2-proxy-class) in front and keep
+the token as the proxy-to-studio hop. State is the workspace directory
+(`.mas/` inside it) — mount it as a volume and back it up; one Studio
+process per workspace (single-instance supervision; the Celery
+multi-instance upgrade path is documented in server.py). Bare-metal
+equivalent:
+
+```ini
+# /etc/systemd/system/avs-studio.service
+[Service]
+User=avs
+WorkingDirectory=/srv/team-workspace
+Environment=AVS_STUDIO_TOKEN_FILE=/etc/avs/studio-token
+Environment=ANTHROPIC_API_KEY_FILE=/etc/avs/anthropic-key
+ExecStart=/usr/local/bin/avs studio . --host 0.0.0.0 --port 8433
+Restart=on-failure
+```
+
 **Windows.** Process-liveness probes and worker detachment are
 cross-platform (`procs.pid_alive`; no bare `os.kill(pid, 0)` — on
 Windows that terminates the probed process). A dev *clone* uses repo
