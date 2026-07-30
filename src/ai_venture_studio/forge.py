@@ -35,6 +35,28 @@ def detect(target: str) -> str | None:
     return None
 
 
+# Forges we can NAME but not yet drive. Recognizing them exists so the
+# failure is "Azure DevOps is not supported yet", never a `git diff` on a
+# URL. Azure DevOps: dev.azure.com/{org}/{proj}/_git/{repo}/pullrequest/{n}
+# (legacy {org}.visualstudio.com hosts too). Bitbucket (Cloud and Data
+# Center) both use /pull-requests/{n}.
+_AZURE_DEVOPS_PR = re.compile(
+    r"^https://(dev\.azure\.com/|[^/\s]+\.visualstudio\.com/)\S*/pullrequest/\d+"
+)
+_BITBUCKET_PR = re.compile(r"^https://[^/\s]+/\S+/pull-requests/\d+")
+
+
+def recognize_unsupported(target: str) -> str | None:
+    """Name a forge we recognize but cannot drive, or None."""
+    if detect(target) is not None:
+        return None
+    if _AZURE_DEVOPS_PR.match(target):
+        return "Azure DevOps"
+    if _BITBUCKET_PR.match(target):
+        return "Bitbucket"
+    return None
+
+
 def is_change_request(target: str) -> bool:
     return detect(target) is not None
 

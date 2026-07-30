@@ -35,7 +35,9 @@ def capture_web(workspace: str | Path, paths: list[str] | None = None, port: int
     if not _playwright_available():
         return ShotResult(
             note="screenshots skipped: playwright not installed "
-            "(`uv add playwright && uv run playwright install chromium`)"
+            "(`pip install 'ai-venture-studio[screenshots]'` then "
+            "`playwright install chromium` — needs the browser download "
+            "allowed, or PLAYWRIGHT_DOWNLOAD_HOST at an internal mirror)"
         )
     entry = next(
         (e for e in ("app/main.py", "main.py", "app.py") if (root / e).exists()), None

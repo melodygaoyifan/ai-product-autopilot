@@ -6,9 +6,12 @@ and are summarized in the README roadmap and docs/implementation-map.md.
 
 ## Unreleased — the enterprise you actually work at: GitLab, Bedrock, a proxy
 
-Driven by adopting a real enterprise data-pipeline repo (a BigQuery spend
-optimizer living on self-managed GitLab): three assumptions broke on
-contact, all of them about the environment rather than the pipeline.
+Started by adopting one real enterprise data-pipeline repo (a BigQuery
+spend optimizer on self-managed GitLab), then generalized from research
+across the enterprise landscape — forge market reality, how enterprises
+actually reach model APIs, what security questionnaires ask, and what
+breaks behind TLS-inspecting proxies — so the fixes fit the scenario,
+not the single example.
 
 - **GitLab is a first-class forge.** Every `gh` side effect — PR comments,
   HITL issues, fix-PRs, head-branch lookup, diff acquisition, the
@@ -31,6 +34,41 @@ contact, all of them about the environment rather than the pipeline.
   scanner that cannot be trusted on first contact. Heuristic matches whose
   first segment is a Unix/macOS filesystem root are now screened out;
   decorator-declared routes are untouched.
+- **The perimeter that cannot expose an endpoint still gets reviews.**
+  `avs review --from-ci` derives the target from the pipeline's own
+  predefined variables (GitLab CI merge-request pipelines, GitHub Actions
+  pull_request events) — the pattern locked-down enterprises actually use
+  instead of webhooks. `avs serve` grew a `/webhook/gitlab` route
+  (constant-time `X-Gitlab-Token` check — GitLab's design is a shared
+  secret, not an HMAC; `update` events trigger only when they carry new
+  commits, so metadata edits don't spam the MR). Azure DevOps and
+  Bitbucket PR URLs are recognized and refused by name instead of falling
+  through to `git diff` on a URL; CodeCommit (closed to new customers
+  2024) is deliberately out.
+- **The model door matches all four enterprise routes.**
+  `AVS_ANTHROPIC_MODE=foundry` adds Microsoft Foundry (Azure) beside
+  bedrock/vertex — model IDs stay platform-native and verbatim (ARNs and
+  deployment names cannot be derived, so no auto-translation is
+  attempted). The cross-family voter seats re-point too:
+  `OPENAI_BASE_URL` (also the on-prem vLLM/NIM door), `XAI_BASE_URL`,
+  `GEMINI_BASE_URL`.
+- **Secrets can live in mounts, not process environments.** Every
+  provider key and `secret://` reference accepts the Docker/K8s
+  `<VAR>_FILE` convention; a configured mount that cannot be read errors
+  loudly instead of running half-armed.
+- **Egress is enumerated, and quieter.** The procurement pack gains
+  [network-egress.md](editions/enterprise/procurement/network-egress.md)
+  — every outbound host with the env var that re-points or disables it.
+  The slopsquat check honors an internal PyPI mirror
+  (`AVS_PYPI_JSON_BASE`), semgrep runs with `--metrics=off` and a
+  pinnable local config (`AVS_SEMGREP_CONFIG`), and playwright moved to
+  an opt-in `[screenshots]` extra so the base install never wants a
+  browser download a firewall will block.
+- **Windows can't be killed by a health check anymore.** `os.kill(pid, 0)`
+  liveness probes — which on Windows *terminate* the probed process —
+  went through a cross-platform `procs.pid_alive`, worker detachment
+  gained a Windows path, and the probe venv resolves `Scripts/` as well
+  as `bin/`.
 
 ## v0.60.0 — a run that says what it is doing, and a failure that says why
 

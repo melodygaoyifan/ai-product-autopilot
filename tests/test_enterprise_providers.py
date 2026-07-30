@@ -12,7 +12,10 @@ from ai_venture_studio.providers.base import ProviderError
 
 _MODE_VARS = (
     "AVS_ANTHROPIC_MODE", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_API_KEY_FILE", "ANTHROPIC_AUTH_TOKEN_FILE",
     "ANTHROPIC_VERTEX_PROJECT_ID", "CLOUD_ML_REGION",
+    "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_RESOURCE",
+    "ANTHROPIC_FOUNDRY_BASE_URL",
 )
 
 
@@ -31,8 +34,15 @@ def test_direct_mode_accepts_gateway_bearer_token(monkeypatch):
     """Enterprise LLM gateways authenticate with ANTHROPIC_AUTH_TOKEN +
     ANTHROPIC_BASE_URL; the absence of an API key must not block them."""
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "gw-token")
-    monkeypatch.setattr(anthropic, "Anthropic", lambda: "direct-client")
+    captured = {}
+
+    def fake_anthropic(api_key=None, auth_token=None):
+        captured["auth_token"] = auth_token
+        return "direct-client"
+
+    monkeypatch.setattr(anthropic, "Anthropic", fake_anthropic)
     assert _make_client() == "direct-client"
+    assert captured["auth_token"] == "gw-token"
 
 
 def test_unknown_mode_is_an_error_not_a_silent_fallback(monkeypatch):
@@ -74,3 +84,36 @@ def test_vertex_mode_selects_vertex_client(monkeypatch):
         anthropic, "AnthropicVertex", lambda: "vertex-client", raising=False
     )
     assert _make_client() == "vertex-client"
+
+
+def test_foundry_mode_requires_key_and_resource(monkeypatch):
+    monkeypatch.setenv("AVS_ANTHROPIC_MODE", "foundry")
+    with pytest.raises(ProviderError, match="ANTHROPIC_FOUNDRY_API_KEY"):
+        _make_client()
+
+
+def test_foundry_mode_selects_foundry_client(monkeypatch):
+    monkeypatch.setenv("AVS_ANTHROPIC_MODE", "foundry")
+    monkeypatch.setenv("ANTHROPIC_FOUNDRY_API_KEY", "az-key")
+    monkeypatch.setenv("ANTHROPIC_FOUNDRY_RESOURCE", "acme-ai")
+    monkeypatch.setattr(
+        anthropic, "AnthropicFoundry",
+        lambda api_key=None: f"foundry-client:{api_key}", raising=False,
+    )
+    assert _make_client() == "foundry-client:az-key"
+
+
+def test_direct_mode_accepts_file_mounted_key(monkeypatch, tmp_path):
+    """K8s/Docker secret mounts deliver the key as a file, not an env var."""
+    mount = tmp_path / "anthropic-key"
+    mount.write_text("sk-mounted")
+    monkeypatch.setenv("ANTHROPIC_API_KEY_FILE", str(mount))
+    captured = {}
+
+    def fake_anthropic(api_key=None, auth_token=None):
+        captured["api_key"] = api_key
+        return "direct-client"
+
+    monkeypatch.setattr(anthropic, "Anthropic", fake_anthropic)
+    assert _make_client() == "direct-client"
+    assert captured["api_key"] == "sk-mounted"

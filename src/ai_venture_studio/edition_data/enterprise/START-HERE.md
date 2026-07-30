@@ -20,15 +20,20 @@ of the 12% of enterprise agent pilots that reach production (94% have a
 named owner with budget authority; 87% run automated evals on every
 change) — enforced at init, not recommended in a slide.
 
-## Your forge and your model door
+## Your forge, your network, your model door
 
 Reviews target GitLab MR URLs (self-managed hosts and subgroups included,
 via `glab`) as first-class citizens next to GitHub PRs — comments, HITL
-issues, fix-MRs, and policy-gated merges all follow the target's forge.
-If the network path to Anthropic is AWS or GCP rather than the public
-API, set `AVS_ANTHROPIC_MODE=bedrock|vertex`; an internal LLM gateway
-works via `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`. Details and the
-exact env table: [RUNBOOK.md § Enterprise environments](../../RUNBOOK.md#enterprise-environments-gitlab-bedrockvertex-gateways).
+issues, fix-MRs, webhooks, and policy-gated merges all follow the
+target's forge, and `avs review --from-ci` runs inside a merge-request
+pipeline when the perimeter cannot expose a webhook endpoint at all.
+If the network path to Anthropic is AWS, GCP, or Azure rather than the
+public API, set `AVS_ANTHROPIC_MODE=bedrock|vertex|foundry`; an internal
+LLM gateway works via `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`;
+keys can arrive as K8s secret mounts (`*_FILE`). The complete
+outbound-host allowlist for your network team is
+[procurement/network-egress.md](procurement/network-egress.md); the env
+tables are in [RUNBOOK.md § Enterprise environments](../../RUNBOOK.md#enterprise-environments-gitlab-bedrockvertexfoundry-gateways-air-gap).
 
 ## Before the security questionnaire arrives
 

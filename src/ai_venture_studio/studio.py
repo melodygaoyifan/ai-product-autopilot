@@ -99,13 +99,9 @@ def _build_running(root: Path) -> bool:
         pid = int(marker.read_text().strip())
     except ValueError:
         return False
-    try:
-        import os
+    from ai_venture_studio.procs import pid_alive
 
-        os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, PermissionError):
-        return False
+    return pid_alive(pid)
 
 
 _STATE_ICON = {"built": "✅", "pending": "⏳"}

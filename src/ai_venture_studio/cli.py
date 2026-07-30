@@ -32,7 +32,11 @@ def _root() -> None:
 
 @app.command()
 def review(
-    target: str = typer.Argument(..., help="GitHub PR URL or git range (e.g. main...HEAD)"),
+    target: str = typer.Argument(
+        None,
+        help="GitHub PR / GitLab MR URL or git range (e.g. main...HEAD); "
+        "omit with --from-ci",
+    ),
     repo_dir: str = typer.Option(".", help="Repository to review in"),
     skills_dir: str = typer.Option(str(_DEFAULT_SKILLS), help="Voter skills directory"),
     mode: str = typer.Option(None, help="Override mode: fast | standard | deep"),
@@ -41,7 +45,39 @@ def review(
         help="Force one provider for all voters (e.g. 'mock' for offline runs; "
         "heterogeneity is the default posture)",
     ),
+    from_ci: bool = typer.Option(
+        False, "--from-ci",
+        help="Derive the target from CI predefined variables (GitLab CI "
+        "merge-request pipelines, GitHub Actions pull_request events) — "
+        "the webhook-less entry point for locked-down networks",
+    ),
 ):
+    from ai_venture_studio.ci import CITargetError, detect_ci_target
+    from ai_venture_studio.forge import recognize_unsupported
+
+    if from_ci:
+        if target is not None:
+            console.print("[red]--from-ci derives the target; do not pass one[/red]")
+            raise typer.Exit(code=2)
+        try:
+            target = detect_ci_target()
+        except CITargetError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
+        console.print(f"[dim]CI target: {target}[/dim]")
+    elif target is None:
+        console.print("[red]a target is required (or pass --from-ci in a pipeline)[/red]")
+        raise typer.Exit(code=2)
+    unsupported = recognize_unsupported(target)
+    if unsupported:
+        # A recognized-but-unsupported forge must fail here, loudly — the
+        # fallthrough would hand the URL to `git diff` and produce garbage.
+        console.print(
+            f"[red]{unsupported} pull-request URLs are recognized but not "
+            "yet supported; review the local range instead "
+            "(avs review origin/<target-branch>...HEAD)[/red]"
+        )
+        raise typer.Exit(code=2)
     # Substrate ladder guard (ADR-U15): no-op unless the workspace declares
     # .mas/substrate-profile.yaml; below-floor stages refuse loudly.
     try:
@@ -232,20 +268,18 @@ def compound(
     if push.returncode != 0:
         console.print(f"[yellow]push failed: {push.stderr.strip()[:200]}[/yellow]")
         raise typer.Exit(code=1)
-    created = subprocess.run(
-        [
-            "gh", "pr", "create",
-            "--title", f"[compound] CLAUDE.md constraints — {date}",
-            "--body", report + "\n\n🤖 opened by the avs compounding loop",
-        ],
-        cwd=repo_dir, capture_output=True, text=True,
+    from ai_venture_studio import forge
+
+    ok, output = forge.create_change_request(
+        repo_dir, branch,
+        f"[compound] CLAUDE.md constraints — {date}",
+        report + "\n\n🤖 opened by the avs compounding loop",
     )
-    output = (created.stdout or created.stderr).strip()
     git("checkout", "-")
-    if created.returncode != 0:
-        console.print(f"[yellow]gh pr create failed: {output[:200]}[/yellow]")
+    if not ok:
+        console.print(f"[yellow]PR/MR create failed: {output[:200]}[/yellow]")
         raise typer.Exit(code=1)
-    console.print(output.splitlines()[-1] if output else "(no gh output)")
+    console.print(output.splitlines()[-1] if output else "(no forge output)")
 
 
 _DEFAULT_CASES = Path(__file__).resolve().parent.parent.parent / "benchmarks" / "cases"
@@ -421,7 +455,8 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Bind address"),
     port: int = typer.Option(8422, help="Port"),
 ):
-    """Webhook mode: GitHub PR events -> reviews, incident POSTs -> triage.
+    """Webhook mode: GitHub PR / GitLab MR events -> reviews, incident
+    POSTs -> triage.
     Requires AUTOPRODUCT_WEBHOOK_SECRET for signature verification."""
     from ai_venture_studio.server import serve as run_server
 

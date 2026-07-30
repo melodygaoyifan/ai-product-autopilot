@@ -1,9 +1,9 @@
 """Webhook mode (§09.5) — the always-on entry points.
 
-FastAPI receives GitHub PR events (Gate 1 entry) and incident POSTs
-(Gate 6 entry) and launches the same CLI pipelines in detached worker
-processes; results land in the usual mirrors and on GitHub. The SQLite
-checkpointer gives crash-resumability per review.
+FastAPI receives GitHub PR events and GitLab MR events (Gate 1 entry)
+and incident POSTs (Gate 6 entry) and launches the same CLI pipelines in
+detached worker processes; results land in the usual mirrors and on the
+forge. The SQLite checkpointer gives crash-resumability per review.
 
 Honest scope note (§08.2.2.12): the design's production posture is
 Celery + Redis supervising LangGraph for failure detection across
@@ -31,6 +31,9 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 
 REVIEW_ACTIONS = {"opened", "synchronize", "reopened", "ready_for_review"}
+# GitLab MR actions that mean "there is something new to review". `update`
+# is additionally gated on oldrev (new commits) at the route.
+GITLAB_REVIEW_ACTIONS = {"open", "reopen", "update"}
 
 
 def _jobs_path(repo_dir: str) -> Path:
@@ -51,7 +54,7 @@ def _reconcile_jobs(repo_dir: str) -> list[dict]:
     finished (its artifacts tell the real story) — and reviews that died
     mid-flight remain resumable via their SQLite checkpoints. The Celery
     supervisor stays the multi-instance upgrade path."""
-    import os
+    from ai_venture_studio.procs import pid_alive
 
     path = _jobs_path(repo_dir)
     if not path.exists():
@@ -61,8 +64,10 @@ def _reconcile_jobs(repo_dir: str) -> list[dict]:
     for job in jobs:
         if job.get("status") == "running":
             try:
-                os.kill(int(job["pid"]), 0)
-            except (ProcessLookupError, PermissionError, ValueError):
+                pid = int(job["pid"])
+            except (TypeError, ValueError):
+                pid = -1
+            if not pid_alive(pid):
                 job["status"] = "finished"
                 changed = True
     if changed:
@@ -88,12 +93,22 @@ def _spawn(args: list[str], repo_dir: str) -> int:
         from ai_venture_studio.jobqueue import enqueue
 
         return -enqueue(queue_db, args[0], args)
+    # Detach so a worker outlives the request: setsid on POSIX, its own
+    # process group + no console on Windows (start_new_session is POSIX-only).
+    detach: dict = (
+        {"start_new_session": True}
+        if os.name != "nt"
+        else {
+            "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.DETACHED_PROCESS
+        }
+    )
     proc = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
         [sys.executable, "-m", "ai_venture_studio.cli", *args],
         cwd=repo_dir,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        start_new_session=True,
+        **detach,
     )
     _record_job(repo_dir, proc.pid, args)
     return proc.pid
@@ -160,17 +175,16 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
     def healthz():
         return {"ok": True, "tenants": len(tenant_list) or None}
 
-    @app.post("/webhook/github", status_code=202)
-    @app.post("/webhook/github/{tenant_id}", status_code=202)
-    async def github_webhook(request: Request, tenant_id: str | None = None):
-        # GitHub signs with HMAC, so the secret must be per-tenant and the
-        # tenant is named in the path (there is no bearer token on a GitHub
-        # delivery). The path only SELECTS which secret must verify — it
-        # grants nothing on its own.
+    def _webhook_auth(tenant_id: str | None, route: str) -> tuple[str, str]:
+        """(secret, workspace) for a forge webhook delivery. Forge deliveries
+        carry no bearer token, so the secret must be per-tenant and the
+        tenant is named in the path. The path only SELECTS which secret must
+        verify — it grants nothing on its own. Shared by every forge route;
+        only the verification scheme differs per forge."""
         if tenant_list:
             if tenant_id is None:
                 raise HTTPException(
-                    404, "multi-tenant mode: post to /webhook/github/<tenant_id>"
+                    404, f"multi-tenant mode: post to {route}/<tenant_id>"
                 )
             tenant = next(
                 (t for t in tenant_list if t.id == tenant_id and t.enabled), None
@@ -187,11 +201,17 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
             workspace = str(tenants_mod.tenant_workspace(tenant))
         else:
             if tenant_id is not None:
-                raise HTTPException(404, "single-tenant mode: post to /webhook/github")
+                raise HTTPException(404, f"single-tenant mode: post to {route}")
             secret = os.environ.get("AUTOPRODUCT_WEBHOOK_SECRET")
             if not secret:
                 raise HTTPException(503, "AUTOPRODUCT_WEBHOOK_SECRET is not configured")
             workspace = repo
+        return secret, workspace
+
+    @app.post("/webhook/github", status_code=202)
+    @app.post("/webhook/github/{tenant_id}", status_code=202)
+    async def github_webhook(request: Request, tenant_id: str | None = None):
+        secret, workspace = _webhook_auth(tenant_id, "/webhook/github")
         body = await request.body()
         if not _verify_signature(
             secret, body, request.headers.get("X-Hub-Signature-256")
@@ -208,6 +228,38 @@ def create_app(repo_dir: str = ".", *, spawn=_spawn) -> FastAPI:
             raise HTTPException(422, "payload has no pull_request.html_url")
         pid = spawn(["review", pr_url], workspace)
         return {"queued": True, "target": pr_url, "worker_pid": pid}
+
+    @app.post("/webhook/gitlab", status_code=202)
+    @app.post("/webhook/gitlab/{tenant_id}", status_code=202)
+    async def gitlab_webhook(request: Request, tenant_id: str | None = None):
+        # GitLab authenticates with a plain shared secret in X-Gitlab-Token
+        # (equality, not an HMAC of the body — that is GitLab's design, not
+        # an omission here); compare constant-time before any parsing.
+        secret, workspace = _webhook_auth(tenant_id, "/webhook/gitlab")
+        token = request.headers.get("X-Gitlab-Token", "")
+        if not (token and hmac.compare_digest(token, secret)):
+            raise HTTPException(401, "invalid webhook token")
+        body = await request.body()
+        payload = json.loads(body or b"{}")
+        if payload.get("object_kind") != "merge_request":
+            return {
+                "queued": False,
+                "reason": f"ignored event {payload.get('object_kind')}",
+            }
+        attrs = payload.get("object_attributes") or {}
+        action = attrs.get("action")
+        if action not in GITLAB_REVIEW_ACTIONS:
+            return {"queued": False, "reason": f"ignored action {action}"}
+        if action == "update" and not attrs.get("oldrev"):
+            # Only pushes carry oldrev; title/label/assignee edits arrive as
+            # `update` too, and re-reviewing on every metadata touch would
+            # spam the MR with duplicate reviews.
+            return {"queued": False, "reason": "update without new commits"}
+        mr_url = attrs.get("url")
+        if not mr_url:
+            raise HTTPException(422, "payload has no object_attributes.url")
+        pid = spawn(["review", mr_url], workspace)
+        return {"queued": True, "target": mr_url, "worker_pid": pid}
 
     @app.get("/metrics")
     async def metrics():
