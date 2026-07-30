@@ -66,9 +66,20 @@ def _md(path: Path) -> str:
     return html.escape(path.read_text(encoding="utf-8")) if path.exists() else ""
 
 
+# Inline SVG favicon: kills the /favicon.ico 404 in every console (the
+# first thing a browser-driven evaluation sees) without adding a route or
+# an asset file.
+_FAVICON = (
+    "data:image/svg+xml,"
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E"
+    "%3Ctext y='13' font-size='13'%3E%F0%9F%8F%97%3C/text%3E%3C/svg%3E"
+)
+
+
 def _page(title: str, body: str) -> HTMLResponse:
     return HTMLResponse(
         f"<!doctype html><meta charset='utf-8'><title>{html.escape(title)}</title>"
+        f"<link rel='icon' href=\"{_FAVICON}\">"
         f"<style>{_STYLE}</style><body><h1>{html.escape(title)}</h1>{body}"
     )
 

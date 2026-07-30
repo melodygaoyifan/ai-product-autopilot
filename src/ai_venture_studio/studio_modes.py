@@ -232,12 +232,220 @@ def engineer_panel(root: Path, t_: Callable[[str], str],
 def enterprise_panel(root: Path, t_: Callable[[str], str]) -> str:
     """The governance spokes render independently: a workspace without an
     edition file still has a stage ladder, a dwell distribution, and an
-    automation arming state worth seeing."""
+    automation arming state worth seeing.
+
+    Order follows the enterprise-dashboard convention (posture verdict →
+    trust/procurement facts → what-we-found → drill-down): the one-line
+    answer first, the security reviewer's questions second, the evidence
+    below."""
     return (
-        _edition_card(root, t_)
+        _posture_html(root, t_)
+        + _trust_html(root, t_)
+        + _codebase_html(root, t_)
+        + _edition_card(root, t_)
         + _stage_grid_html(root, t_)
         + _dwell_html(root, t_)
         + _automation_html(root, t_)
+    )
+
+
+def governance_posture(root: Path) -> dict[str, list[str]]:
+    """Machine-readable spoke states: measured / unconfigured / attention.
+
+    'Unconfigured' is its own state on purpose — a grey answer. A dashboard
+    that renders green over an unmeasured workspace teaches its readers to
+    ignore green (the GitHub-security-overview lesson: 'not enabled' is
+    never 'healthy')."""
+    from ai_venture_studio.adoption.attestation import verify_ledger
+    from ai_venture_studio.adoption.dwell import gate_dwell_report
+    from ai_venture_studio.adoption.substrate import load_substrate_profile
+    from ai_venture_studio.automation import (
+        AUTOMERGE_POLICY,
+        DEPLOY_EXEC_POLICY,
+        PolicyError,
+        load_policy,
+    )
+    from ai_venture_studio.editions import EditionError, load_workspace_edition
+
+    posture: dict[str, list[str]] = {
+        "measured": [], "unconfigured": [], "attention": [],
+    }
+
+    try:
+        edition = load_workspace_edition(root)
+        if edition is None:
+            posture["unconfigured"].append("edition")
+        else:
+            posture["measured"].append("edition")
+    except EditionError:
+        posture["attention"].append("edition")
+
+    if load_substrate_profile(root) is None:
+        posture["unconfigured"].append("substrate")
+    else:
+        posture["measured"].append("substrate")
+
+    dwell = gate_dwell_report(root)
+    if dwell.median_s is None:
+        posture["unconfigured"].append("gate dwell")
+    elif dwell.rubber_stamp:
+        posture["attention"].append("gate dwell")
+    else:
+        posture["measured"].append("gate dwell")
+
+    if not (root / ".mas" / "attestation" / "ledger.jsonl").exists():
+        posture["unconfigured"].append("attestation")
+    else:
+        try:
+            posture[
+                "measured" if verify_ledger(root).ok else "attention"
+            ].append("attestation")
+        except ValueError:
+            posture["attention"].append("attestation")
+
+    # Policies always have a knowable state (absent file = disarmed default),
+    # so they count as measured unless the file itself is invalid.
+    policy_state = "measured"
+    for filename in (AUTOMERGE_POLICY, DEPLOY_EXEC_POLICY):
+        try:
+            load_policy(root, filename)
+        except PolicyError:
+            policy_state = "attention"
+    posture[policy_state].append("automation policies")
+    return posture
+
+
+def _posture_html(root: Path, t_: Callable[[str], str]) -> str:
+    posture = governance_posture(root)
+    parts = []
+    if posture["attention"]:
+        parts.append(
+            f"<span class=bad>{t_('gov_posture_attention')} "
+            f"{html.escape(', '.join(posture['attention']))}</span>"
+        )
+    if posture["measured"]:
+        parts.append(
+            f"<span class=ok>{t_('gov_posture_measured')} "
+            f"{html.escape(', '.join(posture['measured']))}</span>"
+        )
+    if posture["unconfigured"]:
+        parts.append(
+            f"<span class=muted>{t_('gov_posture_unmeasured')} "
+            f"{html.escape(', '.join(posture['unconfigured']))}</span>"
+        )
+    line = " · ".join(parts)
+    return (
+        f"<div class=card><b>{t_('gov_posture')}</b>"
+        f"<p>{line}</p>"
+        f"<p class=muted>{t_('gov_posture_note')}</p></div>"
+    )
+
+
+def _trust_html(root: Path, t_: Callable[[str], str]) -> str:
+    """The procurement answers, on screen: which model door, authenticated
+    how (presence only — never a value), which forge, what leaves the
+    machine, and what this workspace has spent. A security reviewer should
+    read this without a meeting."""
+    import os
+
+    from ai_venture_studio import spend as spend_mod
+    from ai_venture_studio.forge import _remote_forge
+
+    mode = (os.environ.get("AVS_ANTHROPIC_MODE", "").strip().lower()
+            or "direct")
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        auth = t_("trust_auth_env")
+    elif os.environ.get("ANTHROPIC_API_KEY_FILE") or os.environ.get(
+        "ANTHROPIC_AUTH_TOKEN_FILE"
+    ):
+        auth = t_("trust_auth_file")
+    elif os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        auth = t_("trust_auth_gateway")
+    else:
+        auth = t_("trust_auth_none")
+    auth_css = "muted" if auth == t_("trust_auth_none") else "ok"
+
+    forge = _remote_forge(str(root))
+    forge_cell = (
+        f"<code>{html.escape(forge)}</code>" if forge
+        else f"<span class=muted>{t_('trust_forge_none')}</span>"
+    )
+
+    try:
+        summary = spend_mod.summarize(spend_mod.read_entries(root))
+    except Exception:  # noqa: BLE001 — a corrupt ledger must not kill the page
+        summary = None
+    if summary is None or summary.calls == 0:
+        spend_cell = f"<span class=muted>{t_('trust_spend_none')}</span>"
+    else:
+        floor = f"{t_('trust_spend_floor')} " if summary.is_floor else ""
+        spend_cell = (
+            f"{floor}${summary.usd:.2f} · {summary.calls} calls · "
+            f"{summary.total_tokens:,} tokens"
+        )
+
+    rows = (
+        f"<tr><td>{t_('trust_provider')}</td>"
+        f"<td><code>{html.escape(mode)}</code> · "
+        f"<span class={auth_css}>{auth}</span></td></tr>"
+        f"<tr><td>{t_('trust_forge')}</td><td>{forge_cell}</td></tr>"
+        f"<tr><td>{t_('trust_egress')}</td>"
+        f"<td class=muted>{t_('trust_egress_note')}</td></tr>"
+        f"<tr><td>{t_('trust_spend')}</td><td>{spend_cell}</td></tr>"
+    )
+    return (
+        f"<div class=card><b>{t_('trust_head')}</b>"
+        f"<p class=muted>{t_('trust_note')}</p><table>{rows}</table></div>"
+    )
+
+
+def _codebase_html(root: Path, t_: Callable[[str], str]) -> str:
+    """The brownfield what-we-found report (the Renovate-onboarding lesson:
+    prove comprehension before asking for configuration). Reads the map
+    `avs map` / `init --adopt` wrote; absent map is a grey state with the
+    one command that fills it."""
+    path = root / ".mas" / "codebase-map.yaml"
+    head = f"<b>{t_('code_head')}</b>"
+    if not path.exists():
+        return (
+            f"<div class=card>{head}"
+            f"<p class=muted>{t_('code_none')} "
+            f"<code>avs map .</code></p>"
+            f"<p class=muted>{t_('gov_action_reload')}</p></div>"
+        )
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return (
+            f"<div class=card>{head}"
+            f"<p class=bad>{t_('code_unreadable')}</p></div>"
+        )
+    langs = ", ".join(
+        f"{lang} ({count})" for lang, count in (data.get("languages") or {}).items()
+    )
+    modules = sorted(
+        data.get("modules") or [],
+        key=lambda m: m.get("lines", 0), reverse=True,
+    )
+    entries = ", ".join(data.get("entry_points") or []) or "—"
+    routes = len(data.get("routes") or [])
+    top = "".join(
+        f"<tr><td><code>{html.escape(str(m.get('name', '')))}</code></td>"
+        f"<td>{m.get('files', 0)} files · {m.get('lines', 0):,} lines</td></tr>"
+        for m in modules[:6]
+    )
+    more = (
+        f"<p class=muted>+{len(modules) - 6} more modules</p>"
+        if len(modules) > 6 else ""
+    )
+    return (
+        f"<div class=card>{head}"
+        f"<p>{html.escape(langs)} · {data.get('total_files', 0)} files · "
+        f"{data.get('total_lines', 0):,} lines · "
+        f"{t_('code_http')}: {routes}</p>"
+        f"<p class=muted>{t_('code_entries')}: <code>{html.escape(entries)}"
+        f"</code></p><table>{top}</table>{more}"
+        f"<p class=muted>{t_('code_note')}</p></div>"
     )
 
 
@@ -256,7 +464,15 @@ def _edition_card(root: Path, t_: Callable[[str], str]) -> str:
             f"{html.escape(str(exc))}</p></div>"
         )
     if edition is None:
-        return f"<div class=card>{head}<p class=warn>{t_('gov_no_edition')}</p></div>"
+        # Grey state, not a dead end: the exact command, what it changes,
+        # and the feedback loop (this page re-reads the file every load).
+        return (
+            f"<div class=card>{head}<p class=warn>{t_('gov_no_edition')}</p>"
+            f"<p><code>avs init . --profile enterprise-web --edition "
+            f"enterprise --gate-owner \"&lt;name&gt;\"</code></p>"
+            f"<p class=muted>{t_('gov_edition_effect')} "
+            f"{t_('gov_action_reload')}</p></div>"
+        )
 
     defaults = edition.defaults or {}
     policy = edition.gate_policy or {}
@@ -278,6 +494,10 @@ def _edition_card(root: Path, t_: Callable[[str], str]) -> str:
         t_("gov_gate_owner_yes") if policy.get("require_gate_owner")
         else t_("gov_gate_owner_no")
     )
+    if policy.get("gate_owner"):
+        # The named human, not just the rule — who is accountable is the
+        # first thing a CAB asks.
+        owner += f" <b>{html.escape(str(policy['gate_owner']))}</b>"
     return (
         f"<div class=card>{head}<table>{rows}</table>"
         f"<p>{owner}</p><p>{_attestation_html(root, t_)}</p></div>"
@@ -328,7 +548,10 @@ def _stage_grid_html(root: Path, t_: Callable[[str], str]) -> str:
     if profile is None:
         return (
             f"<div class=card>{head}"
-            f"<p class=muted>{t_('gov_no_substrate')}</p></div>"
+            f"<p class=muted>{t_('gov_no_substrate')}</p>"
+            f"<p><code>avs readiness</code></p>"
+            f"<p class=muted>{t_('gov_substrate_effect')} "
+            f"{t_('gov_action_reload')}</p></div>"
         )
     icons = {"ACTIVE": "✅", "DEGRADED": "⚠️", "STAGE_INACTIVE": "⛔"}
     rows = ""

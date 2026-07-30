@@ -82,6 +82,24 @@ not the single example.
   versioned JSON contracts for named integration consumers, and a
   no-node-assumed frontend stance. It reuses web's block library;
   add-only like every profile (edition_lint posture).
+- **Enterprise mode is a governance dashboard, not four dead ends.**
+  Grounded in how mature enterprise consoles actually work (SonarQube's
+  verdict-first gates, GitHub security overview's explicit "not enabled"
+  state, Renovate's what-we-found onboarding) and tested by adopting a
+  real 39k-line enterprise data-pipeline repo: a **posture line** now
+  answers first — measured / not-yet-configured / needs-attention, and
+  unmeasured never renders green; a **Model door & egress card** answers
+  the security reviewer's first questions on screen (which provider mode,
+  authenticated how — presence only, never a value — which forge,
+  telemetry-sends-nothing, workspace spend from the ledger); a
+  **Codebase card** renders the `avs map` comprehension report so a
+  brownfield adoption's first screen proves the tool read the repo;
+  empty states carry the exact command, what it changes, and the
+  feedback loop ("this page re-reads the workspace on every reload");
+  the governance card names the gate owner, not just the rule; and
+  `init --adopt` now points at readiness/review/studio instead of
+  telling a brownfield team to write a spec for a product that already
+  exists. The Studio also stopped 404ing its own favicon.
 - **Windows can't be killed by a health check anymore.** `os.kill(pid, 0)`
   liveness probes — which on Windows *terminate* the probed process —
   went through a cross-platform `procs.pid_alive`, worker detachment

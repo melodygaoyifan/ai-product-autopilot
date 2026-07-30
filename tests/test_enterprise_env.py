@@ -297,3 +297,88 @@ def test_studio_build_worker_inherits_provider(tmp_path, monkeypatch):
     argv = argv_seen["argv"]
     assert "--provider" in argv and argv[argv.index("--provider") + 1] == "mock"
     assert argv_seen["stdout_is_devnull"] is False
+
+
+# --- enterprise dashboard panels ----------------------------------------------
+
+
+def _t(key):
+    from ai_venture_studio.studio_i18n import STRINGS
+
+    return STRINGS[key]["en"]
+
+
+def test_governance_posture_never_green_when_unmeasured(tmp_path):
+    """The GitHub-security-overview lesson: 'not configured' is its own
+    state — an empty workspace must not read as healthy."""
+    from ai_venture_studio.studio_modes import governance_posture
+
+    (tmp_path / ".mas").mkdir()
+    posture = governance_posture(tmp_path)
+    assert set(posture["unconfigured"]) == {
+        "edition", "substrate", "gate dwell", "attestation",
+    }
+    assert posture["measured"] == ["automation policies"]
+    assert posture["attention"] == []
+
+
+def test_trust_panel_shows_presence_never_values(tmp_path, monkeypatch):
+    from ai_venture_studio.studio_modes import _trust_html
+
+    for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_FILE",
+                "ANTHROPIC_AUTH_TOKEN", "AVS_ANTHROPIC_MODE"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / ".mas").mkdir()
+    page = _trust_html(tmp_path, _t)
+    assert "no credential visible" in page
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY_FILE", "/run/secrets/key")
+    monkeypatch.setenv("AVS_ANTHROPIC_MODE", "bedrock")
+    page = _trust_html(tmp_path, _t)
+    assert "*_FILE secret mount" in page and "bedrock" in page
+    assert "/run/secrets/key" not in page  # presence only, never the ref
+
+
+def test_codebase_panel_renders_map_and_grey_state(tmp_path):
+    import yaml as _yaml
+
+    from ai_venture_studio.studio_modes import _codebase_html
+
+    (tmp_path / ".mas").mkdir()
+    grey = _codebase_html(tmp_path, _t)
+    assert "avs map ." in grey and "No codebase map yet" in grey
+
+    (tmp_path / ".mas" / "codebase-map.yaml").write_text(_yaml.safe_dump({
+        "languages": {"python": 133}, "total_files": 133,
+        "total_lines": 39328, "entry_points": ["mapop_api/main.py"],
+        "routes": ["/api/health"] * 22,
+        "modules": [{"name": "map_optimizer", "files": 27, "lines": 16509}],
+    }))
+    page = _codebase_html(tmp_path, _t)
+    assert "39,328" in page and "HTTP routes: 22" in page
+    assert "map_optimizer" in page
+
+
+def test_edition_empty_state_is_actionable_not_a_dead_end(tmp_path):
+    """Command + what-it-changes + feedback loop, per the anti-pattern:
+    'run this CLI' with no state transition is how dashboards get ignored."""
+    from ai_venture_studio.studio_modes import enterprise_panel
+
+    (tmp_path / ".mas").mkdir()
+    page = enterprise_panel(tmp_path, _t)
+    assert "avs init . --profile enterprise-web --edition enterprise" in page
+    assert "re-reads the workspace on every reload" in page
+    assert "avs readiness" in page
+
+
+def test_edition_card_names_the_gate_owner(tmp_path):
+    import yaml as _yaml
+
+    from ai_venture_studio.editions import load_edition_preset
+    from ai_venture_studio.studio_modes import _edition_card
+
+    (tmp_path / ".mas").mkdir()
+    edition = load_edition_preset("enterprise")
+    edition["gate_policy"]["gate_owner"] = "Melody Gao"
+    (tmp_path / ".mas" / "edition.yaml").write_text(_yaml.safe_dump(edition))
+    assert "Melody Gao" in _edition_card(tmp_path, _t)

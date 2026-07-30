@@ -226,6 +226,142 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "edition 文件未通过检查 / Edition file fails lint",
         "en": "The edition file fails lint",
     },
+    # --- enterprise posture / trust / codebase panels -------------------
+    "gov_posture": {
+        "zh": "治理态势 / Governance posture",
+        "en": "Governance posture",
+    },
+    "gov_posture_attention": {
+        "zh": "需要处理 / needs attention:",
+        "en": "needs attention:",
+    },
+    "gov_posture_measured": {
+        "zh": "已度量 / measured:",
+        "en": "measured:",
+    },
+    "gov_posture_unmeasured": {
+        "zh": "尚未配置 / not yet configured:",
+        "en": "not yet configured:",
+    },
+    "gov_posture_note": {
+        "zh": "未度量的项显示为灰色，绝不显示为绿色 — 绿色只属于真正度量过的东西。"
+              "/ Unmeasured items render grey, never green.",
+        "en": "Unmeasured items render grey, never green — green is only "
+              "earned by something actually measured.",
+    },
+    "gov_action_reload": {
+        "zh": "本页每次刷新都会重新读取工作区 — 运行命令后刷新即可。"
+              "/ This page re-reads the workspace on every reload.",
+        "en": "This page re-reads the workspace on every reload — run the "
+              "command, then refresh.",
+    },
+    "gov_edition_effect": {
+        "zh": "该命令会写入 .mas/edition.yaml（含指定的闸门负责人）。"
+              "/ Writes .mas/edition.yaml with the named gate owner.",
+        "en": "This writes .mas/edition.yaml with the named gate owner; "
+              "the Governance card fills in from it.",
+    },
+    "gov_substrate_effect": {
+        "zh": "该命令会打印阶梯与起步档案；声明 .mas/substrate-profile.yaml "
+              "后此表格生效。/ Prints the ladder; declaring the profile "
+              "activates this grid.",
+        "en": "Prints the rung-by-rung ladder and a starter profile; "
+              "declaring .mas/substrate-profile.yaml activates this grid.",
+    },
+    "trust_head": {
+        "zh": "模型通道与数据流向 / Model door & egress",
+        "en": "Model door & egress",
+    },
+    "trust_note": {
+        "zh": "安全评审最先问的问题 — 每次加载从环境与工作区实时读取，"
+              "从不显示密钥的值。/ Read live from the environment; never "
+              "shows a secret's value.",
+        "en": "What a security review asks first — read live from the "
+              "environment and workspace on each load; presence only, "
+              "never a secret's value.",
+    },
+    "trust_provider": {
+        "zh": "模型通道 / Model door",
+        "en": "Model door",
+    },
+    "trust_auth_env": {
+        "zh": "密钥来自环境变量 / key in environment",
+        "en": "key in environment",
+    },
+    "trust_auth_file": {
+        "zh": "密钥来自 *_FILE 挂载 / key via *_FILE mount",
+        "en": "key via *_FILE secret mount",
+    },
+    "trust_auth_gateway": {
+        "zh": "网关令牌（ANTHROPIC_AUTH_TOKEN + base URL）/ gateway bearer",
+        "en": "gateway (ANTHROPIC_AUTH_TOKEN + base URL)",
+    },
+    "trust_auth_none": {
+        "zh": "当前进程看不到任何凭据 / no credential visible",
+        "en": "no credential visible to this process",
+    },
+    "trust_forge": {
+        "zh": "代码托管（origin）/ Forge (origin remote)",
+        "en": "Forge (origin remote)",
+    },
+    "trust_forge_none": {
+        "zh": "未检测到远端 / none detected",
+        "en": "no forge remote detected",
+    },
+    "trust_egress": {
+        "zh": "出网 / Egress",
+        "en": "Egress",
+    },
+    "trust_egress_note": {
+        "zh": "遥测不发送任何内容（未配置端点）；完整出网清单见采购包 "
+              "network-egress.md。/ Telemetry sends nothing; full outbound "
+              "list in the procurement pack.",
+        "en": "telemetry sends nothing (no endpoint configured); the "
+              "complete outbound-host list ships in the procurement pack "
+              "(network-egress.md)",
+    },
+    "trust_spend": {
+        "zh": "本工作区花费 / Spend (this workspace)",
+        "en": "Spend (this workspace)",
+    },
+    "trust_spend_none": {
+        "zh": "尚无模型调用记录 / no model calls recorded",
+        "en": "no model calls recorded",
+    },
+    "trust_spend_floor": {
+        "zh": "至少 / at least",
+        "en": "at least",
+    },
+    "code_head": {
+        "zh": "代码库（avs 读到的）/ Codebase (what avs found)",
+        "en": "Codebase (what avs found)",
+    },
+    "code_none": {
+        "zh": "还没有代码地图 — 运行（本地读取，无 LLM、无网络）："
+              "/ No codebase map yet — run (local read, no LLM, no network):",
+        "en": "No codebase map yet — run (reads the repo locally; no LLM, "
+              "no network):",
+    },
+    "code_unreadable": {
+        "zh": "代码地图无法解析 — 重新运行 avs map 。/ Map unreadable — "
+              "re-run avs map.",
+        "en": "The codebase map is unreadable — re-run avs map.",
+    },
+    "code_http": {
+        "zh": "HTTP 路由 / HTTP routes",
+        "en": "HTTP routes",
+    },
+    "code_entries": {
+        "zh": "入口 / entry points",
+        "en": "entry points",
+    },
+    "code_note": {
+        "zh": "由 avs map 从代码推导 — 规划器读取它，而不是靠文件名猜测。"
+              "/ Derived from the code; the planner reads this instead of "
+              "guessing.",
+        "en": "Derived from the code by avs map — the planner reads this "
+              "instead of guessing from filenames.",
+    },
     # --- mode strip + per-mode pages (v0.56) ----------------------------
     "mode_strip_label": {"zh": "视角 / View as:", "en": "View as:"},
     "mode_founder": {"zh": "创始人 / Founder", "en": "Founder"},

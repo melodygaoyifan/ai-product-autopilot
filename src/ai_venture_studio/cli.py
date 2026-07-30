@@ -486,7 +486,9 @@ def worker(
 def init(
     directory: str = typer.Argument(..., help="Workspace directory to create"),
     name: str = typer.Option(None, help="Project name (defaults to directory name)"),
-    profile: str = typer.Option(..., help="Domain profile: web | miniprogram | app"),
+    profile: str = typer.Option(
+        ..., help="Domain profile: web | enterprise-web | miniprogram | "
+                  "app | game | data"),
     tier: str = typer.Option(
         "standard", help="thin | standard | deep. thin plans ONE working "
                          "end-to-end slice first; narrows, never widens."
@@ -601,9 +603,18 @@ def init(
             f"{resolved_edition.get('docs_entry', 'editions/')}"
         )
     console.print(f"workspace ready: {root}")
-    console.print(
-        f"next: avs spec \"<what you want to build>\" --repo-dir {root}"
-    )
+    if adopt:
+        # A brownfield adoption's next step is governance and review, not
+        # writing a spec for a product that already exists.
+        console.print(
+            f"next: avs readiness (the rung you occupy) · "
+            f"avs review main...HEAD --repo-dir {root} · "
+            f"avs studio {root} (the governance dashboard)"
+        )
+    else:
+        console.print(
+            f"next: avs spec \"<what you want to build>\" --repo-dir {root}"
+        )
 
 
 @app.command()
