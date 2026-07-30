@@ -76,7 +76,19 @@ def last_probe(root: Path) -> dict | None:
 
 
 def live_body(root: Path, t_: Callable[[str], str], profile: str) -> str:
-    from ai_venture_studio.upstream.provisioning import preview_env
+    from ai_venture_studio.upstream.provisioning import CLOUD_CATALOG, preview_env
+
+    has_catalog = profile in CLOUD_CATALOG
+    guide_form = (
+        f"<form method=post action=/live/guide>"
+        f"<button class=secondary>{t_('btn_cloud_guide')}</button></form>"
+        f"<p class=muted>{t_('live_guide_effect')}</p>"
+        if has_catalog
+        # A button that silently does nothing is worse than no button: the
+        # data/game profiles have no guided cloud catalog, and saying so is
+        # the honest rendering.
+        else f"<p class=muted>{t_('live_no_catalog')}</p>"
+    )
 
     # 1 · run it: the boot contract, verbatim — the same command every
     # verification harness used, so it is known to work.
@@ -103,26 +115,26 @@ def live_body(root: Path, t_: Callable[[str], str], profile: str) -> str:
             services = {}
     guide = root / "SERVICES.md"
     if guide.exists():
+        rewrite_form = (
+            f"<form method=post action=/live/guide>"
+            f"<button class=secondary>{t_('btn_cloud_guide_again')}</button></form>"
+            if has_catalog else ""
+        )
         persistence_inner = (
             f"<details open><summary>{t_('live_cloud_steps')}</summary>"
             f"<pre>{html.escape(guide.read_text(encoding='utf-8'))}</pre></details>"
-            f"<form method=post action=/live/guide>"
-            f"<button class=secondary>{t_('btn_cloud_guide_again')}</button></form>"
+            f"{rewrite_form}"
         )
     elif services:
         names = ", ".join(sorted(services))
         persistence_inner = (
             f"<p class=ok>{t_('live_local_db')} <code>{html.escape(names)}</code></p>"
-            f"<form method=post action=/live/guide>"
-            f"<button class=secondary>{t_('btn_cloud_guide')}</button></form>"
-            f"<p class=muted>{t_('live_guide_effect')}</p>"
+            f"{guide_form}"
         )
     else:
         persistence_inner = (
             f"<p class=muted>{t_('live_no_services')}</p>"
-            f"<form method=post action=/live/guide>"
-            f"<button class=secondary>{t_('btn_cloud_guide')}</button></form>"
-            f"<p class=muted>{t_('live_guide_effect')}</p>"
+            f"{guide_form}"
         )
     persistence_card = (
         f"<div class=card><b>{t_('live_persistence')}</b>{persistence_inner}</div>"

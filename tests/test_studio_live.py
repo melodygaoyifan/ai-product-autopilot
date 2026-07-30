@@ -161,3 +161,15 @@ def test_incident_fix_flow_reloads_persisted_root_cause(tmp_path):
     assert attempt.status in ("opened", "branch_only", "tests_failed",
                               "abstained", "error")
     assert "How the attempt went" in page
+
+
+def test_live_body_hides_guide_button_without_a_cloud_catalog(tmp_path):
+    """The data/game profiles have no guided cloud catalog; a button that
+    silently no-ops is worse than no button (found E2E on a data repo)."""
+    from ai_venture_studio.studio_live import live_body
+
+    root = _workspace(tmp_path)
+    page = live_body(root, _t, "data")
+    assert "/live/guide" not in page
+    assert "No guided cloud catalog" in page
+    assert "/live/guide" in live_body(root, _t, "web")

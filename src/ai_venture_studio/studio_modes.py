@@ -280,10 +280,14 @@ def governance_posture(root: Path) -> dict[str, list[str]]:
     except EditionError:
         posture["attention"].append("edition")
 
-    if load_substrate_profile(root) is None:
-        posture["unconfigured"].append("substrate")
+    try:
+        substrate = load_substrate_profile(root)
+    except ValueError:
+        posture["attention"].append("substrate")
     else:
-        posture["measured"].append("substrate")
+        posture[
+            "unconfigured" if substrate is None else "measured"
+        ].append("substrate")
 
     dwell = gate_dwell_report(root)
     if dwell.median_s is None:
@@ -544,7 +548,15 @@ def _stage_grid_html(root: Path, t_: Callable[[str], str]) -> str:
     )
 
     head = f"<b>{t_('gov_stages')}</b>"
-    profile = load_substrate_profile(root)
+    try:
+        profile = load_substrate_profile(root)
+    except ValueError as exc:
+        # A malformed profile must not take the page down — render it as
+        # broken with the loader's own message (it names the field).
+        return (
+            f"<div class=card>{head}"
+            f"<p class=bad>{html.escape(str(exc))}</p></div>"
+        )
     if profile is None:
         return (
             f"<div class=card>{head}"

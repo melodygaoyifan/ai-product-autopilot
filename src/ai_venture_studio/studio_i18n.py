@@ -273,6 +273,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "生成云数据库指南 / Write the cloud guide",
         "en": "Write the cloud database guide",
     },
+    "live_no_catalog": {
+        "zh": "此产品类型没有引导式云服务目录 — 数据存储是产品自身设计的一部分"
+              "（见 FDR 与 design.md）。/ No guided cloud catalog for this "
+              "profile; storage is part of the product's own design.",
+        "en": "No guided cloud catalog for this profile — the data store "
+              "is part of the product's own design (see the FDR and "
+              "design.md).",
+    },
     "btn_cloud_guide_again": {
         "zh": "重新生成指南 / Rewrite the guide",
         "en": "Rewrite the guide",

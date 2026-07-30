@@ -1245,12 +1245,52 @@ def readiness(repo_dir: str = typer.Option(".", help="Workspace directory")):
     declared rung and what each missing rung would unlock."""
     from ai_venture_studio.adoption import load_substrate_profile, readiness_report
 
-    profile = load_substrate_profile(repo_dir)
+    try:
+        profile = load_substrate_profile(repo_dir)
+    except ValueError as exc:
+        # A malformed profile is an operator mistake, not a crash: the
+        # loader's message already names the file and field.
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
     if profile is None:
+        # Not a dead end: detect what the repo already has and print a
+        # starter profile prefilled from it — the what-we-found pattern.
+        # Detection is conservative (pr_flow/observability can't be read
+        # from the filesystem, so they start false/none and only the
+        # human widens them).
+        import yaml as _yaml
+
+        root = Path(repo_dir).resolve()
+        ci_files = (
+            ".github/workflows", ".gitlab-ci.yml", "azure-pipelines.yml",
+            "Jenkinsfile", ".circleci",
+        )
+        languages: list[str] = []
+        map_path = root / ".mas" / "codebase-map.yaml"
+        if map_path.exists():
+            try:
+                map_data = _yaml.safe_load(map_path.read_text(encoding="utf-8")) or {}
+                languages = sorted(map_data.get("languages") or {})
+            except _yaml.YAMLError:
+                languages = []
+        starter = {"substrate": {
+            "vcs": "git" if (root / ".git").exists() else "none",
+            "pr_flow": False,
+            "ci": any((root / f).exists() for f in ci_files),
+            "observability": ["none"],
+            "progressive_delivery": False,
+            "languages": languages,
+        }}
         console.print(
             "No .mas/substrate-profile.yaml — the adoption ladder is not "
-            "declared, so every stage runs ungated (effective S4).\n"
-            "Declare one to get a rung-by-rung modernization roadmap (§18.47.1)."
+            "declared, so every stage runs ungated (effective S4).\n\n"
+            "Detected from this repo (confirm pr_flow/observability by "
+            "hand — they cannot be read from the filesystem):\n"
+        )
+        console.print(_yaml.safe_dump(starter, sort_keys=False).rstrip())
+        console.print(
+            "\nSave that as .mas/substrate-profile.yaml and re-run "
+            "avs readiness for the rung-by-rung roadmap (§18.47.1)."
         )
         raise typer.Exit(code=0)
     console.print(readiness_report(profile, project_name=Path(repo_dir).resolve().name))
