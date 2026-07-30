@@ -98,6 +98,12 @@ not the single example.
   the event loop (a slow URL froze every Studio page — moved to the
   threadpool), and the studio wireup drift test caught two forms that
   rendered in no walked state.
+- **Enterprise mode opens with "Ready to build?"** — a six-row preflight
+  read live from the environment, git config, the forge CLI's own auth
+  check, and the workspace: model credential (mock escape hatch named),
+  git identity, forge authentication, governance (edition + named gate
+  owner), substrate declaration, Studio access posture. Ready rows show
+  what was found; gaps show the exact fix command.
 - **The Studio can be deployed for a team, fail-closed.**
   `AVS_STUDIO_TOKEN` (env or `_FILE` secret mount) gates every request —
   open `/?token=…` once, a cookie keeps the session; `avs studio --host`
