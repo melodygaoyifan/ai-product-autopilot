@@ -243,13 +243,23 @@ def incident_body(t_: Callable[[str], str], incident_id: str, result) -> str:
         f"<p class=muted><code>{html.escape(verdict)}</code> — "
         f"{html.escape(summary)}</p>"
     )
-    if result.root_cause:
+    # Hypothesis and next-step lines only when a cause was actually
+    # proposed. On the escalate path the model's fields are non-answers
+    # ("insufficient evidence", "propose fix-PR") that contradict the
+    # verdict one line above them; the founder-useful information there is
+    # WHERE the technical record lives, to hand to whoever maintains it.
+    if verdict == "ROOT_CAUSE_PROPOSED" and result.root_cause:
         lines += (
             f"<p>{t_('inc_hypothesis')}: "
             f"{html.escape(result.root_cause.hypothesis)} "
             f"<span class=muted>({result.root_cause.confidence}%)</span></p>"
             f"<p class=muted>{t_('inc_next')}: "
             f"{html.escape(result.root_cause.next_action)}</p>"
+        )
+    elif verdict not in ("ROOT_CAUSE_PROPOSED", "TRIAGED_LOW_PRIORITY"):
+        lines += (
+            f"<p>{t_('inc_saved_at')} "
+            f"<code>.mas/incidents/{html.escape(incident_id)}/</code></p>"
         )
     fix_form = ""
     if verdict == "ROOT_CAUSE_PROPOSED":

@@ -397,6 +397,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "This needs a human — the cause could not be pinned down "
               "automatically.",
     },
+    "inc_saved_at": {
+        "zh": "完整的技术记录已保存，交给维护这个产品的人即可：/ The full "
+              "technical record is saved here — hand it to whoever "
+              "maintains the product:",
+        "en": "The full technical record is saved here — hand it to "
+              "whoever maintains the product:",
+    },
     "btn_try_fix": {
         "zh": "尝试修复（会进评审）/ Attempt the fix",
         "en": "Attempt the fix",
