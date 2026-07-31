@@ -62,6 +62,69 @@ text-align:left;vertical-align:top}
 """
 
 
+_KEY_SIGNALS = (
+    "api_key", "api key", "authentication", "unauthorized", "permission denied",
+    "credit balance", "insufficient_quota", "billing", " 401", "401 ", " 403", "403 ",
+)
+_BUSY_SIGNALS = (
+    "overloaded", "rate limit", "rate_limit", "temporarily unavailable",
+    "timeout", "timed out", "connection", "econnreset", "bad gateway",
+    " 429", "429 ", " 502", "502 ", " 503", "503 ", " 529", "529 ",
+)
+
+
+def failure_cause(exc: BaseException) -> str:
+    """Which plain-language cause the failure page should show: 'key',
+    'busy', or 'unknown'.
+
+    Deliberately returns 'unknown' rather than guessing. A confident wrong
+    cause is more expensive than an honest "look at the detail below": the
+    page used to assert a missing-or-exhausted API key for every failure, so
+    a 529 overload on a valid key read as a billing problem and the real
+    signal — retry in a minute — was nowhere on the page.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    # Key problems are checked first: an auth failure is often *reported*
+    # through a status code that also appears in the busy list.
+    if any(signal in text for signal in _KEY_SIGNALS):
+        return "key"
+    if any(signal in text for signal in _BUSY_SIGNALS):
+        return "busy"
+    return "unknown"
+
+
+def record_failure(root: Path, exc: BaseException) -> None:
+    """Append the failure to .mas/studio-failures.jsonl, with the traceback.
+
+    The Studio rendered its exceptions to the browser and nowhere else, so an
+    operator who closed the tab had no record that anything had failed. This
+    keeps forensics where the rest of them live (.mas/, gitignored) rather
+    than introducing a logging stack the codebase does not otherwise use.
+
+    Never raises: a workspace that cannot be written to must still get the
+    error page it was about to render.
+    """
+    import datetime as _dt
+    import json
+    import traceback
+
+    try:
+        path = Path(root) / ".mas" / "studio-failures.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "at": _dt.datetime.now(_dt.UTC).isoformat(),
+            "error": f"{type(exc).__name__}: {exc}"[:500],
+            "cause": failure_cause(exc),
+            "traceback": "".join(
+                traceback.format_exception(type(exc), exc, exc.__traceback__)
+            )[-4000:],
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        return  # forensics are best-effort; the founder's page is not
+
+
 def _md(path: Path) -> str:
     return html.escape(path.read_text(encoding="utf-8")) if path.exists() else ""
 
@@ -240,11 +303,19 @@ def create_studio_app(
     def _failure_page(request: Request, exc: Exception) -> HTMLResponse:
         """A founder should never meet a stack trace, and should never be
         told nothing either: plain language first, the real error one click
-        away, and the workspace left where they can retry."""
+        away, and the workspace left where they can retry.
+
+        The cause line is derived from the exception, never assumed. It used
+        to be one hardcoded sentence naming a missing API key, which is how a
+        transient provider overload — on a valid, funded key — sent someone
+        looking for a key problem that did not exist.
+        """
+        record_failure(root, exc)
         return _render(
             request, _("title_failed"),
             f"<div class=card><b class=bad>{_('failed_lead')}</b>"
-            f"<p>{_('failed_hint')}</p>"
+            f"<p>{_('failed_safe')}</p>"
+            f"<p>{_('failed_cause_' + failure_cause(exc))}</p>"
             f"<details><summary class=muted>{_('failed_detail')}</summary>"
             f"<pre>{html.escape(f'{type(exc).__name__}: {exc}')}</pre>"
             "</details></div>"
@@ -478,7 +549,7 @@ def create_studio_app(
                 )
                 retry_block = (
                     f"<div class=card><b class=warn>{_('failed_modules')}"
-                    f"</b><p>{_('failed_hint')}</p>{rows}</div>"
+                    f"</b><p>{_('failed_modules_hint')}</p>{rows}</div>"
                 )
             no_features = f"<p class=muted>{_('first_version')}</p>"
             # Cost, in the founder's register, on the page they land on. Read

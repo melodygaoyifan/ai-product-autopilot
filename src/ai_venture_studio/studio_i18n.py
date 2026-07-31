@@ -133,7 +133,10 @@ STRINGS: dict[str, dict[str, str]] = {
     },
     "failed_modules": {"zh": "没做成的模块 / Failed modules",
                        "en": "Modules that did not build"},
-    "failed_hint": {
+    # Named _modules_ explicitly: this used to be "failed_hint", the same key
+    # the error page uses further down, so the later definition silently won
+    # and this card told founders their API key was missing.
+    "failed_modules_hint": {
         "zh": "可以先不管它们，产品其余部分能用；也可以单独重试：",
         "en": "You can leave them: the rest of the product works. Or retry one "
               "on its own:",
@@ -753,12 +756,32 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "这一步没有做完。",
         "en": "That step stopped before it finished.",
     },
-    "failed_hint": {
-        "zh": "你的需求和已有成果都还在，什么都没丢。常见原因：模型的 API key "
-              "没设置或额度用完了。可以修好后重试。",
+    # The reassurance is always true, so it is always shown. The CAUSE is a
+    # separate string chosen from the actual exception (studio.failure_cause)
+    # — one hardcoded guess used to claim "missing or exhausted API key" for
+    # every failure, including transient overloads on a perfectly good key.
+    "failed_safe": {
+        "zh": "你的需求和已有成果都还在，什么都没丢。",
         "en": "Nothing was lost — your requirements and anything already built "
-              "are still here. The usual causes are a missing or exhausted "
-              "model API key. Fix that and try again.",
+              "are still here.",
+    },
+    "failed_cause_key": {
+        "zh": "看起来是模型 API key 的问题：没设置、被拒绝或额度用完了。"
+              "修好后重试即可。",
+        "en": "This looks like a problem with your model API key — missing, "
+              "rejected, or out of credit. Fix that and try again.",
+    },
+    "failed_cause_busy": {
+        "zh": "模型服务当时繁忙或连不上，自动重试也用完了。你的设置没有问题，"
+              "过一会儿再点一次就行。",
+        "en": "The model service was busy or unreachable, and the automatic "
+              "retries ran out. Nothing is wrong with your setup — wait a "
+              "moment and press the button again.",
+    },
+    "failed_cause_unknown": {
+        "zh": "这次的原因不能确定，下面的技术细节写明了实际发生了什么。",
+        "en": "The cause is not certain this time. The technical detail below "
+              "says exactly what happened.",
     },
     "failed_detail": {
         "zh": "技术细节 / Technical detail",
