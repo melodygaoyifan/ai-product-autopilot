@@ -324,7 +324,13 @@ def create_studio_app(
             f"<div class=card><b class=warn>{_('working_lead')}</b>"
             f"<p>{html.escape(what)}</p>"
             f"<p class=muted>{_('working_hint')}</p></div>"
-            "<script>setTimeout(()=>location.href='/',15000)</script>",
+            # A POLL, not a bounce. This used to jump to / after 15 seconds
+            # while the step was still running, and / had no idea anything
+            # was in flight — so it rendered the page the founder had just
+            # left and the whole thing read as "my click did nothing". Home
+            # now returns this same page while work is in flight, so the
+            # reload is a refresh that ends by itself when the step lands.
+            "<script>setTimeout(()=>location.href='/',4000)</script>",
         )
 
     def _failure_page(request: Request, exc: Exception) -> HTMLResponse:
@@ -457,6 +463,12 @@ def create_studio_app(
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
+        # A foreground step (assess / feature / correct) is mid-flight in
+        # another request. Say so, rather than rendering the page they just
+        # left as though nothing had happened — these steps run for minutes
+        # and the thinking page reloads here on a timer.
+        if thinking:
+            return _thinking_page(request, next(iter(thinking.values())))
         fdr = root / "FDR.md"
         report = root / "product" / "BUILD-REPORT.md"
         confirmation = root / "product" / "CONFIRMATION.md"
