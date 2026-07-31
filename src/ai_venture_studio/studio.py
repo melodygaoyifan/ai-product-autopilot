@@ -31,6 +31,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from ai_venture_studio import studio_chat
 from ai_venture_studio.studio_i18n import DEFAULT_LANGUAGE, normalize, t
 from ai_venture_studio.studio_modes import (
     MODES,
@@ -626,9 +627,169 @@ def create_studio_app(
             f"<textarea name=fdr>{html.escape(current)}</textarea>"
             f"<p><button>{_('btn_check_and_plan')}</button></p>"
             f"</form>"
+            f"<p><a href='/chat'>{_('chat_switch_to_chat')}</a></p>"
             f"<details><summary class=muted>{_('guide_summary')}"
             f"</summary><pre>{guide}</pre></details>",
         )
+
+    # ── The conversational intake ────────────────────────────────────────
+    # An alternative door to the SAME FDR, never a second source of truth:
+    # every answer is composed into FDR.md and the existing flow takes over
+    # from there. The form stays exactly as it was for anyone who prefers it.
+
+    def _chat_page(request: Request, note: str = "") -> HTMLResponse:
+        turns = studio_chat.load_thread(root)
+        thread = "".join(
+            f"<p class=muted style='margin:.2rem 0'>{html.escape(turn.text)}</p>"
+            if turn.role == "assistant"
+            else f"<p style='margin:.2rem 0 1rem'><b>{html.escape(turn.text)}</b></p>"
+            for turn in turns
+        )
+        question = studio_chat.open_question(turns)
+        if question is None:
+            # Nothing pending: ask the next intake question, or hand over.
+            slot = studio_chat.next_intake_slot(turns)
+            if slot is None:
+                return _chat_assess(request)
+            question = studio_chat.append_turn(
+                root, "assistant", _(f"chat_q_{slot}"), slot=slot
+            )
+            thread += (
+                f"<p class=muted style='margin:.2rem 0'>"
+                f"{html.escape(question.text)}</p>"
+            )
+        answered = len(studio_chat.pairs(turns))
+        total = len(studio_chat.INTAKE_SLOTS)
+        counter = (
+            f"{min(answered + 1, total)} / {total}"
+            if question.slot in studio_chat.INTAKE_SLOTS
+            else _("chat_clarify_lead")
+        )
+        return _render(
+            request, _("title_chat"),
+            f"<p class=muted>{_('chat_intro')}</p>"
+            + (f"<div class=card><b class=warn>{html.escape(note)}</b></div>"
+               if note else "")
+            + f"<div class=card>{thread}"
+            f"<form method=post action=/chat>"
+            f"<p class=muted>{counter}</p>"
+            f"<textarea name=answer style='min-height:110px' autofocus></textarea>"
+            f"<p><button>{_('btn_chat_send')}</button> "
+            f"<button class=secondary name=skip value=1>{_('btn_chat_skip')}"
+            "</button></p></form></div>"
+            "<form method=post action=/chat/enough style='display:inline'>"
+            f"<button class=secondary>{_('btn_chat_enough')}</button></form> "
+            "<form method=post action=/chat/restart style='display:inline'>"
+            f"<button class=secondary>{_('btn_chat_restart')}</button></form>"
+            f"<p><a href='/'>{_('chat_switch_to_form')}</a></p>",
+        )
+
+    @app.get("/chat", response_class=HTMLResponse)
+    def chat(request: Request):
+        if "fdr" in thinking:
+            return _thinking_page(request, thinking["fdr"])
+        return _chat_page(request)
+
+    @app.post("/chat")
+    async def chat_answer(request: Request):
+        if "fdr" in thinking:
+            return _thinking_page(request, thinking["fdr"])
+        form = await request.form()
+        turns = studio_chat.load_thread(root)
+        question = studio_chat.open_question(turns)
+        if question is None:
+            return RedirectResponse("/chat", status_code=303)
+        answer = str(form.get("answer", "")).strip()
+        if form.get("skip") or not answer:
+            answer = _("chat_skipped")
+        studio_chat.append_turn(root, "user", answer)
+        # POST-redirect-GET, always: the GET decides whether the next step is
+        # another question or the assessment. Keeping that decision in one
+        # place is also why the assessment is not its own route — it is a
+        # transition, and an endpoint no rendered page links to is an orphan
+        # (caught by tests/test_studio_wireup.py).
+        return RedirectResponse("/chat", status_code=303)
+
+    def _chat_assess(request: Request) -> HTMLResponse:
+        """Compose the FDR from the conversation, then ask the assessor
+        whether it is buildable. Bounded: after MAX_CLARIFY_ROUNDS the
+        conversation stops asking and goes to the plan."""
+        if "fdr" in thinking:
+            return _thinking_page(request, thinking["fdr"])
+        turns = studio_chat.load_thread(root)
+        # Composed in memory, NOT written yet: FDR.md is only replaced at
+        # handoff, and only after the existing one is preserved. Writing here
+        # would destroy a hand-written FDR the moment somebody tried the
+        # conversation out of curiosity.
+        composed = studio_chat.compose_fdr(turns, lang)
+        if studio_chat.clarify_rounds_used(turns) >= studio_chat.MAX_CLARIFY_ROUNDS:
+            return _chat_handoff(request, note=_("chat_rounds_done"))
+
+        from ai_venture_studio.upstream.fdr import assess_fdr
+
+        thinking["fdr"] = _("chat_checking")
+        try:
+            assessment = assess_fdr(composed, provider=provider)
+        except Exception as exc:  # noqa: BLE001 — a founder gets a page, not a 500
+            return _failure_page(request, exc)
+        finally:
+            thinking.pop("fdr", None)
+
+        if assessment.ready or not assessment.questions:
+            return _chat_handoff(request)
+        # One at a time — the whole point of this surface. The remaining
+        # questions are re-derived on the next round against the fuller FDR,
+        # which is usually a shorter list than the one we just got.
+        studio_chat.append_turn(
+            root, "assistant", assessment.questions[0], slot=studio_chat.CLARIFY
+        )
+        return _chat_page(request)
+
+    def _chat_handoff(request: Request, note: str = "") -> HTMLResponse:
+        """The conversation is done: FDR.md is written, so the normal flow
+        (confirmation → build) takes over from the home page.
+
+        An FDR that already existed is copied to FDR-before-chat.md first.
+        Someone with a hand-written FDR who clicks the conversation link to
+        see what it does must not lose it — losing the founder's own words
+        is the worst thing this surface could do.
+        """
+        turns = studio_chat.load_thread(root)
+        composed = studio_chat.compose_fdr(turns, lang)
+        existing = root / "FDR.md"
+        preserved = ""
+        if existing.exists():
+            previous = existing.read_text(encoding="utf-8")
+            backup = root / "FDR-before-chat.md"
+            if previous.strip() and previous != composed and not backup.exists():
+                backup.write_text(previous, encoding="utf-8")
+                preserved = backup.name
+        existing.write_text(composed, encoding="utf-8")
+        (root / "FDR-QUESTIONS.md").unlink(missing_ok=True)
+        if preserved:
+            note = (note + " " if note else "") + _("chat_prior_fdr_saved").format(
+                name=preserved
+            )
+        return _render(
+            request, _("title_chat"),
+            (f"<div class=card><b>{html.escape(note)}</b></div>" if note else "")
+            + f"<div class=card><pre>{html.escape((root / 'FDR.md').read_text(encoding='utf-8'))}</pre></div>"
+            f"<form method=post action=/fdr>"
+            f"<input type=hidden name=fdr value='{html.escape((root / 'FDR.md').read_text(encoding='utf-8'))}'>"
+            f"<button>{_('btn_check_and_plan')}</button></form>"
+            f"<p><a href='/chat'>{_('btn_chat_restart')}</a></p>",
+        )
+
+    @app.post("/chat/enough")
+    def chat_enough(request: Request):
+        """The escape hatch. An under-specified FDR the founder chose is
+        better than a question loop they cannot leave."""
+        return _chat_handoff(request, note=_("chat_rounds_done"))
+
+    @app.post("/chat/restart")
+    def chat_restart(request: Request):
+        studio_chat.reset_thread(root)
+        return RedirectResponse("/chat", status_code=303)
 
     @app.post("/fdr")
     async def save_fdr(request: Request):

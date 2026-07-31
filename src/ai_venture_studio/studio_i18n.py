@@ -787,6 +787,95 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "技术细节 / Technical detail",
         "en": "Technical detail",
     },
+    # ── The conversational intake (studio_chat) ──────────────────────────
+    "title_chat": {
+        "zh": "一句一句说 / One question at a time",
+        "en": "One question at a time",
+    },
+    "chat_intro": {
+        "zh": "我问一句，你答一句，需求文档我来写。随时可以停下来直接生成计划。",
+        "en": "I ask one question, you answer it, and I write the requirements "
+              "document. You can stop and go straight to the plan at any point.",
+    },
+    "chat_switch_to_form": {
+        "zh": "或者用表格一次填完",
+        "en": "Or fill in the whole form instead",
+    },
+    "chat_switch_to_chat": {
+        "zh": "不想填表格？一句一句说",
+        "en": "Rather not fill in a form? Answer one question at a time",
+    },
+    "chat_answer_label": {
+        "zh": "你的回答",
+        "en": "Your answer",
+    },
+    "btn_chat_send": {
+        "zh": "回答",
+        "en": "Answer",
+    },
+    "btn_chat_skip": {
+        "zh": "跳过这一题",
+        "en": "Skip this one",
+    },
+    "btn_chat_enough": {
+        "zh": "够了，直接生成计划",
+        "en": "That's enough — go to the plan",
+    },
+    "btn_chat_restart": {
+        "zh": "重新开始对话",
+        "en": "Start the conversation over",
+    },
+    "chat_checking": {
+        "zh": "正在看你写的需求，可能要一两分钟…",
+        "en": "Reading your requirements — this can take a minute or two…",
+    },
+    "chat_clarify_lead": {
+        "zh": "还有几个地方我不确定，问清楚了再动手，免得建错。",
+        "en": "A few things I am not sure about. Better to ask than to guess "
+              "and build the wrong thing.",
+    },
+    "chat_rounds_done": {
+        "zh": "问得差不多了。剩下不清楚的地方我用合理的默认值处理，"
+              "你也可以以后再单独加功能。",
+        "en": "That is enough questions. I will use sensible defaults for "
+              "whatever is still open — you can always add a feature later.",
+    },
+    "chat_skipped": {
+        "zh": "（跳过）",
+        "en": "(skipped)",
+    },
+    "chat_prior_fdr_saved": {
+        "zh": "你原来写的需求已另存为 {name}，没有被覆盖。",
+        "en": "Your previous requirements were saved as {name} — nothing was "
+              "overwritten.",
+    },
+    # The six intake questions, conversational rather than form-shaped.
+    "chat_q_who": {
+        "zh": "这个产品是给谁用的？他们现在是怎么解决这个问题的？",
+        "en": "Who is this for, and how do they solve the problem today?",
+    },
+    "chat_q_actions": {
+        "zh": "用户打开它之后会做什么？按顺序说，越具体越好。",
+        "en": "What does someone do after they open it? In order, as "
+              "specifically as you can.",
+    },
+    "chat_q_must": {
+        "zh": "哪些功能是没有就不能用的？",
+        "en": "Which features would make it unusable if they were missing?",
+    },
+    "chat_q_not_needed": {
+        "zh": "有什么是你想到了、但第一版不做的？写下来能防止系统做多。",
+        "en": "What have you thought of but do NOT want in the first version? "
+              "Naming it stops it being built by mistake.",
+    },
+    "chat_q_constraints": {
+        "zh": "有什么限制或偏好吗？比如只在微信里用、要能发到群里。没有就说没有。",
+        "en": "Any constraints or preferences? Say none if there are none.",
+    },
+    "chat_q_success": {
+        "zh": "怎么算成功？一句能验证的话就行。",
+        "en": "What does success look like? One sentence you could check.",
+    },
 }
 
 
