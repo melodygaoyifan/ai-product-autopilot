@@ -126,6 +126,21 @@ def record_failure(root: Path, exc: BaseException) -> None:
         return  # forensics are best-effort; the founder's page is not
 
 
+def _fdr_fingerprint(text: str) -> str:
+    """Identifies the FDR revision a form was rendered from.
+
+    The textarea POSTs whatever it was loaded with, so anything that changed
+    FDR.md in the meantime — the CLI, a second tab, the conversation, an
+    agent editing the file — was silently overwritten on submit. That is a
+    lost update, and it cost a founder five answered clarify questions: the
+    stale tab put the pre-answer document back and the assessor, seeing no
+    answers, asked the same five questions again.
+    """
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
 def _md(path: Path) -> str:
     return html.escape(path.read_text(encoding="utf-8")) if path.exists() else ""
 
@@ -624,12 +639,37 @@ def create_studio_app(
             request, _("title_describe"),
             f"{question_block}"
             f"<form method=post action=/fdr>"
+            f"<input type=hidden name=base value='{_fdr_fingerprint(current)}'>"
             f"<textarea name=fdr>{html.escape(current)}</textarea>"
             f"<p><button>{_('btn_check_and_plan')}</button></p>"
             f"</form>"
             f"<p><a href='/chat'>{_('chat_switch_to_chat')}</a></p>"
             f"<details><summary class=muted>{_('guide_summary')}"
             f"</summary><pre>{guide}</pre></details>",
+        )
+
+    def _conflict_page(
+        request: Request, submitted: str, on_disk: str
+    ) -> HTMLResponse:
+        """Both versions, and the founder picks. Never a silent merge and
+        never a silent overwrite — the one thing this page must not do is
+        decide on its own which set of words to throw away."""
+        return _render(
+            request, _("title_conflict"),
+            f"<div class=card><b class=warn>{_('conflict_lead')}</b>"
+            f"<p>{_('conflict_hint')}</p></div>"
+            f"<div class=card><b>{_('conflict_on_disk')}</b>"
+            f"<pre>{html.escape(on_disk)}</pre>"
+            "<form method=post action=/fdr>"
+            f"<input type=hidden name=base value='{_fdr_fingerprint(on_disk)}'>"
+            f"<input type=hidden name=fdr value='{html.escape(on_disk)}'>"
+            f"<button>{_('btn_use_on_disk')}</button></form></div>"
+            f"<div class=card><b>{_('conflict_yours')}</b>"
+            f"<pre>{html.escape(submitted)}</pre>"
+            "<form method=post action=/fdr>"
+            "<input type=hidden name=force value=1>"
+            f"<input type=hidden name=fdr value='{html.escape(submitted)}'>"
+            f"<button class=secondary>{_('btn_use_mine')}</button></form></div>",
         )
 
     # ── The conversational intake ────────────────────────────────────────
@@ -796,7 +836,17 @@ def create_studio_app(
         if "fdr" in thinking:
             return _thinking_page(request, thinking["fdr"])
         form = await request.form()
-        (root / "FDR.md").write_text(str(form.get("fdr", "")), encoding="utf-8")
+        submitted = str(form.get("fdr", ""))
+        fdr_path = root / "FDR.md"
+        # Optimistic concurrency: refuse to overwrite an FDR that changed
+        # after this page was rendered. `force` is the founder's explicit
+        # "yes, use mine" from the conflict page.
+        base = str(form.get("base", ""))
+        if base and not form.get("force") and fdr_path.exists():
+            on_disk = fdr_path.read_text(encoding="utf-8")
+            if _fdr_fingerprint(on_disk) != base and on_disk != submitted:
+                return _conflict_page(request, submitted, on_disk)
+        fdr_path.write_text(submitted, encoding="utf-8")
         for stale in ("FDR-QUESTIONS.md",):
             (root / stale).unlink(missing_ok=True)
         from starlette.concurrency import run_in_threadpool

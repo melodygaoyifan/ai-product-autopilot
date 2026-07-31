@@ -787,6 +787,38 @@ STRINGS: dict[str, dict[str, str]] = {
         "zh": "技术细节 / Technical detail",
         "en": "Technical detail",
     },
+    # ── Lost-update guard on the FDR form ────────────────────────────────
+    "title_conflict": {
+        "zh": "需求文档在你编辑期间变过 / The requirements changed while you were editing",
+        "en": "The requirements changed while you were editing",
+    },
+    "conflict_lead": {
+        "zh": "这个页面打开之后，FDR.md 被改过了。",
+        "en": "FDR.md changed after this page was opened.",
+    },
+    "conflict_hint": {
+        "zh": "直接提交会盖掉那些改动，所以先停下来问你一句。两份都在下面，"
+              "你选一份 —— 什么都不会自动丢。",
+        "en": "Submitting would overwrite those changes, so nothing was saved "
+              "yet. Both versions are below — pick one. Nothing is discarded "
+              "automatically.",
+    },
+    "conflict_on_disk": {
+        "zh": "磁盘上现在的版本（较新）",
+        "en": "What is on disk now (newer)",
+    },
+    "conflict_yours": {
+        "zh": "你这个页面里的版本",
+        "en": "What this page had",
+    },
+    "btn_use_on_disk": {
+        "zh": "用磁盘上的这份",
+        "en": "Use the version on disk",
+    },
+    "btn_use_mine": {
+        "zh": "用我页面里的这份（会覆盖）",
+        "en": "Use mine (overwrites)",
+    },
     # ── The conversational intake (studio_chat) ──────────────────────────
     "title_chat": {
         "zh": "一句一句说 / One question at a time",
