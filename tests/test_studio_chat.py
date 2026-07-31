@@ -259,6 +259,22 @@ def test_the_backup_is_not_overwritten_by_a_second_pass(client, workspace):
     ) == handwritten
 
 
+def test_merely_opening_the_page_does_not_commit_you_to_the_conversation(
+    client, workspace
+):
+    """Loading /chat asks question one, which put a turn in the thread. That
+    made the thread look 'started', so a later visit interviewed a founder
+    who already had an FDR instead of offering it back. Only an ANSWER
+    starts a conversation."""
+    client.get("/chat")  # a look around; no answer given
+    (workspace / "FDR.md").write_text("# real\n\nreal content\n", encoding="utf-8")
+
+    page = client.get("/chat").text
+
+    assert "already have a requirements document" in page
+    assert "real content" in page
+
+
 def test_open_questions_become_the_conversation(client, workspace):
     """The whole point: assessor questions left by the form are asked here
     one at a time instead of handed back as a list to merge by hand."""

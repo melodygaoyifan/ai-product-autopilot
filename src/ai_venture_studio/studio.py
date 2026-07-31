@@ -741,15 +741,31 @@ def create_studio_app(
     def _chat_page(request: Request, note: str = "") -> HTMLResponse:
         turns = studio_chat.load_thread(root)
         existing = _written_fdr()
+        # "Started" means an ANSWER exists. A thread holding only a question
+        # nobody replied to is a page that was opened once, and it must not
+        # suppress the offer below — merely looking at the conversation
+        # should not commit you to it.
+        started = bool(studio_chat.pairs(turns))
+        if not started and existing:
+            studio_chat.reset_thread(root)
+            turns = []
         pending = _open_questions() if existing else []
-        if not turns and pending and not request.query_params.get("start"):
+        if not started and pending and not request.query_params.get("start"):
             # Straight into answering them, one at a time — this is exactly
             # the loop the conversation exists to fix.
             studio_chat.append_turn(
                 root, "assistant", pending[0], slot=studio_chat.CLARIFY
             )
             turns = studio_chat.load_thread(root)
-        if not turns and existing and not request.query_params.get("start"):
+        # Only when there is nothing outstanding: unanswered assessor
+        # questions are the more urgent thing to show, and the branch above
+        # has already put the first one in the thread.
+        if (
+            not started
+            and existing
+            and not pending
+            and not request.query_params.get("start")
+        ):
             # Never start interviewing someone about a document they already
             # wrote. Offer it back first; the conversation is the other button.
             return _render(
