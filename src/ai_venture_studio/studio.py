@@ -566,7 +566,8 @@ def create_studio_app(
                 request, _("title_interrupted"),
                 f"<div class=card><b class=warn>{_('interrupted_lead')}"
                 f"</b><ul style='list-style:none;padding-left:0'>"
-                f"{_task_list_html(tasks)}</ul>{done_note}</div>"
+                f"{_task_list_html(tasks)}</ul>{done_note}"
+                f"{_worker_error_block()}</div>"
                 "<form method=post action=/reset style='margin-top:1rem'>"
                 f"<button class=secondary>{_('btn_edit_and_restart')}"
                 "</button></form>",
@@ -779,6 +780,42 @@ def create_studio_app(
             if re.match(r"^\d+\.\s+\S", stripped):
                 found.append(re.sub(r"^\d+\.\s+", "", stripped))
         return found
+
+    def _worker_error_block() -> str:
+        """Why the build stopped, if the detached worker left a reason.
+
+        The worker's traceback goes to .mas/build.log and nowhere the
+        founder looks, so "The build was interrupted" was the whole story
+        for a run that had actually died on a hard, repeatable provider
+        error. Same rule as everywhere else here: plain language first, the
+        real thing one click away.
+        """
+        log = root / ".mas" / "build.log"
+        if not log.exists():
+            return ""
+        try:
+            text = log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        # The last exception line is the one that ended the run; rich draws
+        # a box around the traceback, so prefer a bare `Error: message`.
+        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        headline = next(
+            (
+                line for line in reversed(lines)
+                if re.match(r"^[A-Za-z_.]*(Error|Exception)\b", line)
+            ),
+            "",
+        )
+        if not headline and not lines:
+            return ""
+        tail = "\n".join(lines[-40:])
+        return (
+            f"<p class=bad>{html.escape(headline[:300])}</p>" if headline else ""
+        ) + (
+            f"<details><summary class=muted>{_('failed_detail')}</summary>"
+            f"<pre>{html.escape(tail)}</pre></details>"
+        )
 
     def _chat_page(request: Request, note: str = "") -> HTMLResponse:
         turns = studio_chat.load_thread(root)

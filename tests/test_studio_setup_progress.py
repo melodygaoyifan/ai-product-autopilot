@@ -87,3 +87,51 @@ def test_per_task_steps_still_take_over_once_tasks_exist(building):
 
     assert "the first module" in page
     assert "writing the code (attempt 1 of 3)" in page
+
+
+def test_the_interrupted_page_says_why_the_worker_died(tmp_path):
+    """"The build was interrupted" was the entire story for a run that had
+    died on a hard, repeatable provider error. The traceback was sitting in
+    .mas/build.log, where no founder looks."""
+    import subprocess
+    import sys as _sys
+
+    root = init_workspace(tmp_path / "why", "why", "web")
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "plan.yaml").write_text(yaml.safe_dump({
+        "status": "locked", "brief_title": "x",
+        "tasks": [{"id": "t1", "title": "a module", "estimate_hours": 1}],
+    }), encoding="utf-8")
+    dead = subprocess.Popen([_sys.executable, "-c", ""])
+    dead.wait()
+    (root / ".mas" / "build.pid").write_text(str(dead.pid), encoding="utf-8")
+    (root / ".mas" / "build.log").write_text(
+        "some rich traceback framing\n"
+        "ValueError: Streaming is required for operations that may take "
+        "longer than 10 minutes\n",
+        encoding="utf-8",
+    )
+
+    page = TestClient(create_studio_app(root, provider="mock")).get("/").text
+
+    assert "interrupted" in page.lower()
+    assert "Streaming is required" in page
+    assert "<details>" in page
+
+
+def test_an_interrupted_build_with_no_log_still_renders(tmp_path):
+    import subprocess
+    import sys as _sys
+
+    root = init_workspace(tmp_path / "nolog", "nolog", "web")
+    (root / "product").mkdir(exist_ok=True)
+    (root / "product" / "plan.yaml").write_text(yaml.safe_dump({
+        "status": "locked", "brief_title": "x",
+        "tasks": [{"id": "t1", "title": "a module", "estimate_hours": 1}],
+    }), encoding="utf-8")
+    dead = subprocess.Popen([_sys.executable, "-c", ""])
+    dead.wait()
+    (root / ".mas" / "build.pid").write_text(str(dead.pid), encoding="utf-8")
+
+    page = TestClient(create_studio_app(root, provider="mock")).get("/").text
+    assert "interrupted" in page.lower()

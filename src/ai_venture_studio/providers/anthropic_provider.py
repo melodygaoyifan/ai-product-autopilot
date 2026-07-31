@@ -100,6 +100,15 @@ def _make_client():
     return anthropic.Anthropic(api_key=api_key, auth_token=auth_token)
 
 
+#: Above this many output tokens the request is streamed. The SDK computes
+#: an expected duration from max_tokens and refuses a non-streaming call that
+#: could exceed 10 minutes, so the ceiling is a property of the SDK, not of
+#: our patience. Kept comfortably under the smallest per-model non-streaming
+#: limit rather than tuned to one model's number, because that number is not
+#: ours to depend on.
+_STREAM_ABOVE = 8192
+
+
 @register
 class AnthropicProvider(Provider):
     name = "anthropic"
@@ -124,12 +133,32 @@ class AnthropicProvider(Provider):
         response = None
         for attempt in range(4):
             try:
-                response = client.messages.create(
-                    model=model,
-                    max_tokens=max_tokens,
-                    system=system,
-                    messages=messages,
-                )
+                if max_tokens > _STREAM_ABOVE:
+                    # The SDK REFUSES a non-streaming request whose max_tokens
+                    # implies it could run past 10 minutes — it raises before
+                    # sending anything. The implementer asks for 32000 (it
+                    # writes whole files, and 16384 truncated real builds), so
+                    # every single build call died on
+                    #   ValueError: Streaming is required for operations that
+                    #   may take longer than 10 minutes
+                    # and no task could be built at all. Streaming the big
+                    # calls is the fix the SDK is asking for; the final
+                    # message has the same shape, so everything below is
+                    # unchanged.
+                    with client.messages.stream(
+                        model=model,
+                        max_tokens=max_tokens,
+                        system=system,
+                        messages=messages,
+                    ) as stream:
+                        response = stream.get_final_message()
+                else:
+                    response = client.messages.create(
+                        model=model,
+                        max_tokens=max_tokens,
+                        system=system,
+                        messages=messages,
+                    )
                 break
             except (
                 anthropic.APIStatusError,
