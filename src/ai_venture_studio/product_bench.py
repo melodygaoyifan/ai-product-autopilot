@@ -22,6 +22,7 @@ exactly that.
 from __future__ import annotations
 
 import datetime
+import os
 import subprocess
 import sys
 import tempfile
@@ -38,15 +39,9 @@ _PROBE_TIMEOUT_S = 60
 
 
 def _pid_alive(pid: int) -> bool:
-    import os
+    from ai_venture_studio.procs import pid_alive
 
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True  # exists, owned by someone else
-    return True
+    return pid_alive(pid)
 
 
 def acquire_bench_lock(repo_dir: str | Path = ".") -> Path:
@@ -178,7 +173,10 @@ def workspace_python(workspace: Path) -> str:
     ]
     if not real_deps:
         return sys.executable
-    venv_python = workspace / ".probe-venv" / "bin" / "python"
+    bin_dir, exe = (
+        ("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")
+    )
+    venv_python = workspace / ".probe-venv" / bin_dir / exe
     if venv_python.exists():
         return str(venv_python)
     created = subprocess.run(

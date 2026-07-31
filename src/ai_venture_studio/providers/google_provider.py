@@ -24,9 +24,15 @@ class GoogleProvider(Provider):
         messages: list[dict[str, str]],
         max_tokens: int = 4096,
     ) -> str:
-        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        from ai_venture_studio.secrets import env_or_file
+
+        api_key = env_or_file("GEMINI_API_KEY") or env_or_file("GOOGLE_API_KEY")
         if not api_key:
             raise ProviderError("GEMINI_API_KEY / GOOGLE_API_KEY is not set")
+        base_url = (
+            os.environ.get("GEMINI_BASE_URL")
+            or "https://generativelanguage.googleapis.com"
+        ).rstrip("/")
         contents = [
             {
                 "role": "model" if m["role"] == "assistant" else "user",
@@ -35,7 +41,7 @@ class GoogleProvider(Provider):
             for m in messages
         ]
         response = httpx.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            f"{base_url}/v1beta/models/{model}:generateContent",
             headers={"x-goog-api-key": api_key},
             json={
                 "system_instruction": {"parts": [{"text": system}]},

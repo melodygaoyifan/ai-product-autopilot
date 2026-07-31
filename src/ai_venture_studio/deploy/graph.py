@@ -55,11 +55,10 @@ def resolve_branch(target: str, repo_dir: str) -> str:
     """The branch this review covers: a PR's head branch, or the checked-out
     branch for a local range. Empty when it cannot be determined — callers
     must refuse rather than assume (ADR-031 §mechanism)."""
-    from ai_venture_studio.diff import _PR_URL
-    from ai_venture_studio.github import pr_head_branch
+    from ai_venture_studio import forge
 
-    if _PR_URL.match(target):
-        return pr_head_branch(target) or ""
+    if forge.is_change_request(target):
+        return forge.head_branch(target) or ""
     proc = subprocess.run(  # noqa: S603 — fixed argv
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
         cwd=repo_dir, capture_output=True, text=True, timeout=30,

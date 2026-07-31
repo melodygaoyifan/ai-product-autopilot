@@ -163,9 +163,15 @@ RegistryFetcher = Callable[[str], dict | None]
 
 
 def _pypi_fetcher(name: str) -> dict | None:
+    import os
+
     import httpx
 
-    response = httpx.get(f"https://pypi.org/pypi/{name}/json", timeout=15)
+    # Enterprises route package metadata through an internal mirror
+    # (Artifactory/Nexus expose the same /pypi/<name>/json shape); pypi.org
+    # is often unreachable from inside the perimeter.
+    base = (os.environ.get("AVS_PYPI_JSON_BASE") or "https://pypi.org").rstrip("/")
+    response = httpx.get(f"{base}/pypi/{name}/json", timeout=15)
     if response.status_code == 404:
         return None
     response.raise_for_status()

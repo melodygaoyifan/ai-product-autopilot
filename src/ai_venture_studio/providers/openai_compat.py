@@ -20,6 +20,7 @@ from ai_venture_studio.providers.base import (
 
 class _ChatCompletionsProvider(Provider):
     base_url: str
+    base_url_env: str
     api_key_env: str
 
     def chat(
@@ -30,7 +31,13 @@ class _ChatCompletionsProvider(Provider):
         messages: list[dict[str, str]],
         max_tokens: int = 4096,
     ) -> str:
-        api_key = os.environ.get(self.api_key_env)
+        from ai_venture_studio.secrets import env_or_file
+
+        # base_url_env lets an enterprise LLM gateway or an on-prem
+        # OpenAI-compatible server (vLLM, NIM) front this seat; the key may
+        # arrive as a mounted-file secret (NAME_FILE).
+        base_url = (os.environ.get(self.base_url_env) or self.base_url).rstrip("/")
+        api_key = env_or_file(self.api_key_env)
         if not api_key:
             raise ProviderError(f"{self.api_key_env} is not set")
         # gpt-5 / o-series reject the legacy max_tokens param; older models
@@ -49,7 +56,7 @@ class _ChatCompletionsProvider(Provider):
         response = None
         for attempt in params:
             response = httpx.post(
-                f"{self.base_url}/chat/completions",
+                f"{base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={**payload, attempt: max_tokens},
                 timeout=120,
@@ -86,6 +93,7 @@ def _record_usage(provider: str, model: str, usage: dict) -> None:
 class OpenAIProvider(_ChatCompletionsProvider):
     name = "openai"
     base_url = "https://api.openai.com/v1"
+    base_url_env = "OPENAI_BASE_URL"  # the OpenAI SDK's own convention
     api_key_env = "OPENAI_API_KEY"
 
 
@@ -93,4 +101,5 @@ class OpenAIProvider(_ChatCompletionsProvider):
 class XAIProvider(_ChatCompletionsProvider):
     name = "xai"
     base_url = "https://api.x.ai/v1"
+    base_url_env = "XAI_BASE_URL"
     api_key_env = "XAI_API_KEY"

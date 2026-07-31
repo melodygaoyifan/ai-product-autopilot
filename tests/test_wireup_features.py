@@ -108,3 +108,23 @@ def test_feature_fdr_builds_against_existing_product(tmp_path):
     assert (newest / "REPORT.md").exists()
     # Existing product file untouched.
     assert (root / "existing.py").read_text() == "# existing product code\n"
+
+
+def test_route_scan_ignores_filesystem_paths_in_heuristics(tmp_path):
+    """Brownfield repos compare strings against /usr, /opt, /dev all over;
+    those are paths on disk, not an HTTP surface (seen adopting a real data
+    pipeline: /usr/bin/env and /opt/homebrew reported as routes)."""
+    from ai_venture_studio.tools.wireup import collect_routes
+
+    (tmp_path / "pipeline.py").write_text(
+        'if sys.executable.startswith("/opt/homebrew"): ...\n'
+        'if path == "/dev/shm": ...\n'
+        'if p.startswith("/usr/lib"): ...\n'
+        'if request.path.startswith("/api/outputs"): ...\n'
+        '@app.get("/api/health")\ndef health(): ...\n'
+    )
+    routes = collect_routes(tmp_path)
+    assert ("api", "health") in routes
+    assert ("api", "outputs") in routes  # hand-rolled router still counts
+    first_segments = {r[0] for r in routes if r}
+    assert first_segments.isdisjoint({"opt", "dev", "usr"})

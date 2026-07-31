@@ -4,6 +4,163 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## Unreleased — the enterprise you actually work at: GitLab, Bedrock, a proxy
+
+Started by adopting one real enterprise data-pipeline repo (a BigQuery
+spend optimizer on self-managed GitLab), then generalized from research
+across the enterprise landscape — forge market reality, how enterprises
+actually reach model APIs, what security questionnaires ask, and what
+breaks behind TLS-inspecting proxies — so the fixes fit the scenario,
+not the single example.
+
+- **GitLab is a first-class forge.** Every `gh` side effect — PR comments,
+  HITL issues, fix-PRs, head-branch lookup, diff acquisition, the
+  policy-gated merge — now routes through a forge seam (`forge.py`) that
+  dispatches on the target's URL shape: `/pull/<n>` → `gh` (github.com and
+  GitHub Enterprise Server), `/-/merge_requests/<n>` → `glab` (gitlab.com
+  and self-managed, subgroups included). The ADR-031 posture carries over
+  verbatim: no `--admin`, no force flags, merge reachable only through
+  `automation.evaluate_merge`. `avs review <MR-URL>` now works where
+  enterprises actually host code.
+- **The model door matches enterprise network reality.**
+  `AVS_ANTHROPIC_MODE=bedrock|vertex` routes the same Messages API through
+  AWS Bedrock or GCP Vertex; an internal LLM gateway authenticates with
+  `ANTHROPIC_AUTH_TOKEN` (+ SDK-native `ANTHROPIC_BASE_URL`). Every door
+  errors loudly on missing credentials — no silent fallback between doors.
+- **`avs map` no longer reports the filesystem as an HTTP surface.** The
+  hand-rolled-router heuristics (`path == "/..."`, `startswith("/...")`)
+  matched filesystem-path literals all over brownfield code; mapping the
+  pilot repo reported `/usr/bin/env` and `/opt/homebrew` as routes — a
+  scanner that cannot be trusted on first contact. Heuristic matches whose
+  first segment is a Unix/macOS filesystem root are now screened out;
+  decorator-declared routes are untouched.
+- **The perimeter that cannot expose an endpoint still gets reviews.**
+  `avs review --from-ci` derives the target from the pipeline's own
+  predefined variables (GitLab CI merge-request pipelines, GitHub Actions
+  pull_request events) — the pattern locked-down enterprises actually use
+  instead of webhooks. `avs serve` grew a `/webhook/gitlab` route
+  (constant-time `X-Gitlab-Token` check — GitLab's design is a shared
+  secret, not an HMAC; `update` events trigger only when they carry new
+  commits, so metadata edits don't spam the MR). Azure DevOps and
+  Bitbucket PR URLs are recognized and refused by name instead of falling
+  through to `git diff` on a URL; CodeCommit (closed to new customers
+  2024) is deliberately out.
+- **The model door matches all four enterprise routes.**
+  `AVS_ANTHROPIC_MODE=foundry` adds Microsoft Foundry (Azure) beside
+  bedrock/vertex — model IDs stay platform-native and verbatim (ARNs and
+  deployment names cannot be derived, so no auto-translation is
+  attempted). The cross-family voter seats re-point too:
+  `OPENAI_BASE_URL` (also the on-prem vLLM/NIM door), `XAI_BASE_URL`,
+  `GEMINI_BASE_URL`.
+- **Secrets can live in mounts, not process environments.** Every
+  provider key and `secret://` reference accepts the Docker/K8s
+  `<VAR>_FILE` convention; a configured mount that cannot be read errors
+  loudly instead of running half-armed.
+- **Egress is enumerated, and quieter.** The procurement pack gains
+  [network-egress.md](editions/enterprise/procurement/network-egress.md)
+  — every outbound host with the env var that re-points or disables it.
+  The slopsquat check honors an internal PyPI mirror
+  (`AVS_PYPI_JSON_BASE`), semgrep runs with `--metrics=off` and a
+  pinnable local config (`AVS_SEMGREP_CONFIG`), and playwright moved to
+  an opt-in `[screenshots]` extra so the base install never wants a
+  browser download a firewall will block.
+- **The Studio can be evaluated air-gapped, and its build worker no
+  longer dies silently.** `avs studio --provider mock` walks the whole
+  founder flow — clarify, plan confirmation, build with per-task
+  narration, review, report — offline with a canned product. Found by
+  driving the UI in a real browser: the Studio accepted a provider
+  internally but the CLI never exposed it, and the spawned build worker
+  didn't inherit it — a mock Studio spawned a build that wanted a real
+  key and died with its output in DEVNULL, silently returning the
+  founder to the confirm page. The worker now inherits the provider and
+  writes `.mas/build.log`, so a worker that dies before the report
+  leaves forensics.
+- **`enterprise-web` joins the profile set** — the web profile plus the
+  constraints an IT/security review actually asks about: append-only
+  audit records on every state-changing action, `/api/health` for the
+  load balancer, env-only configuration with `<VAR>_FILE` secret mounts,
+  versioned JSON contracts for named integration consumers, and a
+  no-node-assumed frontend stance. It reuses web's block library;
+  add-only like every profile (edition_lint posture).
+- **The founder's journey no longer ends at "works in this folder" — the
+  production loop is in the Studio.** *Take it live* (`/live`): the exact
+  boot command every verification used, the persistence story (local DB /
+  the SERVICES.md cloud steps, generated on click), the deploy boundary
+  stated where the button would be (avs never deploys on its own —
+  ADR-031), an is-it-answering-now probe with a remembered last check,
+  and the sweep role's housekeeping digest in plain language. *Is it
+  broken?* on the product page: a founder sentence becomes a real
+  incident — same Incident model, same triage/root-cause MAS, same
+  artifacts as `avs triage` — reported back in plain language
+  ("A likely cause was found" / "This needs a human"), with a one-click
+  fix attempt whose click IS the human approval and whose change
+  re-enters review like any PR. Found while wiring it: the probe ran on
+  the event loop (a slow URL froze every Studio page — moved to the
+  threadpool), and the studio wireup drift test caught two forms that
+  rendered in no walked state.
+- **`avs preflight` and the enterprise journey as a fixture.** The
+  Ready-to-build check exists in the terminal too (`--strict` exits 1 on
+  any gap — a pipeline can gate on enterprise readiness before spending
+  a token), and the whole enterprise journey — adopt-with-gate-owner,
+  readiness starter, substrate declaration, posture transitions,
+  preflight truth-telling, every dashboard card — is pinned end-to-end
+  in CI against a miniature of the real pilot repo (data-pipeline
+  modules, FastAPI surface, filesystem-path traps, GitLab CI, an
+  operator-owned CLAUDE.md), so enterprise mode cannot rot against
+  exactly the kind of repo it was built for.
+- **Enterprise mode opens with "Ready to build?"** — a six-row preflight
+  read live from the environment, git config, the forge CLI's own auth
+  check, and the workspace: model credential (mock escape hatch named),
+  git identity, forge authentication, governance (edition + named gate
+  owner), substrate declaration, Studio access posture. Ready rows show
+  what was found; gaps show the exact fix command.
+- **The Studio can be deployed for a team, fail-closed.**
+  `AVS_STUDIO_TOKEN` (env or `_FILE` secret mount) gates every request —
+  open `/?token=…` once, a cookie keeps the session; `avs studio --host`
+  exists now and **refuses** a non-loopback bind without the token. The
+  CSRF origin guard compares against the request's own host instead of
+  hardcoded localhost (which would have rejected every form POST the
+  moment the Studio served on a corp hostname). A deployment
+  `Dockerfile` ships (non-root, git-only, fail-closed default command;
+  not yet CI-built) plus the RUNBOOK's run-it-as-a-service section
+  (docker + systemd, volume/backup note, OIDC-reverse-proxy as the SSO
+  path — the token stays a shared secret by design).
+- **The enterprise loop closes in the Studio: incidents from anywhere,
+  evidence in one click, Gate 5 on the dashboard, housekeeping on
+  demand.** The incident front door now also lives on /live (an adopted
+  brownfield repo has no product page — and the substrate ladder's
+  refusal renders in place when maintenance is below floor). The review
+  timeline gained *Export the Gate-R evidence bundle* — same artifact as
+  `avs evidence-bundle`, one click from the review it attests; a human
+  still attaches it, the Studio never submits anything. The enterprise
+  panel gained a Deploy reviews (Gate 5) card reading the same mirrors
+  `avs deploy-review` writes — recommendations, never executions. And
+  the housekeeping card gained *Run a housekeeping check*: the identical
+  sweep pass as `avs sweep`, report-only at SW0, clean passes recorded.
+- **Enterprise mode is a governance dashboard, not four dead ends.**
+  Grounded in how mature enterprise consoles actually work (SonarQube's
+  verdict-first gates, GitHub security overview's explicit "not enabled"
+  state, Renovate's what-we-found onboarding) and tested by adopting a
+  real 39k-line enterprise data-pipeline repo: a **posture line** now
+  answers first — measured / not-yet-configured / needs-attention, and
+  unmeasured never renders green; a **Model door & egress card** answers
+  the security reviewer's first questions on screen (which provider mode,
+  authenticated how — presence only, never a value — which forge,
+  telemetry-sends-nothing, workspace spend from the ledger); a
+  **Codebase card** renders the `avs map` comprehension report so a
+  brownfield adoption's first screen proves the tool read the repo;
+  empty states carry the exact command, what it changes, and the
+  feedback loop ("this page re-reads the workspace on every reload");
+  the governance card names the gate owner, not just the rule; and
+  `init --adopt` now points at readiness/review/studio instead of
+  telling a brownfield team to write a spec for a product that already
+  exists. The Studio also stopped 404ing its own favicon.
+- **Windows can't be killed by a health check anymore.** `os.kill(pid, 0)`
+  liveness probes — which on Windows *terminate* the probed process —
+  went through a cross-platform `procs.pid_alive`, worker detachment
+  gained a Windows path, and the probe venv resolves `Scripts/` as well
+  as `bin/`.
+
 ## v0.60.0 — a run that says what it is doing, and a failure that says why
 
 Diagnosed from the durable bench scoreboard (`benchmarks/results/`), where

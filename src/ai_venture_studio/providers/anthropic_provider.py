@@ -10,6 +10,96 @@ from ai_venture_studio.providers.base import (
 )
 
 
+def _make_client():
+    """Direct API by default; AVS_ANTHROPIC_MODE=bedrock|vertex|foundry
+    routes the same Messages API through AWS Bedrock, GCP Vertex, or
+    Microsoft Foundry — the doors enterprises actually have. Model IDs are
+    platform-native and passed verbatim (Bedrock inference profiles, Vertex
+    @-versioned IDs, Foundry deployment names) — auto-translation cannot
+    express ARNs or custom deployment names, so none is attempted. Every
+    mode errors loudly on missing credentials rather than running
+    half-armed; nothing here is a silent fallback to a different provider."""
+    import anthropic
+
+    from ai_venture_studio.secrets import env_or_file
+
+    mode = os.environ.get("AVS_ANTHROPIC_MODE", "direct").strip().lower() or "direct"
+    if mode == "bedrock":
+        try:
+            return anthropic.AnthropicBedrock()
+        except Exception as exc:
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=bedrock but the Bedrock client could not "
+                f"start ({exc}). Install `anthropic[bedrock]` and provide AWS "
+                "credentials (env/instance profile) with bedrock:InvokeModel; "
+                "profiles must name Bedrock model IDs (anthropic.claude-* / "
+                "region-prefixed variants)."
+            ) from exc
+    if mode == "vertex":
+        if not (
+            os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID")
+            and os.environ.get("CLOUD_ML_REGION")
+        ):
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=vertex requires ANTHROPIC_VERTEX_PROJECT_ID "
+                "and CLOUD_ML_REGION"
+            )
+        try:
+            return anthropic.AnthropicVertex()
+        except Exception as exc:
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=vertex but the Vertex client could not "
+                f"start ({exc}). Install `anthropic[vertex]` and authenticate "
+                "with Application Default Credentials."
+            ) from exc
+    if mode == "foundry":
+        if not hasattr(anthropic, "AnthropicFoundry"):
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=foundry needs an anthropic SDK with "
+                "AnthropicFoundry — upgrade the `anthropic` package"
+            )
+        if not (
+            env_or_file("ANTHROPIC_FOUNDRY_API_KEY")
+            and (
+                os.environ.get("ANTHROPIC_FOUNDRY_RESOURCE")
+                or os.environ.get("ANTHROPIC_FOUNDRY_BASE_URL")
+            )
+        ):
+            raise ProviderError(
+                "AVS_ANTHROPIC_MODE=foundry requires ANTHROPIC_FOUNDRY_API_KEY "
+                "and ANTHROPIC_FOUNDRY_RESOURCE (or ANTHROPIC_FOUNDRY_BASE_URL); "
+                "the model field is your Foundry deployment name"
+            )
+        try:
+            return anthropic.AnthropicFoundry(
+                api_key=env_or_file("ANTHROPIC_FOUNDRY_API_KEY")
+            )
+        except Exception as exc:
+            raise ProviderError(
+                f"AVS_ANTHROPIC_MODE=foundry but the Foundry client could "
+                f"not start ({exc})"
+            ) from exc
+    if mode != "direct":
+        raise ProviderError(
+            f"unknown AVS_ANTHROPIC_MODE {mode!r}; "
+            "expected direct|bedrock|vertex|foundry"
+        )
+    # ANTHROPIC_AUTH_TOKEN covers enterprise LLM gateways (bearer auth), the
+    # SDK honors ANTHROPIC_BASE_URL natively so a proxy needs no code, and
+    # *_FILE variants cover K8s/Docker secret mounts.
+    api_key = env_or_file("ANTHROPIC_API_KEY")
+    auth_token = env_or_file("ANTHROPIC_AUTH_TOKEN")
+    if not (api_key or auth_token):
+        raise ProviderError(
+            "ANTHROPIC_API_KEY is not set (a gateway bearer token via "
+            "ANTHROPIC_AUTH_TOKEN also works, and either accepts a mounted "
+            "secret via ANTHROPIC_API_KEY_FILE / ANTHROPIC_AUTH_TOKEN_FILE; "
+            "set AVS_ANTHROPIC_MODE=bedrock|vertex|foundry to route through "
+            "AWS, GCP, or Azure instead)"
+        )
+    return anthropic.Anthropic(api_key=api_key, auth_token=auth_token)
+
+
 @register
 class AnthropicProvider(Provider):
     name = "anthropic"
@@ -22,13 +112,11 @@ class AnthropicProvider(Provider):
         messages: list[dict[str, str]],
         max_tokens: int = 4096,
     ) -> str:
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            raise ProviderError("ANTHROPIC_API_KEY is not set")
         import time
 
         import anthropic
 
-        client = anthropic.Anthropic()
+        client = _make_client()
         # Transient-error resilience at the ADAPTER layer: overload/rate
         # limits retry with backoff here, so every direct .complete() call
         # site (writers, critics, implementer) inherits it — a 529 killed

@@ -12,7 +12,6 @@ dependencies = [
     "fastapi>=0.139.2",
     "langgraph>=1.0,<2",
     "langgraph-checkpoint-sqlite>=3.1.0",
-    "playwright>=1.61.0",
     "pydantic>=2",
     "python-multipart>=0.0.32",
     "pyyaml>=6.0.3",
@@ -30,6 +29,15 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Build Tools",
+]
+
+[project.optional-dependencies]
+# Build-report screenshots are the only playwright consumer, and they
+# already skip visibly when it is absent. Keeping it out of the base
+# install matters behind enterprise firewalls, where the post-install
+# browser download is blocked and a hard dependency would look broken.
+screenshots = [
+    "playwright>=1.61.0",
 ]
 
 [project.urls]

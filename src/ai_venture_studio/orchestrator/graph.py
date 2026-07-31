@@ -26,7 +26,7 @@ import yaml as yaml_lib
 from langgraph.graph import END, StateGraph
 from langgraph.types import Command, interrupt
 
-from ai_venture_studio import github, render, testing
+from ai_venture_studio import forge, render, testing
 
 from ai_venture_studio import leader as leader_mod
 from ai_venture_studio import scoring, verify
@@ -276,7 +276,7 @@ def escalate_node(state: ReviewState) -> dict[str, Any]:
         target=state["target"],
         resume_hint=resume_hint,
     )
-    issue_url, note = github.create_issue(
+    issue_url, note = forge.create_issue(
         state.get("repo_dir", "."),
         f"[autoproduct] {result.verdict.value}: review {state['review_id']}",
         body,
@@ -370,7 +370,7 @@ def post_node(
     if banners:
         comment = "> " + "\n> ".join(banners) + "\n\n" + comment
     (mirror.dir / "review.md").write_text(comment, encoding="utf-8")
-    comment_note = github.post_pr_comment(state["target"], comment)
+    comment_note = forge.post_comment(state["target"], comment)
     mirror.write(
         "final",
         {

@@ -90,7 +90,12 @@ def test_every_profile_specs_and_builds(tmp_path, profile):
 
 
 def test_the_profile_set_is_what_the_docs_claim():
-    assert set(available_profiles()) == {"web", "miniprogram", "app", "game", "data"}
+    # enterprise-web (2026-07): the web profile plus the governance
+    # constraints an IT/security review asks about — audit records,
+    # /api/health, env-only config, versioned integration endpoints.
+    assert set(available_profiles()) == {
+        "web", "miniprogram", "app", "game", "data", "enterprise-web",
+    }
 
 
 # --- every edition -----------------------------------------------------------

@@ -142,6 +142,28 @@ def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
     pages.append(client.get("/review/rev-wire").text)
     pages.append(client.get("/?mode=enterprise").text)
 
+    # 9. The production loop (v0.61): Take-it-live page and the incident
+    # triage result — both render forms of their own (/live/guide,
+    # /live/probe, /incident/fix), so they are states too. The incident
+    # needs a correlatable commit so the mock proposes a root cause and
+    # the fix form actually renders.
+    if not (root / ".git").exists():
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    (root / "app").mkdir(exist_ok=True)
+    (root / "app" / "main.py").write_text("def main(): ...\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-qm", "handle TypeError in app main"],
+        cwd=root, check=True,
+    )
+    pages.append(client.get("/live").text)
+    pages.append(
+        client.post("/incident", data={
+            "description": "TypeError in app main since the latest change.",
+        }).text
+    )
+
     refs: dict[str, list[tuple[str, str]]] = {"POST": [], "GET": []}
     for page in pages:
         for path in _FORM_ACTION.findall(page):

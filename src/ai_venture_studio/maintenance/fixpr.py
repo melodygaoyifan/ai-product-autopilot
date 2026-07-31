@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from ai_venture_studio import github
+from ai_venture_studio import forge
 from ai_venture_studio.maintenance.review import Incident, RootCauseResult
 from ai_venture_studio.providers import get_provider
 from ai_venture_studio.testing import (
@@ -203,22 +203,20 @@ def generate_fix_pr(
             if regression_path
             else ""
         )
-        ok, output = github._gh(
-            ["pr", "create", "--head", branch,
-             "--title", f"[avs fix] {incident.title[:80]}",
-             "--body",
-             f"Automated fix proposal for incident `{incident.id}`.\n\n"
-             f"**Hypothesis** ({root_cause.confidence}% confidence): "
-             f"{root_cause.hypothesis}\n\nSuite passed in the fix worktree."
-             f"{regression_line}\n\nThis PR re-enters code review like any other.\n\n"
-             "🤖 Generated with [Claude Code](https://claude.com/claude-code)"],
-            cwd=str(repo),
+        ok, output = forge.create_change_request(
+            str(repo), branch,
+            f"[avs fix] {incident.title[:80]}",
+            f"Automated fix proposal for incident `{incident.id}`.\n\n"
+            f"**Hypothesis** ({root_cause.confidence}% confidence): "
+            f"{root_cause.hypothesis}\n\nSuite passed in the fix worktree."
+            f"{regression_line}\n\nThis PR re-enters code review like any other.\n\n"
+            "🤖 Generated with [Claude Code](https://claude.com/claude-code)",
         )
         return FixAttempt(
             status="opened" if ok else "branch_only",
             branch=branch,
             pr_url=output.splitlines()[-1].strip() if ok else None,
-            detail="" if ok else f"branch pushed; gh pr create failed: {output[:120]}",
+            detail="" if ok else f"branch pushed; PR/MR create failed: {output[:120]}",
             files_changed=[f["path"] for f in files],
             regression_test=regression_path,
             regression_note=regression_note,

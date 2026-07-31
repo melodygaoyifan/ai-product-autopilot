@@ -8,6 +8,7 @@ pre-existing debt is not this PR's finding.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -45,8 +46,15 @@ def semgrep(diff: ParsedDiff, repo_dir: str) -> ToolReport:
     py_files = [p for p in diff.changed_files if Path(repo_dir, p).exists()]
     if not py_files:
         return ToolReport(tool="semgrep", status="ok", detail="no existing changed files")
+    # `--config auto` fetches rules from (and reports metrics to) the
+    # semgrep.dev registry. AVS_SEMGREP_CONFIG lets an enterprise pin a
+    # local ruleset path or an internal mirror, and metrics stay off either
+    # way — a review tool has no business phoning home.
+    config = os.environ.get("AVS_SEMGREP_CONFIG") or "auto"
     stdout, stderr = _run_json(
-        ["semgrep", "--config", "auto", "--json", "--quiet", *py_files], repo_dir
+        ["semgrep", "--config", config, "--metrics=off", "--json", "--quiet",
+         *py_files],
+        repo_dir,
     )
     if not stdout:
         return ToolReport(tool="semgrep", status="error", detail=stderr[:300])

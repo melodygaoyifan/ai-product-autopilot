@@ -18,6 +18,7 @@ voters fall back visibly without them).
 | `avs compound [--pr]` | Weekly signal aggregation → CLAUDE.md proposal |
 | `avs serve` | Webhook mode (needs `AUTOPRODUCT_WEBHOOK_SECRET`) |
 | `avs readiness` | Substrate-ladder report (docs 18–19): active stages at the declared rung, what each missing rung unlocks |
+| `avs preflight [--strict]` | Ready to build? — the six live checks the enterprise Studio card renders (model credential, git identity, forge auth, governance, substrate, Studio access) + the posture line; `--strict` exits 1 on any gap, so a pipeline can gate on readiness |
 | `avs evidence-bundle <review-id>` | Export the Gate-R evidence bundle (unsigned v0) for CAB/change-control submission |
 | `avs toolchain <language> [--manifest seeded.yaml]` | Run a language lane's det_tools slots (skipped = loud, never clean); with a seeded-defect manifest, measure catch-rate and register (or label PROVISIONAL) |
 | `avs calibrate <language>` | Calibrate seeded-lane patterns against real scanners; per-defect report with actual slot output for each miss (run via `make calibrate`) |
@@ -167,6 +168,102 @@ accidental:
 Provider keys live in the environment only. If a key may have leaked,
 rotate it at the provider console and update `~/.zshrc` (or your secret
 store); nothing under `.mas/` or git should ever contain one.
+
+## Enterprise environments (GitLab, Bedrock/Vertex/Foundry, gateways, air-gap)
+
+**Forge.** Review targets can be GitHub PR URLs (github.com or GitHub
+Enterprise Server, via `gh`) or GitLab MR URLs (gitlab.com or self-managed,
+via `glab`) — `.../-/merge_requests/<n>` URLs dispatch to `glab`
+automatically, subgroups included. Comments, HITL issues, fix-MRs, merges
+(still policy-gated per ADR-031), and diff acquisition all follow the
+target's forge; authenticate the matching CLI (`gh auth login` /
+`glab auth login --hostname <your-host>`) first. Azure DevOps and
+Bitbucket PR URLs are *recognized and refused by name* — supporting them
+is open work, and the refusal names the workaround (review the local
+range). AWS CodeCommit closed to new customers in 2024 and is
+deliberately not on the roadmap.
+
+**Three entry points, most-locked-down first:**
+
+1. **CI job (no webhook, no inbound surface)** — `avs review --from-ci`
+   inside a GitLab CI merge-request pipeline (`rules: if:
+   $CI_PIPELINE_SOURCE == "merge_request_event"`) or a GitHub Actions
+   `pull_request` job derives the target from the CI's own predefined
+   variables. This is the pattern for perimeters that cannot expose an
+   endpoint at all.
+2. **Webhooks** — `avs serve` accepts GitHub `pull_request` events at
+   `/webhook/github` (HMAC `X-Hub-Signature-256`) and GitLab
+   `merge_request` events at `/webhook/gitlab` (constant-time
+   `X-Gitlab-Token` check; `open`/`reopen`/`update`-with-new-commits
+   trigger, metadata edits do not). Both share
+   `AUTOPRODUCT_WEBHOOK_SECRET` or per-tenant secrets.
+3. **CLI** — `avs review <PR-or-MR-URL | git-range>` from any machine
+   with the forge CLI authenticated.
+
+**Model door.** Direct API is the default; `AVS_ANTHROPIC_MODE` selects
+the enterprise routes. Model IDs are platform-native, passed verbatim
+(Bedrock inference profiles/ARNs, Vertex `@`-versioned IDs, Foundry
+deployment names) — put the platform's ID in your profile's model fields.
+
+| Env | Effect |
+|---|---|
+| `ANTHROPIC_API_KEY` | direct API (default) |
+| `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` | enterprise LLM gateway (LiteLLM-style Anthropic passthrough), bearer auth |
+| `AVS_ANTHROPIC_MODE=bedrock` | AWS Bedrock (`pip install 'anthropic[bedrock]'`, AWS credential chain; `ANTHROPIC_BEDROCK_BASE_URL` honored by the SDK) |
+| `AVS_ANTHROPIC_MODE=vertex` + `ANTHROPIC_VERTEX_PROJECT_ID` + `CLOUD_ML_REGION` | GCP Vertex (`pip install 'anthropic[vertex]'`, ADC; `ANTHROPIC_VERTEX_BASE_URL` honored) |
+| `AVS_ANTHROPIC_MODE=foundry` + `ANTHROPIC_FOUNDRY_API_KEY` + `ANTHROPIC_FOUNDRY_RESOURCE` | Microsoft Foundry (Azure); model = your deployment name |
+
+The optional cross-family voter seats re-point the same way:
+`OPENAI_BASE_URL` (also the door to on-prem vLLM/NIM OpenAI-compatible
+serving), `XAI_BASE_URL`, `GEMINI_BASE_URL`. Every mode errors loudly on
+missing credentials; there is no silent fallback between doors.
+
+**Secrets.** Every provider key and `secret://` reference also accepts
+the Docker/K8s mounted-file convention: `ANTHROPIC_API_KEY_FILE=/run/secrets/key`
+reads the mounted file instead of requiring the value in the process
+environment. A configured `*_FILE` that cannot be read errors loudly.
+
+**Network.** All HTTP clients honor `HTTPS_PROXY`/`NO_PROXY` and
+`SSL_CERT_FILE` (TLS-inspection CAs) — nothing sets `verify=False`. The
+complete outbound-host list, with the env var that re-points or disables
+each, is the procurement pack's
+[network-egress.md](editions/enterprise/procurement/network-egress.md):
+internal PyPI mirror via `AVS_PYPI_JSON_BASE`, pinned local semgrep
+rules via `AVS_SEMGREP_CONFIG` (metrics always off), screenshots as an
+opt-in extra (`pip install 'ai-venture-studio[screenshots]'`) so the
+base install never wants a browser download. `--provider mock` exercises
+the full pipeline with zero model egress.
+
+**Run it as a service.** The repo ships a `Dockerfile` (Studio by
+default, `avs serve` for webhook mode). Non-loopback Studio binds are
+fail-closed: `--host 0.0.0.0` refuses to start without
+`AVS_STUDIO_TOKEN` (env or `AVS_STUDIO_TOKEN_FILE` secret mount), and
+with it every request needs the token — open `/?token=<value>` once and
+a cookie keeps the session. The token is a shared secret by design; for
+SSO, put an OIDC reverse proxy (oauth2-proxy-class) in front and keep
+the token as the proxy-to-studio hop. State is the workspace directory
+(`.mas/` inside it) — mount it as a volume and back it up; one Studio
+process per workspace (single-instance supervision; the Celery
+multi-instance upgrade path is documented in server.py). Bare-metal
+equivalent:
+
+```ini
+# /etc/systemd/system/avs-studio.service
+[Service]
+User=avs
+WorkingDirectory=/srv/team-workspace
+Environment=AVS_STUDIO_TOKEN_FILE=/etc/avs/studio-token
+Environment=ANTHROPIC_API_KEY_FILE=/etc/avs/anthropic-key
+ExecStart=/usr/local/bin/avs studio . --host 0.0.0.0 --port 8433
+Restart=on-failure
+```
+
+**Windows.** Process-liveness probes and worker detachment are
+cross-platform (`procs.pid_alive`; no bare `os.kill(pid, 0)` — on
+Windows that terminates the probed process). A dev *clone* uses repo
+symlinks and wants Developer Mode; installed wheels have no such
+requirement. Windows CI is not yet part of the matrix — treat Windows
+server mode as supported-by-construction, verified-on-request.
 
 ## Quick-tunnel webhook (dogfood setup)
 

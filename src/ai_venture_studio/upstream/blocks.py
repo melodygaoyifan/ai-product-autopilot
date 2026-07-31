@@ -40,7 +40,9 @@ _MIN_SIMILARITY = 0.08
 
 
 def list_blocks(profile: str) -> list[str]:
-    prefix = "web/" if profile == "web" else f"{profile}/"
+    # enterprise-web is the web profile plus governance constraints — it
+    # reuses web's block library rather than starting an empty one.
+    prefix = "web/" if profile in ("web", "enterprise-web") else f"{profile}/"
     return sorted(k for k in _KEYWORDS if k.startswith(prefix))
 
 

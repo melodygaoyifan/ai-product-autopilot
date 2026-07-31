@@ -32,7 +32,11 @@ def _root() -> None:
 
 @app.command()
 def review(
-    target: str = typer.Argument(..., help="GitHub PR URL or git range (e.g. main...HEAD)"),
+    target: str = typer.Argument(
+        None,
+        help="GitHub PR / GitLab MR URL or git range (e.g. main...HEAD); "
+        "omit with --from-ci",
+    ),
     repo_dir: str = typer.Option(".", help="Repository to review in"),
     skills_dir: str = typer.Option(str(_DEFAULT_SKILLS), help="Voter skills directory"),
     mode: str = typer.Option(None, help="Override mode: fast | standard | deep"),
@@ -41,7 +45,39 @@ def review(
         help="Force one provider for all voters (e.g. 'mock' for offline runs; "
         "heterogeneity is the default posture)",
     ),
+    from_ci: bool = typer.Option(
+        False, "--from-ci",
+        help="Derive the target from CI predefined variables (GitLab CI "
+        "merge-request pipelines, GitHub Actions pull_request events) — "
+        "the webhook-less entry point for locked-down networks",
+    ),
 ):
+    from ai_venture_studio.ci import CITargetError, detect_ci_target
+    from ai_venture_studio.forge import recognize_unsupported
+
+    if from_ci:
+        if target is not None:
+            console.print("[red]--from-ci derives the target; do not pass one[/red]")
+            raise typer.Exit(code=2)
+        try:
+            target = detect_ci_target()
+        except CITargetError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
+        console.print(f"[dim]CI target: {target}[/dim]")
+    elif target is None:
+        console.print("[red]a target is required (or pass --from-ci in a pipeline)[/red]")
+        raise typer.Exit(code=2)
+    unsupported = recognize_unsupported(target)
+    if unsupported:
+        # A recognized-but-unsupported forge must fail here, loudly — the
+        # fallthrough would hand the URL to `git diff` and produce garbage.
+        console.print(
+            f"[red]{unsupported} pull-request URLs are recognized but not "
+            "yet supported; review the local range instead "
+            "(avs review origin/<target-branch>...HEAD)[/red]"
+        )
+        raise typer.Exit(code=2)
     # Substrate ladder guard (ADR-U15): no-op unless the workspace declares
     # .mas/substrate-profile.yaml; below-floor stages refuse loudly.
     try:
@@ -232,20 +268,18 @@ def compound(
     if push.returncode != 0:
         console.print(f"[yellow]push failed: {push.stderr.strip()[:200]}[/yellow]")
         raise typer.Exit(code=1)
-    created = subprocess.run(
-        [
-            "gh", "pr", "create",
-            "--title", f"[compound] CLAUDE.md constraints — {date}",
-            "--body", report + "\n\n🤖 opened by the avs compounding loop",
-        ],
-        cwd=repo_dir, capture_output=True, text=True,
+    from ai_venture_studio import forge
+
+    ok, output = forge.create_change_request(
+        repo_dir, branch,
+        f"[compound] CLAUDE.md constraints — {date}",
+        report + "\n\n🤖 opened by the avs compounding loop",
     )
-    output = (created.stdout or created.stderr).strip()
     git("checkout", "-")
-    if created.returncode != 0:
-        console.print(f"[yellow]gh pr create failed: {output[:200]}[/yellow]")
+    if not ok:
+        console.print(f"[yellow]PR/MR create failed: {output[:200]}[/yellow]")
         raise typer.Exit(code=1)
-    console.print(output.splitlines()[-1] if output else "(no gh output)")
+    console.print(output.splitlines()[-1] if output else "(no forge output)")
 
 
 _DEFAULT_CASES = Path(__file__).resolve().parent.parent.parent / "benchmarks" / "cases"
@@ -421,7 +455,8 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Bind address"),
     port: int = typer.Option(8422, help="Port"),
 ):
-    """Webhook mode: GitHub PR events -> reviews, incident POSTs -> triage.
+    """Webhook mode: GitHub PR / GitLab MR events -> reviews, incident
+    POSTs -> triage.
     Requires AUTOPRODUCT_WEBHOOK_SECRET for signature verification."""
     from ai_venture_studio.server import serve as run_server
 
@@ -451,7 +486,9 @@ def worker(
 def init(
     directory: str = typer.Argument(..., help="Workspace directory to create"),
     name: str = typer.Option(None, help="Project name (defaults to directory name)"),
-    profile: str = typer.Option(..., help="Domain profile: web | miniprogram | app"),
+    profile: str = typer.Option(
+        ..., help="Domain profile: web | enterprise-web | miniprogram | "
+                  "app | game | data"),
     tier: str = typer.Option(
         "standard", help="thin | standard | deep. thin plans ONE working "
                          "end-to-end slice first; narrows, never widens."
@@ -566,9 +603,18 @@ def init(
             f"{resolved_edition.get('docs_entry', 'editions/')}"
         )
     console.print(f"workspace ready: {root}")
-    console.print(
-        f"next: avs spec \"<what you want to build>\" --repo-dir {root}"
-    )
+    if adopt:
+        # A brownfield adoption's next step is governance and review, not
+        # writing a spec for a product that already exists.
+        console.print(
+            f"next: avs readiness (the rung you occupy) · "
+            f"avs review main...HEAD --repo-dir {root} · "
+            f"avs studio {root} (the governance dashboard)"
+        )
+    else:
+        console.print(
+            f"next: avs spec \"<what you want to build>\" --repo-dir {root}"
+        )
 
 
 @app.command()
@@ -836,6 +882,12 @@ def studio(
         help="Deprecated: pass the workspace positionally instead.",
     ),
     port: int = typer.Option(8433, help="Port"),
+    host: str = typer.Option(
+        "127.0.0.1",
+        help="Bind address. Anything but loopback REQUIRES AVS_STUDIO_TOKEN "
+        "(env or AVS_STUDIO_TOKEN_FILE mount) — an unauthenticated Studio "
+        "never leaves the machine.",
+    ),
     profile: str = typer.Option(None, help="Profile (only needed for a new workspace)"),
     lang: str = typer.Option(
         "en", help="UI language: en (English, default) | zh (bilingual "
@@ -848,11 +900,30 @@ def studio(
                    " — solo→founder), else founder. Modes only add "
                    "read-only detail; the flow is the same in all three."
     ),
+    provider: str = typer.Option(
+        "anthropic",
+        help="Model provider for the flow ('mock' walks clarify→plan→build→"
+        "report offline with a canned product — the air-gapped evaluation "
+        "path; no key, no egress)",
+    ),
 ):
-    """Founder Studio: the browser UI for the FDR flow (localhost only)."""
+    """Founder Studio: the browser UI for the FDR flow (localhost by
+    default; non-loopback binds are token-gated)."""
+    from ai_venture_studio.secrets import env_or_file
     from ai_venture_studio.studio import serve_studio
     from ai_venture_studio.studio_modes import StudioModeError
     from ai_venture_studio.upstream import init_workspace
+
+    if host not in ("127.0.0.1", "localhost", "::1") and not env_or_file(
+        "AVS_STUDIO_TOKEN"
+    ):
+        console.print(
+            f"[red]--host {host} would expose an unauthenticated Studio. "
+            "Set AVS_STUDIO_TOKEN (or AVS_STUDIO_TOKEN_FILE) first — every "
+            "request will then require the token; for SSO put an OIDC "
+            "reverse proxy in front.[/red]"
+        )
+        raise typer.Exit(code=2)
 
     if repo_dir_opt is not None:
         if repo_dir not in (".", repo_dir_opt):
@@ -869,12 +940,19 @@ def studio(
     root = Path(repo_dir).resolve()
     if not (root / ".mas" / "project.yaml").exists():
         if not profile:
-            console.print("[red]new workspace: pass --profile web|miniprogram|app[/red]")
+            from ai_venture_studio.upstream.workspace import available_profiles
+
+            console.print(
+                "[red]new workspace: pass --profile "
+                f"{'|'.join(available_profiles())}[/red]"
+            )
             raise typer.Exit(code=2)
         init_workspace(root, root.name, profile)
-    console.print(f"Studio: http://127.0.0.1:{port}  (workspace: {root})")
+    console.print(f"Studio: http://{host}:{port}  (workspace: {root})")
     try:
-        serve_studio(root, port=port, lang=lang, mode=mode)
+        serve_studio(
+            root, host=host, port=port, provider=provider, lang=lang, mode=mode
+        )
     except StudioModeError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
@@ -1188,15 +1266,101 @@ def readiness(repo_dir: str = typer.Option(".", help="Workspace directory")):
     declared rung and what each missing rung would unlock."""
     from ai_venture_studio.adoption import load_substrate_profile, readiness_report
 
-    profile = load_substrate_profile(repo_dir)
+    try:
+        profile = load_substrate_profile(repo_dir)
+    except ValueError as exc:
+        # A malformed profile is an operator mistake, not a crash: the
+        # loader's message already names the file and field.
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
     if profile is None:
+        # Not a dead end: detect what the repo already has and print a
+        # starter profile prefilled from it — the what-we-found pattern.
+        # Detection is conservative (pr_flow/observability can't be read
+        # from the filesystem, so they start false/none and only the
+        # human widens them).
+        import yaml as _yaml
+
+        root = Path(repo_dir).resolve()
+        ci_files = (
+            ".github/workflows", ".gitlab-ci.yml", "azure-pipelines.yml",
+            "Jenkinsfile", ".circleci",
+        )
+        languages: list[str] = []
+        map_path = root / ".mas" / "codebase-map.yaml"
+        if map_path.exists():
+            try:
+                map_data = _yaml.safe_load(map_path.read_text(encoding="utf-8")) or {}
+                languages = sorted(map_data.get("languages") or {})
+            except _yaml.YAMLError:
+                languages = []
+        starter = {"substrate": {
+            "vcs": "git" if (root / ".git").exists() else "none",
+            "pr_flow": False,
+            "ci": any((root / f).exists() for f in ci_files),
+            "observability": ["none"],
+            "progressive_delivery": False,
+            "languages": languages,
+        }}
         console.print(
             "No .mas/substrate-profile.yaml — the adoption ladder is not "
-            "declared, so every stage runs ungated (effective S4).\n"
-            "Declare one to get a rung-by-rung modernization roadmap (§18.47.1)."
+            "declared, so every stage runs ungated (effective S4).\n\n"
+            "Detected from this repo (confirm pr_flow/observability by "
+            "hand — they cannot be read from the filesystem):\n"
+        )
+        console.print(_yaml.safe_dump(starter, sort_keys=False).rstrip())
+        console.print(
+            "\nSave that as .mas/substrate-profile.yaml and re-run "
+            "avs readiness for the rung-by-rung roadmap (§18.47.1)."
         )
         raise typer.Exit(code=0)
     console.print(readiness_report(profile, project_name=Path(repo_dir).resolve().name))
+
+
+@app.command()
+def preflight(
+    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    strict: bool = typer.Option(
+        False, "--strict",
+        help="Exit 1 when anything is not ready — lets a pipeline gate on "
+        "enterprise readiness instead of discovering it mid-build",
+    ),
+):
+    """Ready to build? The enterprise-mode preflight, in the terminal —
+    the same six live checks the Studio card renders (model credential,
+    git identity, forge auth, governance, substrate, Studio access),
+    plus the governance posture line."""
+    from ai_venture_studio.studio_modes import build_preflight, governance_posture
+
+    root = Path(repo_dir).resolve()
+    rows = build_preflight(root)
+    table = Table(show_lines=False)
+    table.add_column("")
+    table.add_column("check")
+    table.add_column("found / fix")
+    for row in rows:
+        icon = "✅" if row["state"] == "ready" else "◻️"
+        detail = row["found"]
+        if row["state"] != "ready" and row["fix"]:
+            detail += f"\n→ {row['fix']}"
+        table.add_row(icon, row["item"], detail)
+    console.print(table)
+
+    posture = governance_posture(root)
+    parts = []
+    if posture["attention"]:
+        parts.append("[red]attention: " + ", ".join(posture["attention"]) + "[/red]")
+    if posture["measured"]:
+        parts.append("measured: " + ", ".join(posture["measured"]))
+    if posture["unconfigured"]:
+        parts.append("[dim]not configured: "
+                     + ", ".join(posture["unconfigured"]) + "[/dim]")
+    console.print("posture · " + " · ".join(parts))
+
+    ready = sum(1 for r in rows if r["state"] == "ready")
+    console.print(f"{ready}/{len(rows)} ready")
+    if strict and (ready < len(rows) or posture["attention"]):
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -2233,7 +2397,7 @@ def automerge_cmd(
 
     import yaml as _yaml
 
-    from ai_venture_studio import automation, github
+    from ai_venture_studio import automation, forge
 
     finals = sorted(
         (_Path(repo_dir) / ".mas" / "reviews" / review_id).glob("[0-9]*-final.yaml")
@@ -2245,7 +2409,7 @@ def automerge_cmd(
     target = str(final.get("target", ""))
     verdict = str(final.get("verdict", ""))
     test_report = final.get("test_report") or {}
-    branch = github.pr_head_branch(target) or ""
+    branch = forge.head_branch(target) or ""
 
     try:
         decision = automation.evaluate_merge(
@@ -2269,13 +2433,13 @@ def automerge_cmd(
     if dry_run:
         console.print(f"[green]merge would proceed[/green] ({target}, {method})")
         return
-    ok, output = github.merge_pr(target, method=method)
+    ok, output = forge.merge(target, method=method)
     automation.record(
         repo_dir, decision,
-        detail=f"review {review_id}: {'merged' if ok else 'gh failed'} {output[:200]}",
+        detail=f"review {review_id}: {'merged' if ok else 'merge failed'} {output[:200]}",
     )
     if not ok:
-        console.print(f"[red]gh pr merge failed: {output[:200]}[/red]")
+        console.print(f"[red]merge failed: {output[:200]}[/red]")
         raise typer.Exit(code=1)
     console.print(f"[green]merged[/green] {target}")
 

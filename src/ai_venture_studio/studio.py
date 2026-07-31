@@ -66,9 +66,20 @@ def _md(path: Path) -> str:
     return html.escape(path.read_text(encoding="utf-8")) if path.exists() else ""
 
 
+# Inline SVG favicon: kills the /favicon.ico 404 in every console (the
+# first thing a browser-driven evaluation sees) without adding a route or
+# an asset file.
+_FAVICON = (
+    "data:image/svg+xml,"
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E"
+    "%3Ctext y='13' font-size='13'%3E%F0%9F%8F%97%3C/text%3E%3C/svg%3E"
+)
+
+
 def _page(title: str, body: str) -> HTMLResponse:
     return HTMLResponse(
         f"<!doctype html><meta charset='utf-8'><title>{html.escape(title)}</title>"
+        f"<link rel='icon' href=\"{_FAVICON}\">"
         f"<style>{_STYLE}</style><body><h1>{html.escape(title)}</h1>{body}"
     )
 
@@ -99,13 +110,9 @@ def _build_running(root: Path) -> bool:
         pid = int(marker.read_text().strip())
     except ValueError:
         return False
-    try:
-        import os
+    from ai_venture_studio.procs import pid_alive
 
-        os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, PermissionError):
-        return False
+    return pid_alive(pid)
 
 
 _STATE_ICON = {"built": "✅", "pending": "⏳"}
@@ -266,29 +273,81 @@ def create_studio_app(
         title="avs studio", docs_url=None, redoc_url=None, openapi_url=None
     )
 
+    # Shared-machine / corp deployment: AVS_STUDIO_TOKEN (env or *_FILE
+    # mount) gates every request. Absent token keeps the original
+    # localhost-only posture; the CLI refuses to bind non-loopback without
+    # one. This is deliberately a shared secret, not SSO — the documented
+    # upgrade path is OIDC in front (reverse proxy), not a home-grown login.
+    from ai_venture_studio.secrets import env_or_file
+
+    studio_token = env_or_file("AVS_STUDIO_TOKEN")
+
+    @app.middleware("http")
+    async def token_gate(request: Request, call_next):
+        if not studio_token:
+            return await call_next(request)
+        import hmac as _hmac
+
+        auth = request.headers.get("Authorization", "")
+        supplied = (
+            request.cookies.get("studio_token")
+            or request.query_params.get("token")
+            or (auth.removeprefix("Bearer ") if auth.startswith("Bearer ") else "")
+        )
+        if not (supplied and _hmac.compare_digest(supplied, studio_token)):
+            from fastapi.responses import PlainTextResponse
+
+            return PlainTextResponse(
+                "This Studio requires its access token. Open "
+                "/?token=<AVS_STUDIO_TOKEN> once — a cookie keeps you "
+                "signed in after that.",
+                status_code=401,
+            )
+        response = await call_next(request)
+        if request.query_params.get("token"):
+            response.set_cookie(
+                "studio_token", studio_token, httponly=True, samesite="lax"
+            )
+        return response
+
     @app.middleware("http")
     async def same_origin_guard(request: Request, call_next):
         """Localhost is not a security boundary against the browser: a
         malicious page can form-POST to 127.0.0.1 (sweep finding). POSTs
-        must come from the Studio itself."""
+        must come from the Studio itself — compared against the request's
+        OWN host, so a Studio served on a corp hostname keeps working
+        (hardcoding localhost here broke every POST behind a real name)."""
         if request.method == "POST":
             origin = request.headers.get("origin") or request.headers.get("referer") or ""
-            if origin and not origin.startswith(("http://127.0.0.1", "http://localhost")):
-                from fastapi.responses import PlainTextResponse
+            if origin:
+                from urllib.parse import urlsplit
 
-                return PlainTextResponse("cross-origin POST rejected", status_code=403)
+                origin_host = urlsplit(origin).hostname or ""
+                own_host = request.url.hostname or ""
+                if origin_host not in (own_host, "127.0.0.1", "localhost"):
+                    from fastapi.responses import PlainTextResponse
+
+                    return PlainTextResponse(
+                        "cross-origin POST rejected", status_code=403
+                    )
         return await call_next(request)
 
     def _spawn_build() -> int:
         if spawn is not None:
             return spawn(root)
+        # The worker inherits the Studio's provider — without this, a Studio
+        # started with --provider mock spawned a build that wanted a real
+        # key and died silently. Its output goes to .mas/build.log, not
+        # DEVNULL: a worker that dies before writing the report must leave
+        # forensics behind.
+        (root / ".mas").mkdir(exist_ok=True)
+        log = (root / ".mas" / "build.log").open("ab")
         proc = subprocess.Popen(  # noqa: S603 — fixed argv
             [sys.executable, "-m", "ai_venture_studio.cli", "create", str(root),
-             "--profile", _profile(root), "--yes"],
-            cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+             "--profile", _profile(root), "--provider", provider, "--yes"],
+            cwd=root, stdout=log, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        (root / ".mas").mkdir(exist_ok=True)
         (root / ".mas" / "build.pid").write_text(str(proc.pid), encoding="utf-8")
         return proc.pid
 
@@ -435,9 +494,17 @@ def create_studio_app(
             )
             return _render(
                 request, _("title_product"),
-                f"<pre>{_md(report)}</pre>{acceptance}{cost_card}{gallery}{retry_block}"
+                f"<pre>{_md(report)}</pre>{acceptance}"
+                f"<p><a href='/live'>🚀 {_('link_live')}</a></p>"
+                f"{cost_card}{gallery}{retry_block}"
                 f"<h2>{_('h_features')}</h2>"
                 f"{feature_cards or no_features}"
+                f"<h2>{_('h_broken')}</h2>"
+                f"<p class=muted>{_('inc_hint')}</p>"
+                "<form method=post action=/incident>"
+                "<textarea name=description style='min-height:80px' "
+                f"placeholder='{_('inc_placeholder')}'></textarea>"
+                f"<p><button>{_('btn_incident')}</button></p></form>"
                 f"<h2>{_('h_something_wrong')}</h2>"
                 f"<p class=muted>{_('correction_hint')}</p>"
                 + (
@@ -628,10 +695,11 @@ def create_studio_app(
             if spawn is not None:
                 spawn(root)
             else:
+                log = (root / ".mas" / "build.log").open("ab")
                 proc = subprocess.Popen(  # noqa: S603
                     [sys.executable, "-m", "ai_venture_studio.cli", "add", str(fdr_path),
-                     "--repo-dir", str(root), "--yes"],
-                    cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     "--repo-dir", str(root), "--provider", provider, "--yes"],
+                    cwd=root, stdout=log, stderr=subprocess.STDOUT,
                     start_new_session=True,
                 )
                 (root / ".mas" / "build.pid").write_text(str(proc.pid), encoding="utf-8")
@@ -642,6 +710,119 @@ def create_studio_app(
         if not _build_running(root):
             _spawn_build()
         return RedirectResponse("/", status_code=303)
+
+    @app.get("/live", response_class=HTMLResponse)
+    def live(request: Request):
+        from ai_venture_studio.studio_live import live_body
+
+        return _render(request, _("title_live"), live_body(root, _, _profile(root)))
+
+    @app.post("/live/guide")
+    def live_guide():
+        from ai_venture_studio.upstream.provisioning import write_cloud_guide
+
+        write_cloud_guide(root, _profile(root))
+        return RedirectResponse("/live", status_code=303)
+
+    @app.post("/live/sweep")
+    async def live_sweep(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.studio_live import run_housekeeping
+
+        try:
+            await run_in_threadpool(run_housekeeping, root)
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        return RedirectResponse("/live", status_code=303)
+
+    @app.post("/review/{review_id}/evidence")
+    def review_evidence(request: Request, review_id: str):
+        """The Gate-R artifact, one click from the review it attests. Same
+        export as `avs evidence-bundle`; a human still attaches it to the
+        CAB submission — the Studio never submits anything anywhere."""
+        if not _REVIEW_ID.match(review_id):
+            return RedirectResponse("/", status_code=303)
+        from ai_venture_studio.adoption import write_evidence_bundle
+
+        try:
+            path = write_evidence_bundle(str(root), review_id)
+        except FileNotFoundError as exc:
+            return _render(
+                request, _("title_evidence"),
+                f"<div class=card><p class=bad>{html.escape(str(exc))}</p>"
+                f"</div><p><a href='/'>{_('link_back')}</a></p>",
+            )
+        return _render(
+            request, _("title_evidence"),
+            f"<div class=card><b>{_('evidence_written')}</b>"
+            f"<p><code>{html.escape(str(path))}</code></p>"
+            f"<p class=muted>{_('evidence_note')}</p></div>"
+            f"<p><a href='/review/{html.escape(review_id)}'>"
+            f"{_('link_back')}</a></p>",
+        )
+
+    @app.post("/live/probe")
+    async def live_probe(request: Request):
+        # In the threadpool, not the event loop: a slow (or self-referential)
+        # URL must never freeze every other Studio page for 8 seconds.
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.studio_live import probe_live
+
+        form = await request.form()
+        await run_in_threadpool(probe_live, root, str(form.get("url", "")))
+        return RedirectResponse("/live", status_code=303)
+
+    @app.post("/incident")
+    async def incident(request: Request):
+        """It's broken → the real triage MAS. Same Incident model and
+        artifacts as `avs triage`; only the front door is a textarea."""
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.adoption import StageInactiveError, check_stage
+        from ai_venture_studio.studio_live import incident_body, incident_intake
+
+        form = await request.form()
+        description = str(form.get("description", "")).strip()
+        if not description:
+            return RedirectResponse("/", status_code=303)
+        try:
+            check_stage(str(root), "maintenance")
+        except StageInactiveError as exc:
+            return _render(
+                request, _("title_incident"),
+                f"<div class=card><p class=bad>{html.escape(str(exc))}</p>"
+                f"</div><p><a href='/'>{_('link_back')}</a></p>",
+            )
+        try:
+            incident_obj, result = await run_in_threadpool(
+                incident_intake, root, description, provider
+            )
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        return _render(
+            request, _("title_incident"), incident_body(_, incident_obj.id, result)
+        )
+
+    @app.post("/incident/fix")
+    async def incident_fix(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from ai_venture_studio.studio_live import attempt_incident_fix, fix_body
+
+        form = await request.form()
+        incident_id = str(form.get("incident_id", ""))
+        # Same shape rule as review ids — the id becomes a path segment.
+        if not _REVIEW_ID.match(incident_id):
+            return RedirectResponse("/", status_code=303)
+        try:
+            attempt = await run_in_threadpool(
+                attempt_incident_fix, root, incident_id, provider
+            )
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        return _render(request, _("title_fix"), fix_body(_, attempt))
 
     @app.post("/reset")
     def reset():
