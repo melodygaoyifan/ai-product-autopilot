@@ -100,6 +100,15 @@ def run_discovery(
     feedback = ""
     brief: Brief | None = None
     critics: list[dict] = []
+    # The best brief seen so far. A revision that comes back as malformed
+    # YAML used to discard EVERY earlier attempt — including one that had
+    # already passed schema and been through the four charter voters — so a
+    # botched final polish killed a run that had a perfectly usable brief in
+    # hand. Observed live: attempt 3 parsed and was critiqued, attempt 4 came
+    # back unparseable, and the run died with "failed schema after 4
+    # attempts".
+    best: Brief | None = None
+    best_critics: list[dict] = []
     for revision in range(MAX_REVISIONS + 1):
         progress.step(
             repo_dir, progress.SETUP, "plan",
@@ -183,11 +192,23 @@ def run_discovery(
             skills_root=skills_root,
         )
         critics = roster.as_issues()[:10]
+        best, best_critics = brief, critics
         majors = [c for c in critics if c.get("severity") == "major"]
         if not majors:
             break
         feedback = yaml.safe_dump({"critic_majors": majors}, sort_keys=False, allow_unicode=True)
 
+    if brief is None and best is not None:
+        # Keep the good one, and say so rather than quietly presenting it as
+        # the finished article — the critics' majors were never addressed.
+        brief, critics = best, list(best_critics)
+        critics.append({
+            "severity": "minor", "lens": "discovery",
+            "problem": "the final revision came back unparseable; this is the "
+                       "last brief that passed schema and review, so any major "
+                       "findings above may still be open",
+            "evidence": feedback[:200],
+        })
     if brief is None:
         raise ValueError(f"brief failed schema after {MAX_REVISIONS + 1} attempts: {feedback}")
     brief.critic_issues = critics

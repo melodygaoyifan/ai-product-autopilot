@@ -48,3 +48,58 @@ def test_the_writer_gets_room_for_a_dense_brief():
     source = inspect.getsource(discover.run_discovery)
     assert "max_tokens=8192" in source
     assert "max_tokens=4096" not in source
+
+
+class _Scripted:
+    """A writer whose answers are supplied in order, then a critic that
+    always finds a major so the loop keeps revising."""
+
+    GOOD = (
+        'title: "A brief"\nproblem: "p"\ntarget_user: "u"\n'
+        'hypotheses:\n  - statement: "s"\n    evidence: assumed\n'
+        'scope_now: ["one"]\nscope_later: []\nscope_never: []\n'
+        'success_metrics: ["m"]\n'
+    )
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.seen = 0
+
+    def complete(self, **kwargs):
+        system = kwargs.get("system", "")
+        if "PRODUCT-STAGE" in system or "VERIFIER" in system or "LEADER" in system:
+            # critic seats: one verified major, so a revision is demanded
+            if "VERIFIER" in system:
+                return "verdict: verified\nreason: r"
+            if "LEADER" in system:
+                return "summary: s"
+            return 'findings:\n  - severity: major\n    problem: "too big"\n    evidence: "one"'
+        out = self.script[min(self.seen, len(self.script) - 1)]
+        self.seen += 1
+        # The real adapter records a stop reason on every call; a fake that
+        # does not lets the previous test's "max_tokens" leak into this one.
+        provider_base.record_stop_reason("end_turn")
+        return out
+
+
+def test_a_good_brief_survives_a_later_unparseable_revision(tmp_path, monkeypatch):
+    """Observed live: attempt 3 parsed and was critiqued, attempt 4 came back
+    malformed, and the run died — discarding a usable brief."""
+    root = init_workspace(tmp_path / "keep", "keep", "web")
+    writer = _Scripted([_Scripted.GOOD, "not yaml at all: [", "still not yaml: ["])
+    monkeypatch.setattr(discover, "get_provider", lambda name: writer)
+
+    brief = discover.run_discovery(root, "an idea", provider="anthropic")
+
+    assert brief.title == "A brief"
+    problems = " ".join(c.get("problem", "") for c in brief.critic_issues)
+    assert "unparseable" in problems, "the discarded revision must be visible"
+
+
+def test_it_still_raises_when_nothing_ever_parsed(tmp_path, monkeypatch):
+    root = init_workspace(tmp_path / "none", "none", "web")
+    writer = _Scripted(["not yaml: ["])
+    monkeypatch.setattr(discover, "get_provider", lambda name: writer)
+
+    with pytest.raises(ValueError, match="failed schema"):
+        discover.run_discovery(root, "an idea", provider="anthropic")
