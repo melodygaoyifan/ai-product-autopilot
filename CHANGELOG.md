@@ -4,7 +4,7 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
-## Unreleased — the enterprise you actually work at: GitLab, Bedrock, a proxy
+## v0.61.0 — the enterprise you actually work at: GitLab, Bedrock, a proxy
 
 Started by adopting one real enterprise data-pipeline repo (a BigQuery
 spend optimizer on self-managed GitLab), then generalized from research
