@@ -216,7 +216,7 @@ def test_status_payload_matches_what_the_building_page_js_reads(studio):
         "tasks": [{"id": "t1", "title": "one", "estimate_hours": 1}],
     }), encoding="utf-8")
     data = client.get("/status").json()
-    assert set(data) == {"total", "built", "running", "tasks"}
+    assert set(data) == {"total", "built", "running", "tasks", "step"}
     # `step` is the in-flight narration: what this task is doing right now,
     # rendered only while it is still pending.
     assert all(set(t) == {"id", "title", "state", "step"} for t in data["tasks"])

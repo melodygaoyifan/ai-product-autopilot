@@ -19,6 +19,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 
 from ai_venture_studio.providers import get_provider, last_response_truncated
+from ai_venture_studio.upstream import progress
 from ai_venture_studio.upstream.workspace import load_project
 from ai_venture_studio.yamlx import extract_mapping
 
@@ -100,6 +101,11 @@ def run_discovery(
     brief: Brief | None = None
     critics: list[dict] = []
     for revision in range(MAX_REVISIONS + 1):
+        progress.step(
+            repo_dir, progress.SETUP, "plan",
+            "writing the brief" if revision == 0
+            else f"revising the brief (attempt {revision + 1})",
+        )
         raw = provider_impl.complete(
             model=writer_model,
             system=_WRITER_SYSTEM,
@@ -161,6 +167,11 @@ def run_discovery(
         from ai_venture_studio.product.voter_gate import family_roots
 
         skills_root, _ = family_roots("discovery")
+        progress.step(
+            repo_dir, progress.SETUP, "plan",
+            "four reviewers checking the brief — desirability, feasibility, "
+            "viability, scope",
+        )
         roster = run_critique_roster(
             "discovery", "discovery",
             yaml.safe_dump(brief.model_dump(exclude={"critic_issues"}),

@@ -104,7 +104,7 @@ def test_report_state_renders_report(studio):
 def test_status_endpoint(studio):
     client, _, _ = studio
     data = client.get("/status").json()
-    assert set(data) == {"total", "built", "running", "tasks"}
+    assert set(data) == {"total", "built", "running", "tasks", "step"}
 
 
 # --- live progress + interrupted builds (signal s3 / s1) ----------------------

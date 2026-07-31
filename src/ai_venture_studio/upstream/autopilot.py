@@ -93,6 +93,12 @@ def run_autopilot(
 
     run_started_at = _dt.datetime.now(_dt.UTC).isoformat()
 
+    # The pre-task phases are the longest silent stretch in a run — assess,
+    # brief, four charter voters with a verify pass, leader, then planning —
+    # and until tasks exist the Studio has nothing to show but "planning…".
+    # Same journal the per-task steps use; SETUP is the task id meaning "the
+    # run itself, before it has tasks".
+    progress.step(root, progress.SETUP, "plan", "reading your requirements")
     assessment = assess_fdr(fdr_text, provider=provider, model=model)
     if not assessment.ready:
         questions = "\n".join(f"{i + 1}. {q}" for i, q in enumerate(assessment.questions))
@@ -106,8 +112,12 @@ def run_autopilot(
         return AutopilotResult(status="needs_answers", assessment=assessment)
 
     auto_approvals: list[str] = []
+    progress.step(root, progress.SETUP, "plan",
+                  "working out what to build — the longest step")
     brief = run_discovery(root, fdr_text, provider=provider)
     estimate = estimate_hint(root, len(brief.scope_now))
+    progress.step(root, progress.SETUP, "plan",
+                  "writing the plan back to you in plain language")
     confirmation = provider_impl.complete(
         model=model,
         system=_CONFIRM_SYSTEM,
@@ -140,6 +150,8 @@ def run_autopilot(
     auto_approvals.append(
         "services: local SQLite provisioned (data/app.db); cloud options in SERVICES.md"
     )
+    progress.step(root, progress.SETUP, "plan",
+                  "breaking it into modules to build")
     plan = run_planning(root, provider=provider)
     if plan.status == "blocked":
         return AutopilotResult(

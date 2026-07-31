@@ -38,6 +38,14 @@ from collections.abc import Callable
 
 JOURNAL_FILE = "progress.jsonl"
 
+#: Task id for steps that belong to the RUN rather than to any one task —
+#: the assess/brief/plan stretch before tasks exist. That stretch is the
+#: longest silent part of a build (a writer, four charter voters with a
+#: verify pass each, a leader, then planning) and it used to render as a
+#: bare "planning…" for minutes, which is the same 40-minutes-of-nothing
+#: this module exists to end.
+SETUP = "setup"
+
 _lock = threading.Lock()
 _sink: Callable[[str], None] | None = None
 

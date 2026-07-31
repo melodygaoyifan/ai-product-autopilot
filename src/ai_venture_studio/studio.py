@@ -247,11 +247,19 @@ def _progress(root: Path) -> dict:
         ["git", "log", "--oneline"], cwd=root, capture_output=True, timeout=60, text=True
     ).stdout
     built = log.count("feat(")
+    from ai_venture_studio.upstream import progress as _progress_journal
+
+    current = _progress_journal.current(root)
     return {
         "total": total,
         "built": built,
         "running": _build_running(root),
         "tasks": _task_states(root),
+        # What it is doing RIGHT NOW. Before any task exists this is the only
+        # honest thing the Building page can show, and it used to show
+        # nothing but a static "planning…" for the several minutes the
+        # assess/brief/roster/plan stretch takes.
+        "step": (current or {}).get("detail", ""),
     }
 
 
@@ -500,6 +508,11 @@ def create_studio_app(
                 if tasks
                 else f"<p class=muted id=tasks>{_('planning')}</p>"
             )
+            step_line = (
+                f"<p id=step><b>{html.escape(progress['step'])}</b></p>"
+                if progress.get("step")
+                else "<p id=step></p>"
+            )
             # Live per-task progress (signal s3: "it looks frozen while it
             # works") — poll /status, update in place, one full reload when
             # the worker exits so the report page takes over.
@@ -507,7 +520,7 @@ def create_studio_app(
                 request, _("title_building"),
                 f"<div class=card><p>{_('done_label')} <b id=done>{done}</b> / "
                 f"<b id=total>{total}</b> {_('updates_live')}</p>"
-                f"{checklist}</div>"
+                f"{step_line}{checklist}</div>"
                 "<script>\n"
                 "const ICONS={built:'✅',pending:'⏳'};\n"
                 "async function poll(){try{\n"
@@ -516,6 +529,8 @@ def create_studio_app(
                 "  const built=s.tasks.filter(t=>t.state==='built').length;\n"
                 "  document.getElementById('done').textContent=built||s.built;\n"
                 "  if(s.total)document.getElementById('total').textContent=s.total;\n"
+                "  const st=document.getElementById('step');\n"
+                "  if(st)st.innerHTML=s.step?'<b>'+s.step.replace(/[<&]/g,'')+'</b>':'';\n"
                 "  for(const t of s.tasks){\n"
                 "    const li=document.getElementById('task-'+t.id);\n"
                 "    if(li)li.textContent=(ICONS[t.state]||'❌')+' '+t.title\n"
