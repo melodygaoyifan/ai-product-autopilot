@@ -81,3 +81,53 @@ def test_the_page_returns_to_normal_once_the_step_lands(tmp_path):
     page = client.get("/").text
     assert "Working on it" not in page
     assert "One question at a time" in page
+
+
+def test_a_failure_reaches_the_page_that_is_actually_watching(tmp_path):
+    """The failure page is returned to the POST that raised — but the
+    working page has navigated away from that request by then. Without a
+    hand-off the founder sees a spinner, then an ordinary page, and never
+    learns the step failed. Reported as 点了 check 以后一直在转.
+    """
+    root = init_workspace(tmp_path / "lost", "lost", "web")
+    original = autopilot.run_autopilot
+
+    def boom(*args, **kwargs):
+        raise ValueError("brief failed schema after 4 attempts")
+
+    autopilot.run_autopilot = boom
+    try:
+        client = TestClient(
+            create_studio_app(root, spawn=lambda r: 1, provider="mock"),
+            raise_server_exceptions=False,
+        )
+        # The POST that raises — its response is what the browser discards.
+        client.post("/fdr", data={"fdr": "# a\nb\n"}, follow_redirects=True)
+        # The reload the working page does is what the founder is looking at.
+        landed = client.get("/").text
+    finally:
+        autopilot.run_autopilot = original
+
+    assert "did not finish" in landed
+    assert "brief failed schema" in landed
+
+
+def test_the_failure_is_shown_once_and_then_cleared(tmp_path):
+    """A sticky error would make the workspace look broken forever."""
+    root = init_workspace(tmp_path / "once", "once", "web")
+    original = autopilot.run_autopilot
+
+    def boom(*args, **kwargs):
+        raise ValueError("transient thing")
+
+    autopilot.run_autopilot = boom
+    try:
+        client = TestClient(
+            create_studio_app(root, spawn=lambda r: 1, provider="mock"),
+            raise_server_exceptions=False,
+        )
+        client.post("/fdr", data={"fdr": "# a\nb\n"}, follow_redirects=True)
+        assert "transient thing" in client.get("/").text
+        assert "transient thing" not in client.get("/").text
+    finally:
+        autopilot.run_autopilot = original

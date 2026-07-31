@@ -333,7 +333,16 @@ def create_studio_app(
             "<script>setTimeout(()=>location.href='/',4000)</script>",
         )
 
-    def _failure_page(request: Request, exc: Exception) -> HTMLResponse:
+    #: The last foreground failure, kept until a page shows it. The failure
+    #: page is returned to the POST that raised — but the working page has
+    #: usually navigated away from that request by then, so without this the
+    #: founder watches a spinner and then lands on an ordinary page with no
+    #: sign that anything went wrong. Which is precisely what happened.
+    last_failure: dict[str, Exception] = {}
+
+    def _failure_page(
+        request: Request, exc: Exception, *, record: bool = True
+    ) -> HTMLResponse:
         """A founder should never meet a stack trace, and should never be
         told nothing either: plain language first, the real error one click
         away, and the workspace left where they can retry.
@@ -343,7 +352,9 @@ def create_studio_app(
         transient provider overload — on a valid, funded key — sent someone
         looking for a key problem that did not exist.
         """
-        record_failure(root, exc)
+        if record:
+            record_failure(root, exc)
+            last_failure["exc"] = exc
         return _render(
             request, _("title_failed"),
             f"<div class=card><b class=bad>{_('failed_lead')}</b>"
@@ -469,6 +480,10 @@ def create_studio_app(
         # and the thinking page reloads here on a timer.
         if thinking:
             return _thinking_page(request, next(iter(thinking.values())))
+        if last_failure:
+            # Shown once, to whoever gets here first — usually the working
+            # page's own reload, which is the only thing still watching.
+            return _failure_page(request, last_failure.pop("exc"), record=False)
         fdr = root / "FDR.md"
         report = root / "product" / "BUILD-REPORT.md"
         confirmation = root / "product" / "CONFIRMATION.md"

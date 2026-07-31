@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
-from ai_venture_studio.providers import get_provider
+from ai_venture_studio.providers import get_provider, last_response_truncated
 from ai_venture_studio.upstream.workspace import load_project
 from ai_venture_studio.yamlx import extract_mapping
 
@@ -105,8 +105,26 @@ def run_discovery(
             system=_WRITER_SYSTEM,
             user=f"<project>\n{context}</project>\n\n<idea>\n{idea}\n</idea>"
             + (f"\n\n<revision_feedback>\n{feedback}\n</revision_feedback>" if feedback else ""),
-            max_tokens=4096,
+            # A dense FDR produces a dense brief, and CJK costs far more
+            # tokens per character than English. At 4096 a 4-5KB Chinese FDR
+            # ran out of output budget mid-YAML on every attempt, so all four
+            # tries failed identically and the founder got "brief failed
+            # schema after 4 attempts" for what was really a size problem.
+            max_tokens=8192,
         )
+        if last_response_truncated():
+            # Distinct from unparseable: the model was not confused, it ran
+            # out of room. Saying "not a parseable YAML mapping" here sends
+            # the next attempt to fix quoting, which changes nothing, which
+            # is exactly how this burned all four revisions.
+            feedback = (
+                "YOUR LAST ANSWER WAS CUT OFF at the output limit, so none of "
+                "it could be used. Be substantially more concise: at most 5 "
+                "hypotheses and 6 scope_now items, one short sentence each. "
+                "Summarise the source material rather than restating it."
+            )
+            brief = None
+            continue
         try:
             data = extract_mapping(raw, ("hypotheses", "title"))
         except ValueError:
