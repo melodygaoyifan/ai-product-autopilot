@@ -79,9 +79,10 @@ def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
     # 1. FDR editor (fresh workspace).
     snap()
 
-    # 1b. The conversational intake — a second door to the same FDR, with
-    # its own answer / skip / enough / restart controls.
+    # 1b. Both doors onto the describe state: the conversation (now the
+    # default) and the form behind ?form=1.
     pages.append(client.get("/chat").text)
+    pages.append(client.get("/?form=1").text)
 
     # 2. Plan-confirmation state.
     (root / "product").mkdir(exist_ok=True)

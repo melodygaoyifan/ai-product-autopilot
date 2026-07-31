@@ -44,19 +44,36 @@ def studio_en(tmp_path):
 
 def test_first_visit_shows_editor_with_template_and_guide(studio):
     client, _, _ = studio
-    page = client.get("/").text
+    page = client.get("/?form=1").text
     assert "textarea" in page
     assert "不需要任何技术词汇" in page  # template pre-filled
     assert "How to write a good FDR" in page  # guide reachable
 
 
 def test_vague_fdr_roundtrips_to_questions(studio):
+    """A vague FDR comes back as questions — and with the conversation as
+    the front door, straight into answering the first one rather than
+    handing back a list to merge into a 4000-character textarea."""
     client, root, _ = studio
     response = client.post(
         "/fdr", data={"fdr": "just an idea: 帮小区做团购"}, follow_redirects=True
     )
-    assert "请先回答这些问题" in response.text
     assert (root / "FDR-QUESTIONS.md").exists()
+    asked = [
+        line.strip()
+        for line in (root / "FDR-QUESTIONS.md").read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("1. ")
+    ]
+    assert asked, "the assessor wrote no numbered questions"
+    assert asked[0].removeprefix("1. ") in response.text
+
+
+def test_the_form_door_still_shows_the_question_list(studio):
+    """Anyone who prefers the textarea still gets the whole list up front."""
+    client, root, _ = studio
+    client.post("/fdr", data={"fdr": "just an idea: 帮小区做团购"},
+                follow_redirects=True)
+    assert "请先回答这些问题" in client.get("/?form=1").text
 
 
 def test_good_fdr_reaches_confirmation_with_build_button(studio):
@@ -154,7 +171,7 @@ def _page(root, lang):
     client = TestClient(
         create_studio_app(root, spawn=lambda r: 1, provider="mock", lang=lang)
     )
-    return client.get("/").text
+    return client.get("/?form=1").text
 
 
 def test_english_renders_with_no_chinese_anywhere(tmp_path):
@@ -190,7 +207,7 @@ def test_english_is_the_default_when_no_language_is_given(tmp_path):
 
     root = init_workspace(tmp_path / "default", "d", "web")
     unset = TestClient(create_studio_app(root, spawn=lambda r: 1,
-                                         provider="mock")).get("/").text
+                                         provider="mock")).get("/?form=1").text
     assert unset == _page(root, "en")
     assert not re.search(r"[一-鿿]", unset)
 
@@ -233,7 +250,7 @@ def test_the_english_readme_demo_shows_the_english_screenshot():
 
 def test_default_flow_first_visit_is_english(studio_en):
     client, _root, _ = studio_en
-    page = client.get("/").text
+    page = client.get("/?form=1").text
     assert "<title>Describe your product</title>" in page
     assert "Fill this in using your own words" in page  # English template
     assert "How to write a good FDR" in page

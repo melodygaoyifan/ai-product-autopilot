@@ -204,20 +204,34 @@ def test_restart_clears_the_thread(client, workspace):
 
 
 def test_the_form_still_works_and_links_to_the_conversation(client):
-    """The conversation is a second door, never a replacement — removing the
-    form would strand anyone who prefers it."""
-    page = client.get("/").text
+    """The conversation became the default, but the form is not removed —
+    that would strand anyone who prefers to write the whole thing at once."""
+    page = client.get("/?form=1").text
     assert "<textarea name=fdr>" in page
     assert "/chat" in page
 
 
-def test_an_existing_fdr_is_never_destroyed_by_the_conversation(client, workspace):
-    """Someone with a hand-written FDR clicks the conversation link to see
-    what it is. Their words must survive that."""
+def test_an_existing_fdr_is_offered_back_not_interviewed_over(client, workspace):
+    """Chat is the front door now, so most people arriving here already have
+    an FDR. Interviewing them about a document they wrote would be absurd."""
     handwritten = "# My product\n\nA long FDR I spent an hour on.\n"
     (workspace / "FDR.md").write_text(handwritten, encoding="utf-8")
 
-    client.get("/chat")
+    page = client.get("/chat").text
+
+    assert "already have a requirements document" in page
+    assert "A long FDR I spent an hour on." in page
+    assert "/chat?start=1" in page  # …and starting over is still offered
+    assert load_thread(workspace) == []  # nothing was asked yet
+
+
+def test_an_existing_fdr_is_never_destroyed_by_the_conversation(client, workspace):
+    """Someone with a hand-written FDR chooses to start over anyway. Their
+    words must survive that."""
+    handwritten = "# My product\n\nA long FDR I spent an hour on.\n"
+    (workspace / "FDR.md").write_text(handwritten, encoding="utf-8")
+
+    client.get("/chat?start=1")
     client.post("/chat", data={"answer": "founders"}, follow_redirects=True)
     page = client.post("/chat/enough", follow_redirects=True).text
 
@@ -233,7 +247,7 @@ def test_the_backup_is_not_overwritten_by_a_second_pass(client, workspace):
     clobber the backup with conversation output."""
     handwritten = "# original\n\nthe words that matter\n"
     (workspace / "FDR.md").write_text(handwritten, encoding="utf-8")
-    client.get("/chat")
+    client.get("/chat?start=1")
     client.post("/chat", data={"answer": "one"}, follow_redirects=True)
     client.post("/chat/enough", follow_redirects=True)
     client.post("/chat/restart", follow_redirects=True)
@@ -243,6 +257,63 @@ def test_the_backup_is_not_overwritten_by_a_second_pass(client, workspace):
     assert (workspace / "FDR-before-chat.md").read_text(
         encoding="utf-8"
     ) == handwritten
+
+
+def test_open_questions_become_the_conversation(client, workspace):
+    """The whole point: assessor questions left by the form are asked here
+    one at a time instead of handed back as a list to merge by hand."""
+    (workspace / "FDR.md").write_text("# real\n\ncontent\n", encoding="utf-8")
+    (workspace / "FDR-QUESTIONS.md").write_text(
+        "# questions\n\n1. Where do reviews live?\n2. Is delivery animated?\n",
+        encoding="utf-8",
+    )
+
+    page = client.get("/chat").text
+
+    assert "Where do reviews live?" in page
+    assert "Is delivery animated?" not in page  # one at a time
+
+
+def test_a_clarify_only_conversation_extends_the_fdr(client, workspace):
+    """It must APPEND to the founder's document, not replace it with six
+    blank intake sections."""
+    original = "# real\n\nthe product I described at length\n"
+    (workspace / "FDR.md").write_text(original, encoding="utf-8")
+    (workspace / "FDR-QUESTIONS.md").write_text(
+        "# q\n\n1. Where do reviews live?\n", encoding="utf-8"
+    )
+
+    client.get("/chat")
+    client.post("/chat", data={"answer": "under each product"},
+                follow_redirects=True)
+    client.post("/chat/enough", follow_redirects=True)
+
+    fdr = (workspace / "FDR.md").read_text(encoding="utf-8")
+    assert "the product I described at length" in fdr
+    assert "under each product" in fdr
+    assert "not answered" not in fdr
+
+
+def test_chat_is_the_default_door(workspace):
+    from ai_venture_studio.studio import create_studio_app
+
+    page = TestClient(create_studio_app(workspace, provider="mock")).get("/").text
+    assert "One question at a time" in page
+    assert "/?form=1" in page  # the form is one click away
+
+
+def test_the_form_can_still_be_the_default(workspace):
+    from ai_venture_studio.studio import create_studio_app
+
+    app = create_studio_app(workspace, provider="mock", entry="form")
+    assert "<textarea name=fdr>" in TestClient(app).get("/").text
+
+
+def test_an_unknown_entry_is_refused_loudly(workspace):
+    from ai_venture_studio.studio import create_studio_app
+
+    with pytest.raises(ValueError, match="unknown entry"):
+        create_studio_app(workspace, provider="mock", entry="carrier-pigeon")
 
 
 def test_the_conversation_is_a_veneer_over_the_same_fdr(client, workspace):

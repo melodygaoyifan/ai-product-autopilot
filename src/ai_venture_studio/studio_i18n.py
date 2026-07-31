@@ -829,6 +829,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "I ask one question, you answer it, and I write the requirements "
               "document. You can stop and go straight to the plan at any point.",
     },
+    "chat_have_fdr": {
+        "zh": "你已经写过需求文档了。",
+        "en": "You already have a requirements document.",
+    },
+    "chat_have_fdr_hint": {
+        "zh": "直接用它生成计划，或者改一改；也可以丢开它、用对话重新写一份。",
+        "en": "Use it as it stands, edit it, or set it aside and build a new "
+              "one through the conversation.",
+    },
+    "chat_start_over": {
+        "zh": "不用这份，用对话重新写",
+        "en": "Ignore it and answer questions instead",
+    },
     "chat_switch_to_form": {
         "zh": "或者用表格一次填完",
         "en": "Or fill in the whole form instead",

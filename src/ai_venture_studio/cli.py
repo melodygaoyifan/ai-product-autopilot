@@ -906,6 +906,12 @@ def studio(
         "report offline with a canned product — the air-gapped evaluation "
         "path; no key, no egress)",
     ),
+    entry: str = typer.Option(
+        "chat",
+        help="Which door the describe-step opens with: chat (default — one "
+        "question at a time) | form (the whole FDR in one textarea). Both "
+        "stay reachable either way; this only picks the landing page.",
+    ),
 ):
     """Founder Studio: the browser UI for the FDR flow (localhost by
     default; non-loopback binds are token-gated)."""
@@ -951,9 +957,10 @@ def studio(
     console.print(f"Studio: http://{host}:{port}  (workspace: {root})")
     try:
         serve_studio(
-            root, host=host, port=port, provider=provider, lang=lang, mode=mode
+            root, host=host, port=port, provider=provider, lang=lang,
+            mode=mode, entry=entry,
         )
-    except StudioModeError as exc:
+    except (StudioModeError, ValueError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
 

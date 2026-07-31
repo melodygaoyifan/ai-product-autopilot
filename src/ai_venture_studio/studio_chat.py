@@ -158,14 +158,39 @@ def intake_complete(turns: list[Turn]) -> bool:
     return next_intake_slot(turns) is None
 
 
-def compose_fdr(turns: list[Turn], lang: str = "en") -> str:
+def has_intake(turns: list[Turn]) -> bool:
+    """True when the six questions were answered HERE.
+
+    False means the FDR came from somewhere else — the form, the CLI, a
+    hand-written file — and the conversation is only collecting follow-up
+    answers. Composing a fresh document in that case would replace the
+    founder's own writing with six "(not answered)" sections.
+    """
+    return any(
+        question.slot in INTAKE_SLOTS for question, _ in pairs(turns)
+    )
+
+
+def compose_fdr(
+    turns: list[Turn], lang: str = "en", base_fdr: str = ""
+) -> str:
     """Build FDR.md from the answers.
 
     Deterministic string assembly, never a model call: the founder's words
     go into the document as they typed them. An unanswered section is
     written as an explicit blank rather than omitted, so the assessor sees a
     gap instead of a document that looks complete.
+
+    `base_fdr` is an existing document to EXTEND rather than replace. When
+    the six intake questions were not answered here, the conversation is a
+    clarify pass over someone else's document and its only contribution is
+    the follow-up section appended to the end.
     """
+    if base_fdr and not has_intake(turns):
+        follow_ups = _follow_up_block(turns, lang)
+        if not follow_ups:
+            return base_fdr
+        return base_fdr.rstrip() + "\n\n" + follow_ups
     headings = _HEADINGS.get(lang if lang in _HEADINGS else "en")
     if headings is None:  # pragma: no cover — dict lookup above is total
         raise ValueError(f"no headings for language {lang!r}")
@@ -181,19 +206,29 @@ def compose_fdr(turns: list[Turn], lang: str = "en") -> str:
         blocks.append(answers.get(slot, "") or "(未回答 / not answered)")
         blocks.append("")
 
-    follow_ups = [
+    follow_ups = _follow_up_block(turns, lang)
+    if follow_ups:
+        blocks.append(follow_ups)
+    return "\n".join(blocks)
+
+
+def _follow_up_block(turns: list[Turn], lang: str) -> str:
+    """The §7 answers-to-follow-up-questions section, or "" if there are
+    none."""
+    headings = _HEADINGS.get(lang if lang in _HEADINGS else "en", _HEADINGS["en"])
+    answered = [
         (question, answer)
         for question, answer in pairs(turns)
         if question.slot == CLARIFY
     ]
-    if follow_ups:
-        blocks.append(headings["clarify"])
-        blocks.append("")
-        for index, (question, answer) in enumerate(follow_ups, start=1):
-            blocks.append(f"{index}. **{question.text.strip()}**")
-            blocks.append(f"   {answer.text.strip()}")
-        blocks.append("")
-    return "\n".join(blocks)
+    if not answered:
+        return ""
+    lines = [headings["clarify"], ""]
+    for index, (question, answer) in enumerate(answered, start=1):
+        lines.append(f"{index}. **{question.text.strip()}**")
+        lines.append(f"   {answer.text.strip()}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def transcript(turns: list[Turn]) -> str:

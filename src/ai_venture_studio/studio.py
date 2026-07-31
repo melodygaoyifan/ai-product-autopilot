@@ -275,7 +275,18 @@ def _task_list_html(tasks: list[dict]) -> str:
 def create_studio_app(
     repo_dir: str | Path, *, spawn=None, provider: str = "anthropic",
     lang: str = DEFAULT_LANGUAGE, mode: str | None = None,
+    entry: str = "chat",
 ) -> FastAPI:
+    """`entry` picks which door the describe-state opens with.
+
+    Default 'chat': answering one question at a time is what a
+    non-technical founder can actually do, and the 4000-character textarea
+    was where they stopped. The form is never removed — it stays one click
+    away at /?form=1, and anyone who already has an FDR is offered it
+    rather than dropped into a conversation about a document they wrote.
+    """
+    if entry not in ("chat", "form"):
+        raise ValueError(f"unknown entry {entry!r} — expected chat or form")
     root = Path(repo_dir).resolve()
     lang = normalize(lang)
     # --mode / edition only set the DEFAULT; the user switches per request
@@ -623,6 +634,10 @@ def create_studio_app(
                 "<form method=post action=/reset style='margin-top:.5rem'>"
                 f"<button class=secondary>{_('btn_edit_fdr')}</button></form>",
             )
+        # The describe state, and only this state, honours `entry`: the
+        # build/report/confirmation pages above are the same in both doors.
+        if entry == "chat" and not request.query_params.get("form"):
+            return _chat_page(request)
         guide = _md(root / "FDR-GUIDE.md")
         question_block = (
             f"<div class=card><b class=warn>{_('answer_first')}"
@@ -677,8 +692,79 @@ def create_studio_app(
     # every answer is composed into FDR.md and the existing flow takes over
     # from there. The form stays exactly as it was for anyone who prefers it.
 
+    def _written_fdr() -> str:
+        """The founder's existing FDR, or "" if there is nothing real yet.
+
+        A blank template is not content — in either language, since a
+        workspace initialised as `zh` can be served with `--lang en`.
+        """
+        path = root / "FDR.md"
+        if not path.exists():
+            return ""
+        text = path.read_text(encoding="utf-8")
+        from ai_venture_studio.upstream.fdr import TEMPLATE, TEMPLATE_EN
+
+        if not text.strip() or text.strip() in (
+            TEMPLATE.strip(), TEMPLATE_EN.strip()
+        ):
+            return ""
+        return text
+
+    def _compose(turns) -> str:
+        """The FDR this conversation produces.
+
+        A conversation that answered the six intake questions AUTHORS the
+        document. One that only answered follow-ups is a clarify pass over
+        an FDR written elsewhere (the form, the CLI, by hand) and must
+        extend it, never replace it with six blank sections.
+        """
+        base = "" if studio_chat.has_intake(turns) else _written_fdr()
+        return studio_chat.compose_fdr(turns, lang, base_fdr=base)
+
+    def _open_questions() -> list[str]:
+        """Questions the assessor already left on disk (FDR-QUESTIONS.md).
+
+        The form writes them there; with the conversation as the front door
+        they would otherwise be invisible — the founder would land on a page
+        that says nothing about the five things blocking their build.
+        """
+        path = root / "FDR-QUESTIONS.md"
+        if not path.exists():
+            return []
+        found = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if re.match(r"^\d+\.\s+\S", stripped):
+                found.append(re.sub(r"^\d+\.\s+", "", stripped))
+        return found
+
     def _chat_page(request: Request, note: str = "") -> HTMLResponse:
         turns = studio_chat.load_thread(root)
+        existing = _written_fdr()
+        pending = _open_questions() if existing else []
+        if not turns and pending and not request.query_params.get("start"):
+            # Straight into answering them, one at a time — this is exactly
+            # the loop the conversation exists to fix.
+            studio_chat.append_turn(
+                root, "assistant", pending[0], slot=studio_chat.CLARIFY
+            )
+            turns = studio_chat.load_thread(root)
+        if not turns and existing and not request.query_params.get("start"):
+            # Never start interviewing someone about a document they already
+            # wrote. Offer it back first; the conversation is the other button.
+            return _render(
+                request, _("title_chat"),
+                f"<div class=card><b>{_('chat_have_fdr')}</b>"
+                f"<p class=muted>{_('chat_have_fdr_hint')}</p></div>"
+                f"<div class=card><pre>{html.escape(existing)}</pre></div>"
+                "<form method=post action=/fdr style='display:inline'>"
+                f"<input type=hidden name=base value='{_fdr_fingerprint(existing)}'>"
+                f"<input type=hidden name=fdr value='{html.escape(existing)}'>"
+                f"<button>{_('btn_check_and_plan')}</button></form> "
+                f"<a href='/?form=1'><button type=button class=secondary>"
+                f"{_('btn_edit_fdr')}</button></a>"
+                f"<p><a href='/chat?start=1'>{_('chat_start_over')}</a></p>",
+            )
         thread = "".join(
             f"<p class=muted style='margin:.2rem 0'>{html.escape(turn.text)}</p>"
             if turn.role == "assistant"
@@ -721,7 +807,7 @@ def create_studio_app(
             f"<button class=secondary>{_('btn_chat_enough')}</button></form> "
             "<form method=post action=/chat/restart style='display:inline'>"
             f"<button class=secondary>{_('btn_chat_restart')}</button></form>"
-            f"<p><a href='/'>{_('chat_switch_to_form')}</a></p>",
+            f"<p><a href='/?form=1'>{_('chat_switch_to_form')}</a></p>",
         )
 
     @app.get("/chat", response_class=HTMLResponse)
@@ -761,7 +847,7 @@ def create_studio_app(
         # handoff, and only after the existing one is preserved. Writing here
         # would destroy a hand-written FDR the moment somebody tried the
         # conversation out of curiosity.
-        composed = studio_chat.compose_fdr(turns, lang)
+        composed = _compose(turns)
         if studio_chat.clarify_rounds_used(turns) >= studio_chat.MAX_CLARIFY_ROUNDS:
             return _chat_handoff(request, note=_("chat_rounds_done"))
 
@@ -795,7 +881,7 @@ def create_studio_app(
         is the worst thing this surface could do.
         """
         turns = studio_chat.load_thread(root)
-        composed = studio_chat.compose_fdr(turns, lang)
+        composed = _compose(turns)
         existing = root / "FDR.md"
         preserved = ""
         if existing.exists():
@@ -1126,10 +1212,13 @@ def create_studio_app(
 
 def serve_studio(repo_dir: str | Path, host: str = "127.0.0.1", port: int = 8433,
                  *, provider: str = "anthropic",
-                 lang: str = DEFAULT_LANGUAGE, mode: str | None = None) -> None:
+                 lang: str = DEFAULT_LANGUAGE, mode: str | None = None,
+                 entry: str = "chat") -> None:
     import uvicorn
 
     uvicorn.run(
-        create_studio_app(repo_dir, provider=provider, lang=lang, mode=mode),
+        create_studio_app(
+            repo_dir, provider=provider, lang=lang, mode=mode, entry=entry
+        ),
         host=host, port=port, log_level="warning",
     )
