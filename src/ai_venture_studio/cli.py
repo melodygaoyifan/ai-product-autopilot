@@ -1256,9 +1256,15 @@ def retry_task(
     # retry path was the one build path that never passed it — so a retried
     # module was free to invent field names its siblings had agreed on.
     contract = read_fdr(repo_dir)
+    # The recorded failure is the retry's context. A retry that does not
+    # know why the last attempt died repeats it — the spec writer picks the
+    # same rejected phrasing, the implementer walks into the same wall.
+    prior_failure = _recorded_failure(repo_dir, task_id)
+    if prior_failure:
+        console.print("[dim]passing the previous attempt's failure to the writer[/dim]")
     spec = run_spec_stage(
         repo_dir, f"{task.description} (task:{task.id})", provider=provider,
-        source_contract=contract,
+        source_contract=contract, prior_failure=prior_failure,
     )
     if spec.status != "proposed":
         reasons = "; ".join(spec.block_reasons) or "blocked (no reasons recorded)"
@@ -1269,7 +1275,7 @@ def retry_task(
     approve_spec(repo_dir, spec.slug)
     result = run_build(repo_dir, spec.slug, provider=provider,
                        task_lane=task.lane, task_estimate_hours=task.estimate_hours,
-                       source_contract=contract)
+                       source_contract=contract, prior_failure=prior_failure)
     # Gate 3, which this path used to skip outright: a module retried here
     # reached the founder with no reviewer having read it and an empty
     # verdict in the report, sitting next to modules `create` had reviewed.
@@ -1295,6 +1301,34 @@ def retry_task(
     if result.status != "built":
         raise typer.Exit(code=1)
 
+
+
+def _recorded_failure(repo_dir, task_id: str) -> str:
+    """The failed row for this task in product/outcomes.yaml, as retry context.
+
+    Best-effort by design: no record just means the retry runs without prior
+    context, the way it always did — never an error that blocks the retry.
+    """
+    import yaml as _yaml
+
+    try:
+        rows = _yaml.safe_load(
+            (Path(repo_dir) / "product" / "outcomes.yaml").read_text(encoding="utf-8")
+        ) or []
+    except (OSError, _yaml.YAMLError):
+        return ""
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or row.get("task_id") != task_id:
+            continue
+        if row.get("status") == "built":
+            return ""
+        parts = [f"previous attempt status: {row.get('status', 'unknown')}"]
+        if row.get("detail"):
+            parts.append(f"detail: {row['detail']}")
+        if row.get("test_summary"):
+            parts.append(f"test summary: {row['test_summary']}")
+        return "\n".join(parts)
+    return ""
 
 
 def record_retry_outcome(

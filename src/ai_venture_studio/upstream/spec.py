@@ -210,6 +210,7 @@ def run_spec_stage(
     writer_model: str = "claude-opus-4-8",
     critic_model: str = "claude-sonnet-5",
     source_contract: str = "",
+    prior_failure: str = "",
 ) -> Spec:
     project: Project = load_project(repo_dir)
     if not source_contract:
@@ -269,6 +270,23 @@ def run_spec_stage(
     # required reading here — it is what we are about to write.
     _spec_grounding_gate(repo_dir, request, context)
 
+    # A retry that does not know why the last attempt died repeats it. The
+    # observed loop: EARS rejects a phrasing → the task blocks → the retry
+    # regenerates from the same inputs → the writer picks the same phrasing.
+    # Handing the writer the previous failure is what makes the second
+    # attempt a different attempt (product-bench: retries recovered t1/t2 and
+    # t5/t9 only after the underlying rule changed — context is the cheap way
+    # to change what the writer does without changing the rules).
+    failure_block = (
+        "\n\n<previous_attempt_failed note=\"an earlier attempt at this exact "
+        "task failed for the reason below — understand the cause and take a "
+        "different approach; repeating it will fail the same way\">\n"
+        + prior_failure.strip()[:1500]
+        + "\n</previous_attempt_failed>"
+        if prior_failure.strip()
+        else ""
+    )
+
     feedback = ""
     spec_data: dict = {}
     lint: list = []
@@ -278,6 +296,7 @@ def run_spec_stage(
             model=writer_model,
             system=_WRITER_SYSTEM,
             user=f"<project>\n{context}</project>\n\n<request>\n{request}\n</request>"
+            + failure_block
             + (f"\n\n<revision_feedback>\n{feedback}\n</revision_feedback>" if feedback else ""),
             max_tokens=4096,
         )

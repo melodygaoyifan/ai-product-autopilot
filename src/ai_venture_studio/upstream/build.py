@@ -627,6 +627,7 @@ def run_build(
     task_lane: str = "core",
     task_estimate_hours: float = 0.0,
     source_contract: str = "",
+    prior_failure: str = "",
 ) -> BuildResult:
     """in_branch=True: build in an isolated worktree on branch
     build/<slug> (parallel-lane mode) — the caller merges and then calls
@@ -672,7 +673,7 @@ def run_build(
                 worktree, slug, provider=provider, model=model, started=started,
                 bookkeeping=False, task_lane=task_lane,
                 task_estimate_hours=task_estimate_hours,
-                source_contract=source_contract,
+                source_contract=source_contract, prior_failure=prior_failure,
             )
             result.detail = (result.detail + " " if result.detail else "") + f"branch build/{slug}"
             return result
@@ -691,7 +692,7 @@ def run_build(
         repo, slug, provider=provider, model=model, started=started,
         bookkeeping=True, task_lane=task_lane,
         task_estimate_hours=task_estimate_hours,
-        source_contract=source_contract,
+        source_contract=source_contract, prior_failure=prior_failure,
     )
 
 
@@ -814,6 +815,7 @@ def _run_build_inner(
     task_lane: str = "core",
     task_estimate_hours: float = 0.0,
     source_contract: str = "",
+    prior_failure: str = "",
 ) -> BuildResult:
     project = load_project(repo)
     if not source_contract:
@@ -926,6 +928,19 @@ def _run_build_inner(
         f"test_skeletons:\n"
         + "\n".join(f"- {s.path}: {s.purpose} (covers {s.covers})" for s in spec.test_skeletons)
         + "\n</spec>"
+        # A retried task's implementer must know what killed the previous
+        # attempt, or it walks into the same wall: the run-3 forensics showed
+        # a retry re-inventing the exact phantom import its predecessor died
+        # on, because nothing carried the diagnosis across attempts.
+        + (
+            "\n\n<previous_attempt_failed note=\"an earlier attempt at this "
+            "exact task failed for the reason below — diagnose it and take a "
+            "different approach; repeating it will fail the same way\">\n"
+            + prior_failure.strip()[:1500]
+            + "\n</previous_attempt_failed>"
+            if prior_failure.strip()
+            else ""
+        )
     )
     # Grounding gate (§13.25.2): the contract this task will be judged
     # against must actually be in the prompt. A required manifest entry

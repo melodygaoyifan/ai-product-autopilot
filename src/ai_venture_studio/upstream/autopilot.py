@@ -293,9 +293,8 @@ def _build_plan(
     # super-step-granular like the review graph: a task interrupted halfway
     # restarts that task, and the ones before it stay done.
     outcomes: list[TaskOutcome] = _resume_outcomes(root)
-    ordered, resumed = tasks_to_build(
-        outcomes, _topo_order(load_plan(root).tasks)[:max_tasks]
-    )
+    plan_topo = _topo_order(load_plan(root).tasks)[:max_tasks]
+    ordered, resumed = tasks_to_build(outcomes, plan_topo)
     if resumed:
         auto_approvals.append(
             f"resumed: {len(resumed)} task(s) already built "
@@ -304,54 +303,32 @@ def _build_plan(
     if parallel:
         auto_approvals.append("parallel lanes: wave scheduling (one task per lane per wave)")
         for wave in schedule_waves(ordered):
-            outcomes += _build_wave_parallel(
+            for wave_outcome in _build_wave_parallel(
                 root, wave, provider=provider, model=model,
                 auto_approvals=auto_approvals, fdr_text=fdr_text,
-            )
+            ):
+                record_outcome(outcomes, wave_outcome)
         ordered = []
     for task in ordered:
-        # Each of these steps is minutes long and, until now, silent: the task
-        # simply stayed `pending` from here until it finished or died.
-        progress.step(root, task.id, "spec", f"working out how to build: {task.title}")
-        spec = run_spec_stage(
-            root, f"{task.description} (task:{task.id})", provider=provider,
-            source_contract=fdr_text,
+        outcome = _attempt_task(
+            root, task, provider=provider, model=model, fdr_text=fdr_text,
+            auto_approvals=auto_approvals,
         )
-        if spec.status != "proposed":
-            reasons = "; ".join(spec.block_reasons) or "blocked (no reasons recorded)"
-            progress.step(root, task.id, "spec", f"blocked: {reasons[:160]}")
-            outcomes.append(
-                TaskOutcome(task_id=task.id, title=task.title, status="spec_blocked",
-                            detail=reasons)
-            )
-            continue
-        approve_spec(root, spec.slug)
-        auto_approvals.append(
-            f"Gate U3 ({spec.slug}): auto — ears_lint + coverage passed"
-        )
-        built = run_build(root, spec.slug, provider=provider, model=model,
-                          task_lane=task.lane, task_estimate_hours=task.estimate_hours,
-                          source_contract=fdr_text)
-        verdict = None
-        detail = built.detail
-        if built.status == "built":
-            verdict, detail, approvals = review_and_repair(
-                root, provider=provider, model=model, label=spec.slug,
-                task_id=task.id, detail=detail,
-            )
-            auto_approvals.extend(approvals)
-        outcomes.append(
-            TaskOutcome(
-                task_id=task.id, title=task.title,
-                status=built.status, review_verdict=verdict, detail=detail,
-                iterations=built.iterations,
-                files_written=built.files_written,
-                test_summary=built.test_summary,
-            )
-        )
+        record_outcome(outcomes, outcome)
         # Persist immediately: a crash after this point must not lose the
         # task that just cost minutes to build.
         _write_outcomes(root, outcomes)
+
+    # The machine retries its own failures before asking a human to. Every
+    # failed task used to end the story with a retry button the founder had
+    # to press — and the bench record shows that button usually worked
+    # (t1/t2 recovered on the second pass, t5/t9 built on retry). A retry a
+    # human would perform mechanically is the machine's job; judgment gates
+    # stay human.
+    _retry_failed_tasks(
+        root, plan_topo, outcomes, provider=provider, model=model,
+        fdr_text=fdr_text, auto_approvals=auto_approvals,
+    )
 
     report = provider_impl.complete(
         model=model,
@@ -448,6 +425,181 @@ def _outcome_tally(outcomes) -> str:
                 " / not your requirements — ours; retry it on its own"
             )
     return "\n".join(lines) + "\n"
+
+
+def record_outcome(outcomes: list, outcome: TaskOutcome) -> None:
+    """One row per task, always: replace the previous attempt's row.
+
+    Appending was a bug with a delayed fuse. `_resume_outcomes` keeps failed
+    rows (so a re-run knows what to re-attempt), and the build loop appended
+    a fresh row for the re-attempt — leaving both. The tally then counted
+    the ghost: a workspace whose failed task was rebuilt on the next run
+    reported "3/4 modules built" and status `failed` for a product that was
+    entirely built, and the founder was asked to retry work that was already
+    done. A run that says failed when it succeeded is a manufactured
+    stop-and-ask.
+
+    Keyed on task_id alone, deliberately: ids are positional and the plan is
+    authoritative about what t4 *is now*, so a stale row about what t4 used
+    to be must not survive alongside the new one. (Skipping-as-built is the
+    opposite problem and stays keyed on (id, title) in `tasks_to_build`.)
+    """
+    for index, existing in enumerate(outcomes):
+        if existing.task_id == outcome.task_id:
+            outcomes[index] = outcome
+            return
+    outcomes.append(outcome)
+
+
+def _attempt_task(
+    root: Path,
+    task,
+    *,
+    provider: str,
+    model: str,
+    fdr_text: str,
+    auto_approvals: list[str],
+    prior_failure: str = "",
+    marker: str | None = None,
+) -> TaskOutcome:
+    """One task, end to end: spec → Gate U3 → build → review → repair.
+
+    Extracted so the first attempt, the auto-retry, and the feature flow run
+    the SAME code — the retry paths used to be hand-copied variants, which is
+    how `retry-task` shipped without the review gate and the feature loop
+    without progress narration. `prior_failure` is the previous attempt's
+    diagnosis; both the spec writer and the implementer see it, so a retry is
+    a different attempt rather than a replay.
+    """
+    marker = marker or task.id
+    progress.step(root, task.id, "spec", f"working out how to build: {task.title}")
+    spec = run_spec_stage(
+        root, f"{task.description} (task:{marker})", provider=provider,
+        source_contract=fdr_text, prior_failure=prior_failure,
+    )
+    if spec.status != "proposed":
+        reasons = "; ".join(spec.block_reasons) or "blocked (no reasons recorded)"
+        progress.step(root, task.id, "spec", f"blocked: {reasons[:160]}")
+        return TaskOutcome(
+            task_id=task.id, title=task.title, status="spec_blocked", detail=reasons
+        )
+    approve_spec(root, spec.slug)
+    auto_approvals.append(f"Gate U3 ({spec.slug}): auto — ears_lint + coverage passed")
+    built = run_build(
+        root, spec.slug, provider=provider, model=model,
+        task_lane=task.lane, task_estimate_hours=task.estimate_hours,
+        source_contract=fdr_text, prior_failure=prior_failure,
+    )
+    verdict = None
+    detail = built.detail
+    if built.status == "built":
+        verdict, detail, approvals = review_and_repair(
+            root, provider=provider, model=model, label=spec.slug,
+            task_id=task.id, detail=detail,
+        )
+        auto_approvals.extend(approvals)
+    return TaskOutcome(
+        task_id=task.id, title=task.title,
+        status=built.status, review_verdict=verdict, detail=detail,
+        iterations=built.iterations,
+        files_written=built.files_written,
+        test_summary=built.test_summary,
+    )
+
+
+#: What the machine may retry on its own: every status in `_OURS` — our spec
+#: writer, our build gate, our lane collision. A retry of these is mechanical
+#: (the founder's retry button did exactly this); nothing here overrides a
+#: human judgment gate.
+_AUTO_RETRYABLE = frozenset({"spec_blocked", "build_failed", "error", "merge_conflict"})
+
+
+def _failure_context(outcome: TaskOutcome) -> str:
+    """The previous attempt's diagnosis, as the next attempt's context."""
+    parts = [f"previous attempt status: {outcome.status}"]
+    if outcome.detail:
+        parts.append(f"detail: {outcome.detail}")
+    if outcome.test_summary:
+        parts.append(f"test summary: {outcome.test_summary}")
+    return "\n".join(parts)
+
+
+def _retry_failed_tasks(
+    root: Path,
+    plan_tasks,
+    outcomes: list,
+    *,
+    provider: str,
+    model: str,
+    fdr_text: str,
+    auto_approvals: list[str],
+    marker_for=None,
+    persist: bool = True,
+) -> None:
+    """One bounded retry pass over this run's own failures.
+
+    The founder's retry button recovers real tasks — the bench record shows
+    it — and pressing it requires no judgment, only patience. So the run
+    presses it itself, once per failed task, in dependency order (a task
+    that failed because its dependency failed retries AFTER the dependency
+    recovered), with the failure handed to the writer as context. Bounded on
+    purpose: one pass, never recursive, and the cost gate is consulted first
+    so a run over its cap does not retry itself deeper into the cap.
+
+    Every retry and its result land in auto_approvals — the report says what
+    the machine did on the founder's behalf, never silently.
+    """
+    failed = {o.task_id: o for o in outcomes if o.status in _AUTO_RETRYABLE}
+    if not failed:
+        return
+    from ai_venture_studio import spend
+
+    spend.flush(root)
+    gate = spend.cost_gate(root)
+    if not gate.passed:
+        auto_approvals.append(
+            f"auto-retry skipped ({len(failed)} failed task(s)): "
+            + gate.reasons[0]
+        )
+        return
+    recovered: list[str] = []
+    for task in plan_tasks:
+        prior = failed.get(task.id)
+        if prior is None:
+            continue
+        progress.step(
+            root, task.id, "retry",
+            f"first attempt failed — retrying with its failure as context: {task.title}",
+        )
+        outcome = _attempt_task(
+            root, task, provider=provider, model=model, fdr_text=fdr_text,
+            auto_approvals=auto_approvals,
+            prior_failure=_failure_context(prior),
+            marker=marker_for(task) if marker_for else None,
+        )
+        if outcome.status == "built":
+            outcome.detail = (
+                (outcome.detail + " " if outcome.detail else "")
+                + "(recovered on auto-retry)"
+            )
+            recovered.append(task.id)
+        else:
+            # Both diagnoses travel: a later human retry starts from the
+            # accumulated history, not from the last symptom alone.
+            outcome.detail = (
+                (outcome.detail + " " if outcome.detail else "")
+                + f"(auto-retry also failed; first attempt: {prior.status}"
+                + (f" — {prior.detail[:160]}" if prior.detail else "")
+                + ")"
+            )
+        record_outcome(outcomes, outcome)
+        if persist:
+            _write_outcomes(root, outcomes)
+    auto_approvals.append(
+        f"auto-retry: {len(failed)} failed task(s) retried once with their "
+        f"failure as context; {len(recovered)} recovered"
+        + (f" ({', '.join(recovered)})" if recovered else "")
+    )
 
 
 def tasks_to_build(outcomes, tasks) -> tuple[list, list[str]]:
@@ -941,40 +1093,21 @@ def run_feature(
 
     auto_approvals = [f"feature plan ({slug}): auto — dag_check passed"]
     outcomes: list[TaskOutcome] = []
-    for task in _topo_order(tasks):
-        spec = run_spec_stage(
-            root, f"{task.description} (task:{slug}-{task.id})", provider=provider,
-            source_contract=fdr_text,
-        )
-        if spec.status != "proposed":
-            outcomes.append(TaskOutcome(
-                task_id=task.id, title=task.title, status="spec_blocked",
-                detail="; ".join(spec.block_reasons) or "blocked (no reasons recorded)",
-            ))
-            continue
-        approve_spec(root, spec.slug)
-        auto_approvals.append(f"Gate U3 ({spec.slug}): auto — ears_lint + coverage passed")
-        built = run_build(root, spec.slug, provider=provider, model=model,
-                          task_lane=task.lane, task_estimate_hours=task.estimate_hours,
-                          source_contract=fdr_text)
-        verdict = None
-        if built.status == "built":
-            review = _review_head(root, provider)
-            verdict = review.verdict.value if review else None
-            serious = [f for f in (review.findings if review else [])
-                       if f.severity.value in ("critical", "high")]
-            if serious:
-                landed, after = _fix_iteration(root, provider, model, serious)
-                if after:
-                    verdict = after.verdict.value
-                if landed:
-                    auto_approvals.append(
-                        f"fix iteration ({spec.slug}): {len(serious)} finding(s) "
-                        "repaired and re-reviewed clean"
-                    )
-        outcomes.append(TaskOutcome(task_id=task.id, title=task.title,
-                                    status=built.status, review_verdict=verdict,
-                                    detail=built.detail))
+    feature_topo = _topo_order(tasks)
+    for task in feature_topo:
+        record_outcome(outcomes, _attempt_task(
+            root, task, provider=provider, model=model, fdr_text=fdr_text,
+            auto_approvals=auto_approvals, marker=f"{slug}-{task.id}",
+        ))
+    # Feature builds fail for the same mechanical reasons full builds do, and
+    # the founder's recourse was the same retry button. Same pass, same
+    # bounds; feature outcomes stay in the feature dir, so no product-level
+    # persistence.
+    _retry_failed_tasks(
+        root, feature_topo, outcomes, provider=provider, model=model,
+        fdr_text=fdr_text, auto_approvals=auto_approvals,
+        marker_for=lambda t: f"{slug}-{t.id}", persist=False,
+    )
 
     report = provider_impl.complete(
         model=model,

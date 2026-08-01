@@ -60,6 +60,30 @@ Three properties, because a price is a claim like any other here:
 - **A model with no sourced price stays unpriced and is named.** The total is
   labelled a floor rather than quietly counting that call as zero.
 
+### The run retries its own failures (auto-retry)
+
+A failed task used to end the story with a retry button the founder had to
+press — and the bench record shows that button usually worked (t1/t2
+recovered on the second pass, t5/t9 built on retry). Pressing it takes no
+judgment, only patience, so the run presses it itself:
+
+- **One bounded pass**, after the first pass over the plan, in dependency
+  order — a task that failed because its dependency failed retries *after*
+  the dependency recovered. Never recursive.
+- **The retry knows why the last attempt died.** The previous attempt's
+  status, detail, and test summary travel into both the spec writer's and
+  the implementer's prompts as `<previous_attempt_failed>` — a retry is a
+  different attempt, not a replay. `avs retry-task` passes the recorded
+  failure from `outcomes.yaml` the same way.
+- **Mechanical failures only** (`spec_blocked`, `build_failed`, `error`,
+  `merge_conflict` — exactly the statuses the report already calls ours).
+  Human judgment gates are untouched: the FDR questions, the plan
+  confirmation, and review escalations still wait for you.
+- **The cost cap is consulted first** — a run over its cap does not retry
+  itself deeper into the cap; the skip is recorded.
+- **Everything is recorded** in the report's auto-approvals: which tasks
+  were retried, with what context, and which recovered.
+
 ### 小程序 runtime verification (`avs mp-runtime`)
 
 The build gate's loadability check is **static**: it reads `app.json` and
