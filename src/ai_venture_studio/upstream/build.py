@@ -168,6 +168,106 @@ def _boot_gate(repo: Path) -> str | None:
             pass
 
 
+_MP_CONTRACT_HINT = (
+    "a mini-program is loaded from app.json: it must exist at the "
+    "miniprogram root, list every page in its `pages` array (first entry is "
+    "the launch page), and be accompanied by app.js calling App({}). A page "
+    "directory that is not in `pages` cannot be reached by anyone."
+)
+
+
+def _miniprogram_root(repo: Path) -> Path:
+    """Where the mini-program actually lives.
+
+    `project.config.json` may name a `miniprogramRoot`; otherwise the
+    conventional `miniprogram/` directory, otherwise the repo itself.
+    """
+    import json
+
+    config = repo / "miniprogram" / "project.config.json"
+    if not config.exists():
+        config = repo / "project.config.json"
+    if config.exists():
+        try:
+            declared = json.loads(config.read_text(encoding="utf-8")).get(
+                "miniprogramRoot"
+            )
+        except (ValueError, OSError):
+            declared = None
+        if declared:
+            return (config.parent / str(declared)).resolve()
+        return config.parent
+    return repo / "miniprogram" if (repo / "miniprogram").is_dir() else repo
+
+
+def _miniprogram_gate(repo: Path) -> str | None:
+    """Gate U4 for 小程序: the product must LOAD, not just pass its suite.
+
+    The web profile has had `_boot_gate` since product-bench run 4, where
+    every built task passed its tests and then failed every probe because
+    the server never listened. The mini-program profile never got the
+    equivalent, and it cost exactly the same way: a run built nine modules
+    and seven page directories, all green, with no app.json and no app.js —
+    so WeChat DevTools could not open the project at all and not one page
+    was reachable.
+
+    Static rather than runtime, because DevTools is a desktop application
+    that cannot be driven headlessly in CI. Returns feedback text on
+    failure, None when the project would load.
+    """
+    import json
+
+    root = _miniprogram_root(repo)
+    pages_dir = root / "pages"
+    if not pages_dir.is_dir() and not (root / "app.json").exists():
+        return None  # nothing built here yet — not this gate's business
+
+    problems: list[str] = []
+    app_json = root / "app.json"
+    registered: list[str] = []
+    if not app_json.exists():
+        problems.append(f"{app_json.relative_to(repo)} is missing entirely")
+    else:
+        try:
+            data = json.loads(app_json.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            return (
+                f"MINI-PROGRAM GATE: {app_json.relative_to(repo)} is not valid "
+                f"JSON ({exc}) — DevTools refuses the project. " + _MP_CONTRACT_HINT
+            )
+        registered = [str(p) for p in (data.get("pages") or [])]
+        if not registered:
+            problems.append("app.json has no `pages` — nothing would launch")
+        for page in registered:
+            for suffix in (".js", ".wxml"):
+                if not (root / f"{page}{suffix}").exists():
+                    problems.append(
+                        f"app.json registers {page!r} but {page}{suffix} does not exist"
+                    )
+    if not (root / "app.js").exists():
+        problems.append(f"{(root / 'app.js').relative_to(repo)} is missing")
+
+    # Pages built but never registered: the founder cannot reach them. This
+    # is the mini-program's version of the wireup check.
+    on_disk = sorted(
+        f"pages/{path.parent.name}/{path.stem}"
+        for path in pages_dir.glob("*/*.wxml")
+    ) if pages_dir.is_dir() else []
+    unreachable = [p for p in on_disk if p not in registered]
+    if unreachable:
+        problems.append(
+            "these pages exist but are not in app.json `pages`, so nothing "
+            "can open them: " + ", ".join(unreachable[:8])
+        )
+    if not problems:
+        return None
+    return (
+        "MINI-PROGRAM GATE — the project would not load in WeChat DevTools:\n"
+        + "\n".join(f"- {p}" for p in problems[:8])
+        + "\n" + _MP_CONTRACT_HINT
+    )
+
+
 def _preserve_failed_attempt(repo: Path, slug: str, source: Path | None = None) -> str:
     """Failure forensics that survives cleanup: copy the dirty tree to
     .mas/failed-builds/<slug>. Before this, 'worktree left for inspection'
@@ -919,13 +1019,24 @@ def _run_build_inner(
         ):
             # skipped = JS tests exist but no node runtime; the skip is
             # visible in the report and review still judges the diff.
+            if project.profile in ("web", "miniprogram"):
+                progress.step(
+                    repo, slug, "build",
+                    "checking that it actually starts up" if project.profile == "web"
+                    else "checking that the mini-program would load",
+                )
             if project.profile == "web":
-                progress.step(repo, slug, "build", "checking that it actually starts up")
-            boot_failure = _boot_gate(repo) if project.profile == "web" else None
+                boot_failure = _boot_gate(repo)
+            elif project.profile == "miniprogram":
+                # Same lesson as the web boot gate, ported: passing your own
+                # tests is not the same as being loadable.
+                boot_failure = _miniprogram_gate(repo)
+            else:
+                boot_failure = None
             if boot_failure is None:
                 progress.step(repo, slug, "build", "tests pass — saving the code")
                 break
-            progress.step(repo, slug, "build", "it did not start up — fixing")
+            progress.step(repo, slug, "build", "it would not load — fixing")
             feedback = boot_failure
             continue
         feedback = report.detail or report.summary
