@@ -4,6 +4,48 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.66.0 — the spend guard: the ceiling reaches the one persona that cannot use a CLI
+
+Built from research rather than intuition. The published record on
+non-technical builders using AI app tools converges on a short list of
+failure modes: the bug doom loop that burns credits, the comprehension debt
+of owning code you cannot read, the prototype-vs-product gap — and, at the
+top, **surprise bills**: runaway usage-billed sessions ($607 Replit bills,
+credits gone overnight), with no major platform setting a spending cap by
+default and every guide's first recommendation being a hard cap on day one.
+
+Cross-validated against this codebase mode by mode, most of that list was
+already closed — bounded build iterations with test feedback, the auto-retry
+with failure context (v0.65), plain-language reports that never blame the
+founder, probes generated from the founder's own requirements. Two gaps
+survived the check:
+
+**The cap existed and the founder could not reach it.** `avs prices --import
+--cap` shipped in v0.65 — CLI-only. The Studio's cost card showed spend with
+no ceiling on it, to exactly the persona the industry data says is most
+burned by the missing ceiling and least able to use a CLI. The card is now
+the **spend guard**: this month's spend against the cap (honestly labelled a
+floor when a call is unpriced), a one-click set-cap form that writes the
+same `.mas/cost-model.yaml` the CLI owns (packaged reference prices ride
+along so the cap can actually fire; a price the operator corrected is never
+overwritten), and — when the cap is reached — "builds are paused between
+modules, nothing is lost, raise it to continue", because a cap doing its job
+must never read as a failure. It sits on the **confirm page**, next to the
+button that starts the spend, not only on the report page where the bill
+already exists — and it shows before the first dollar, where the old card
+hid itself until money had been spent. Mode-adaptable, add-only: engineer
+gains the per-model table and the CLI twins (`avs cost`, `avs prices`);
+enterprise gains the governance note; the founder card is complete on its
+own, in both languages.
+
+**The verification nobody could see.** Probes generated from the founder's
+own FDR run against the built product and write `VERIFICATION.md` — the one
+artifact that answers "does it actually work?" without asking a founder to
+judge code — and it was never linked anywhere. The Studio now serves it and
+links it beside the acceptance walkthrough. The Studio's own wireup gate
+caught the first draft of this change (a route rendered by no state), which
+is the gate doing precisely what it was built for.
+
 ## v0.65.0 — the run presses its own retry button, and the cost cap can fire
 
 Two changes, both against the failure modes that matter most for autonomous

@@ -110,6 +110,7 @@ def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
     # 5. Feature awaiting confirmation (renders before the report page).
     (root / "product" / "BUILD-REPORT.md").write_text("# done", encoding="utf-8")
     (root / "product" / "ACCEPTANCE.md").write_text("check", encoding="utf-8")
+    (root / "product" / "VERIFICATION.md").write_text("- [x] ok", encoding="utf-8")
     shots = root / "product" / "screenshots"
     shots.mkdir(parents=True, exist_ok=True)
     (shots / "home.png").write_bytes(b"\x89PNG\r\n")

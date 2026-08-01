@@ -726,6 +726,68 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Billed to your own API key — the framework never spends money "
               "on your behalf.",
     },
+    # --- the spend guard (cost + cap, on the pages where money is decided) --
+    "h_spend_guard": {
+        "zh": "花费与上限 / Spending &amp; cap",
+        "en": "Spending &amp; cap",
+    },
+    "cap_month_line": {
+        "zh": "本月（{month}）已花 {spent}，上限 {cap}。",
+        "en": "This month ({month}): {spent} of your {cap} cap.",
+    },
+    "cap_no_spend": {
+        "zh": "本月还没有产生费用。",
+        "en": "No model calls yet this month.",
+    },
+    "cap_none_warn": {
+        "zh": "还没有设定每月花费上限。意外账单几乎都来自没有上限的自动运行 —— "
+              "设一个：到达后构建会在模块之间暂停，什么都不会丢，随时可以调高。",
+        "en": "No monthly spending cap is set. Surprise bills come from "
+              "letting an agent run with no ceiling — set one: when it is "
+              "reached, builds pause between modules, nothing is lost, and "
+              "you can raise it any time.",
+    },
+    "cap_over_note": {
+        "zh": "已到上限：构建在模块之间暂停了。没有任何东西丢失 —— 调高上限即可继续。",
+        "en": "The cap is reached: builds are paused between modules. Nothing "
+              "is lost — raise the cap to continue.",
+    },
+    "cap_floor_note": {
+        "zh": "有些调用还没有单价记录，所以这个数字是下限，实际略高。",
+        "en": "Some calls have no price on file, so this total is a floor — "
+              "the true figure is slightly higher.",
+    },
+    "cap_change_summary": {
+        "zh": "修改上限 / Change the cap",
+        "en": "Change the cap",
+    },
+    "btn_set_cap": {
+        "zh": "设定每月上限（美元）/ Set monthly cap (US$)",
+        "en": "Set monthly cap (US$)",
+    },
+    "cap_invalid": {
+        "zh": "这不是一个有效的金额，上限没有改动。",
+        "en": "That is not a valid amount — the cap was not changed.",
+    },
+    "eng_cost_detail": {
+        "zh": "按模型细分（`avs cost` 的输出）/ Per-model spend",
+        "en": "Per-model spend (what `avs cost` prints)",
+    },
+    "ent_cap_note": {
+        "zh": "上限存放在 .mas/cost-model.yaml —— 它是一份预算决定，价格条目带来源与"
+              "日期，导入永远不会覆盖你自己改过的单价。",
+        "en": "The cap lives in .mas/cost-model.yaml — a budget decision on "
+              "file. Price entries carry a source and a date, and an import "
+              "never overwrites a price you corrected yourself.",
+    },
+    "link_verification": {
+        "zh": "🔎 自动验收结果 / What was checked automatically",
+        "en": "🔎 What was checked automatically",
+    },
+    "title_verification": {
+        "zh": "自动验收结果 / Automatic verification",
+        "en": "Automatic verification",
+    },
     "title_working": {"zh": "正在处理 / Working…", "en": "Working on it…"},
     "working_lead": {
         "zh": "已经在做了，请不要重复提交。",

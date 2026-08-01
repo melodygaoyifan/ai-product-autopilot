@@ -415,12 +415,18 @@ def test_the_studio_product_page_shows_what_it_cost(tmp_path):
     page = TestClient(
         create_studio_app(root, spawn=lambda r: 1, provider="mock")
     ).get("/").text
-    assert "What this cost" in page
+    # v0.66: the cost card grew a ceiling and became the spend guard —
+    # same page, same money, now with the cap state beside it.
+    assert "Spending &amp; cap" in page
     assert "$3.00" in page
     assert "your own API key" in page  # whose money it is, said plainly
 
 
-def test_the_studio_omits_the_cost_card_when_nothing_was_spent(tmp_path):
+def test_the_studio_shows_the_guard_even_before_any_spend(tmp_path):
+    """The old card hid itself until money had been spent — which is
+    exactly backwards for the cap: the ceiling matters BEFORE the first
+    dollar, not after (v0.66 spend guard; the set-cap suggestion is the
+    point of the empty state)."""
     import shutil
 
     if shutil.which("git") is None:
@@ -436,7 +442,8 @@ def test_the_studio_omits_the_cost_card_when_nothing_was_spent(tmp_path):
     page = TestClient(
         create_studio_app(root, spawn=lambda r: 1, provider="mock")
     ).get("/").text
-    assert "What this cost" not in page
+    assert "No model calls yet this month" in page
+    assert "action=/cap" in page
 
 
 def test_the_build_report_gets_a_cost_section(tmp_path):

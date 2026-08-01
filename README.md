@@ -194,7 +194,7 @@ is in [claims/platform.yaml](claims/platform.yaml).
 - **Perf-lane calibration**: 5 of 5 seeded defects caught (catch rate 100%)
   at the 3x relative-detection factor, loopback low-parity environment,
   2026-07-26 ([manifest](benchmarks/perf_seeded/calibration.yaml)).
-- **1543 hermetic tests** (`uv run pytest`, no network, no keys); every PR
+- **1552 hermetic tests** (`uv run pytest`, no network, no keys); every PR
   in this repo was reviewed by avs itself, and five of those reviews caught
   real bugs.
 - **A hermetic suite is not enough, and this repo says so.** Twelve real
@@ -295,10 +295,27 @@ sends). Credentials live in a vault layer that never enters prompts.
 
 ### What happens when a build fails?
 
-Failed modules are preserved for post-mortem, the rest of the product keeps
-working, and the Studio offers per-module retry — an interrupted build
-resumes from what is already built instead of re-paying it. Review verdicts
-and gate records stay on disk as YAML you can replay.
+The run retries its own mechanical failures first: one bounded pass, in
+dependency order, with the previous attempt's diagnosis handed to the writer
+— so a retry is a different attempt, not a replay. What still fails is
+preserved for post-mortem, the rest of the product keeps working, and the
+Studio offers per-module retry — an interrupted build resumes from what is
+already built instead of re-paying it. Review verdicts and gate records stay
+on disk as YAML you can replay.
+
+### Can it run up a surprise bill?
+
+Signal s6, verbatim: *"how much will a typical month of builds cost me? I'm
+scared to leave autopilot running."* Three answers, all mechanical: every
+build report ends with what it cost, as arithmetic; the Studio's
+**Spending & cap** card sits on the confirm page — next to the button that
+starts the spend — and sets a monthly ceiling in one click; and when the
+ceiling is reached, builds pause between modules with nothing lost, until
+you raise it. Prices are published list prices with a source and a date
+(`avs prices`), ranges resolved upward so the estimate is a ceiling, and a
+model with no sourced price keeps the total honestly labelled a floor. The
+cap is yours: no default is silently imposed, and the framework itself
+never spends money on your behalf.
 
 ### How is this different from an orchestration SDK like LangGraph or CrewAI?
 
