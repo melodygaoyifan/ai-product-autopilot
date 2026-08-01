@@ -25,7 +25,7 @@ than a spend.
     truncation_visible   a response cut off at the cap is detectable, since
                          truncated YAML usually still parses and a partial
                          answer that parses is worse than one that does not
-    usage_metered        the spend ledger saw the call, so the cost gate and
+    usage_metered        the spend ledger saw the call, so `avs cost` and
                          the founder's cost line are not silently reading zero
 
 An unconfigured provider is SKIPPED, loudly, naming the variable. A skip is
@@ -214,7 +214,7 @@ def _truncation_visible(provider, model: str) -> Check:
 
 
 def _usage_metered(provider, model: str) -> Check:
-    """The cost gate and the founder's cost line both read this ledger. An
+    """`avs cost` and the founder's cost line both read this ledger. An
     adapter that stops metering makes them read zero, which is the one
     number nobody questions."""
     from ai_venture_studio import spend

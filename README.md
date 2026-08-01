@@ -194,7 +194,7 @@ is in [claims/platform.yaml](claims/platform.yaml).
 - **Perf-lane calibration**: 5 of 5 seeded defects caught (catch rate 100%)
   at the 3x relative-detection factor, loopback low-parity environment,
   2026-07-26 ([manifest](benchmarks/perf_seeded/calibration.yaml)).
-- **1552 hermetic tests** (`uv run pytest`, no network, no keys); every PR
+- **1544 hermetic tests** (`uv run pytest`, no network, no keys); every PR
   in this repo was reviewed by avs itself, and five of those reviews caught
   real bugs.
 - **A hermetic suite is not enough, and this repo says so.** Twelve real
@@ -306,16 +306,22 @@ on disk as YAML you can replay.
 ### Can it run up a surprise bill?
 
 Signal s6, verbatim: *"how much will a typical month of builds cost me? I'm
-scared to leave autopilot running."* Three answers, all mechanical: every
-build report ends with what it cost, as arithmetic; the Studio's
-**Spending & cap** card sits on the confirm page — next to the button that
-starts the spend — and sets a monthly ceiling in one click; and when the
-ceiling is reached, builds pause between modules with nothing lost, until
-you raise it. Prices are published list prices with a source and a date
-(`avs prices`), ranges resolved upward so the estimate is a ceiling, and a
-model with no sourced price keeps the total honestly labelled a floor. The
-cap is yours: no default is silently imposed, and the framework itself
-never spends money on your behalf.
+scared to leave autopilot running."* The answer is visibility plus your
+provider's own controls. Every call is billed to **your** key or
+subscription — the framework holds nobody's keys and never spends money on
+your behalf — so spending limits belong where the billing actually happens:
+your provider account, whose limits see all usage on the key and cannot be
+bypassed by anything here. What the framework owes you is the number, and
+it delivers it everywhere money is decided: every build report ends with
+what the run cost, as arithmetic; `avs cost` prints the month per model;
+the Studio shows spend on the confirm page, before the first dollar.
+Prices are published list prices with a source and a date (`avs prices`),
+ranges resolved upward so the estimate is a ceiling, and a model with no
+sourced price keeps the total honestly labelled a floor — never counted as
+zero. There is deliberately no framework-side spending cap
+([ADR-032](docs/adr/032-no-framework-spending-cap.md)): it would duplicate
+your provider's control and mislead subscription users whose tokens don't
+map to marginal dollars.
 
 ### How is this different from an orchestration SDK like LangGraph or CrewAI?
 

@@ -70,15 +70,11 @@ def dor_gate_node(state: ReviewState, *, repo_dir: str) -> dict[str, Any]:
     policy = load_policy(repo_dir)  # PolicyError is fatal, by design
     reasons = []
 
-    # Cost gate (doc 09 §10): the cap is only worth anything BEFORE the spend,
-    # which is what Gate 1 is for. Silent unless the operator configured a cap;
-    # `cap_check` used to have no caller at all, so the cap was a number in a
-    # file nothing read.
-    from ai_venture_studio.spend import cost_gate
-
-    cost = cost_gate(repo_dir)
-    if not cost.passed:
-        reasons.extend(cost.reasons)
+    # Deliberately no cost check here (ADR-032): every call is billed to the
+    # operator's own key or subscription, and budget enforcement belongs to
+    # the provider account that does the billing. Spend is measured and
+    # reported (spend.flush in post_node); nothing in this graph refuses
+    # work over money.
 
     if not diff.files:
         reasons.append("empty diff — nothing to review")

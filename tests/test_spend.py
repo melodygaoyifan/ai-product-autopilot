@@ -1,14 +1,13 @@
-"""The spend ledger and the cost gate.
+"""The spend ledger — visibility, never gating.
 
-observability.py could already price a call, total a month, and compare
-against a cap — and none of it was reachable, because nothing ever recorded a
-call. `cap_check` had no production caller and there was no ledger for it to
-read: cost was computable and unmeasured.
+observability.py could already price a call and total a month — and none of
+it was reachable, because nothing ever recorded a call: cost was computable
+and unmeasured.
 
-The two honesty rules under test here are the ones that make a cap mean
-something over time: an unpriced call is never counted as zero (the total is
-reported as a floor), and no configured cap means the gate says it checked
-nothing rather than silently passing.
+The honesty rule under test: an unpriced call is never counted as zero (the
+total is reported as a floor). There is deliberately no cap and no gate —
+billing limits live at the provider that does the billing (ADR-032), so
+this module states and never refuses.
 """
 
 from __future__ import annotations
@@ -32,16 +31,13 @@ def _clean_buffer():
         spend._buffer.clear()
 
 
-def _workspace(tmp_path, cap=None, prices=None):
+def _workspace(tmp_path, prices=None):
     root = tmp_path / "ws"
     (root / ".mas").mkdir(parents=True)
-    model = {}
-    if cap is not None:
-        model["monthly_cap_usd"] = cap
     if prices is not None:
-        model["prices"] = prices
-    if model:
-        (root / ".mas" / "cost-model.yaml").write_text(yaml.safe_dump(model))
+        (root / ".mas" / "cost-model.yaml").write_text(
+            yaml.safe_dump({"prices": prices})
+        )
     return root
 
 
@@ -131,93 +127,77 @@ def test_concurrent_recording_loses_nothing(tmp_path):
     assert len(spend.read_entries(root)) == 400
 
 
-# --- the gate ----------------------------------------------------------------
+# --- the month report: a statement, never a verdict --------------------------
 
 
-def test_no_configured_cap_means_the_gate_says_it_checked_nothing(tmp_path):
-    """Silently passing would let an operator believe a cap existed."""
-    result = spend.cost_gate(_workspace(tmp_path))
-    assert result.passed is True
-    assert result.configured is False
-    assert "no monthly_cap_usd" in result.note
-
-
-def test_the_gate_passes_under_the_cap(tmp_path):
-    root = _workspace(tmp_path, cap=100.0, prices=SONNET)
+def test_month_report_states_the_month(tmp_path):
+    root = _workspace(tmp_path, prices=SONNET)
     spend.record("claude-sonnet-5", 1_000_000, 100_000)  # $3 + $1.50
     spend.flush(root)
-    result = spend.cost_gate(root)
-    assert result.passed is True
-    assert result.configured is True
-    assert result.spent_usd == pytest.approx(4.5)
-    assert result.unpriced_calls == 0
-    assert result.is_floor is False
-
-
-def test_the_gate_refuses_once_the_cap_is_reached(tmp_path):
-    root = _workspace(tmp_path, cap=5.0, prices=SONNET)
-    for _ in range(2):
-        spend.record("claude-sonnet-5", 1_000_000, 100_000)  # $4.50 each
-    spend.flush(root)
-    result = spend.cost_gate(root)
-    assert result.passed is False
-    assert result.reasons and "cap" in result.reasons[0]
-    # the way out is named, and the limit is attributed to whoever set it
-    assert "monthly_cap_usd" in result.reasons[0]
-    assert "YOU set" in result.reasons[0]
+    report = spend.month_report(root)
+    assert report.spent_usd == pytest.approx(4.5)
+    assert report.calls == 1
+    assert report.unpriced_calls == 0
+    assert report.is_floor is False
 
 
 def test_an_unpriced_call_is_never_counted_as_zero(tmp_path):
-    """A cap compared against a total that hides unpriced calls silently stops
-    working the day you switch models."""
-    root = _workspace(tmp_path, cap=100.0, prices=SONNET)
+    """A total that hides unpriced calls understates — the number must say
+    it is a floor."""
+    root = _workspace(tmp_path, prices=SONNET)
     spend.record("claude-sonnet-5", 1_000_000, 0)  # $3, priced
     spend.record("gpt-5", 5_000_000, 500_000)      # no price at all
     spend.flush(root)
-    result = spend.cost_gate(root)
-    assert result.unpriced_calls == 1
-    assert result.is_floor is True
-    assert "FLOOR" in result.note
-    assert result.spent_usd == pytest.approx(3.0)  # the priced part only
+    report = spend.month_report(root)
+    assert report.unpriced_calls == 1
+    assert report.is_floor is True
+    assert "FLOOR" in report.note
+    assert report.spent_usd == pytest.approx(3.0)  # the priced part only
 
 
-def test_spend_in_another_month_does_not_block_this_one(tmp_path):
-    root = _workspace(tmp_path, cap=1.0, prices=SONNET)
+def test_spend_in_another_month_stays_in_its_month(tmp_path):
+    root = _workspace(tmp_path, prices=SONNET)
     path = root / ".mas" / spend.LEDGER_FILE
     path.write_text(json.dumps({
         "at": "2020-01-01T00:00:00+00:00", "model": "claude-sonnet-5",
         "input_tokens": 10_000_000, "output_tokens": 10_000_000,
     }) + "\n")
-    assert spend.cost_gate(root).passed is True
+    assert spend.month_report(root).spent_usd == 0.0
 
 
-# --- the wiring: a cap nothing reads is not a cap ----------------------------
+# --- nothing refuses over money (ADR-032) ------------------------------------
 
 
-def test_a_build_refuses_when_the_cap_is_spent(tmp_path):
+def test_a_build_never_refuses_over_money(tmp_path):
+    """The cap existed briefly (v0.65–v0.66) and was removed as a recorded
+    decision: billing limits live at the provider. A month of heavy spend
+    must not stop a build."""
     import shutil
 
     if shutil.which("git") is None:
         pytest.skip("git not on PATH")
 
+    from ai_venture_studio.upstream import init_workspace
     from ai_venture_studio.upstream.build import run_build
 
-    root = _workspace(tmp_path, cap=1.0, prices=SONNET)
-    spend.record("claude-sonnet-5", 1_000_000, 0)  # $3 > $1 cap
+    root = init_workspace(tmp_path / "ws", "ws", "web")
+    (root / ".mas" / "cost-model.yaml").write_text(
+        yaml.safe_dump({"prices": SONNET})
+    )
+    spend.record("claude-sonnet-5", 100_000_000, 10_000_000)  # a huge month
     spend.flush(root)
 
-    result = run_build(root, "anything")
-    assert result.status == "error"
-    assert "cap" in result.detail
+    # The removed gate returned a money-refusal BuildResult BEFORE touching
+    # the spec. Reaching the missing-spec error proves no money check ran.
+    with pytest.raises(FileNotFoundError, match="spec"):
+        run_build(root, "no-such-spec")
 
 
-def test_gate_1_refuses_a_review_when_the_cap_is_spent(tmp_path):
-    """The cap is only worth anything BEFORE the spend, which is what the
-    Definition-of-Ready gate is for."""
+def test_gate_1_never_refuses_over_money(tmp_path):
     from ai_venture_studio.orchestrator.graph import dor_gate_node
 
-    root = _workspace(tmp_path, cap=1.0, prices=SONNET)
-    spend.record("claude-sonnet-5", 1_000_000, 0)
+    root = _workspace(tmp_path, prices=SONNET)
+    spend.record("claude-sonnet-5", 100_000_000, 10_000_000)
     spend.flush(root)
 
     diff = (
@@ -226,20 +206,6 @@ def test_gate_1_refuses_a_review_when_the_cap_is_spent(tmp_path):
     )
     state = {"target": "HEAD", "diff": {"raw": diff}}
     result = dor_gate_node(state, repo_dir=str(root))
-    assert result["dor_pass"] is False
-    assert any("cap" in reason for reason in result["dor_reasons"])
-
-
-def test_gate_1_still_passes_a_normal_review_with_no_cap(tmp_path):
-    from ai_venture_studio.orchestrator.graph import dor_gate_node
-
-    root = _workspace(tmp_path)
-    diff = (
-        "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n"
-        "@@ -0,0 +1 @@\n+x = 1\n"
-    )
-    result = dor_gate_node({"target": "HEAD", "diff": {"raw": diff}},
-                           repo_dir=str(root))
     assert result["dor_pass"] is True
 
 
@@ -378,18 +344,6 @@ def test_typical_on_an_empty_ledger_does_not_invent_a_number(tmp_path):
     assert "no spend recorded" in shape["note"]
 
 
-def test_the_cap_message_reads_as_the_operators_own_limit(tmp_path):
-    """The framework never decides to spend (ADR-U20); it should not sound
-    like it decided to stop either. The cap is off by default and only exists
-    because somebody wrote a number."""
-    root = _workspace(tmp_path, cap=1.0, prices=SONNET)
-    spend.record("claude-sonnet-5", 1_000_000, 0)
-    spend.flush(root)
-    reason = spend.cost_gate(root).reasons[0]
-    assert "YOU set" in reason
-    assert "your key and your budget" in reason
-
-
 # --- cost reaches the surfaces people actually look at ----------------------
 
 
@@ -415,18 +369,17 @@ def test_the_studio_product_page_shows_what_it_cost(tmp_path):
     page = TestClient(
         create_studio_app(root, spawn=lambda r: 1, provider="mock")
     ).get("/").text
-    # v0.66: the cost card grew a ceiling and became the spend guard —
-    # same page, same money, now with the cap state beside it.
-    assert "Spending &amp; cap" in page
+    # v0.67: back to a pure statement — the cap was removed (ADR-032),
+    # the visibility stays.
+    assert "What this cost" in page
     assert "$3.00" in page
     assert "your own API key" in page  # whose money it is, said plainly
 
 
-def test_the_studio_shows_the_guard_even_before_any_spend(tmp_path):
-    """The old card hid itself until money had been spent — which is
-    exactly backwards for the cap: the ceiling matters BEFORE the first
-    dollar, not after (v0.66 spend guard; the set-cap suggestion is the
-    point of the empty state)."""
+def test_the_studio_shows_the_card_even_before_any_spend(tmp_path):
+    """The card shows before the first dollar: "no spend yet" is itself an
+    answer to "I'm scared to leave autopilot running" — and the empty state
+    is where the founder learns the number will live."""
     import shutil
 
     if shutil.which("git") is None:
@@ -443,7 +396,6 @@ def test_the_studio_shows_the_guard_even_before_any_spend(tmp_path):
         create_studio_app(root, spawn=lambda r: 1, provider="mock")
     ).get("/").text
     assert "No model calls yet this month" in page
-    assert "action=/cap" in page
 
 
 def test_the_build_report_gets_a_cost_section(tmp_path):

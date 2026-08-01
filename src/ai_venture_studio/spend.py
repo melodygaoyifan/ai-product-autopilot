@@ -1,10 +1,8 @@
-"""The spend ledger and the cost gate.
+"""The spend ledger — visibility, never gating.
 
-`observability.py` could already price a call (`estimate_cost`), total a month
-(`month_spend`), and compare against a cap (`cap_check`) — and none of it was
-reachable, because nothing ever *recorded* a call. `cap_check` had no
-production caller and there was no ledger for it to read. Cost was computable
-and unmeasured.
+`observability.py` could already price a call (`estimate_cost`) and total a
+month (`month_spend`) — and none of it was reachable, because nothing ever
+*recorded* a call. Cost was computable and unmeasured.
 
 This module closes that loop in three parts:
 
@@ -18,24 +16,22 @@ This module closes that loop in three parts:
    workspace (the review graph's post node, the build loop between tasks).
    Append-only JSONL, one line per call, so a crash loses at most the
    in-flight buffer rather than the month.
-3. **Gating** is `cost_gate`, which reads the current month and refuses to
-   start new work once the operator's cap is spent.
+3. **Reporting** is `month_report` and `summarize_workspace`: the founder's
+   cost line, `avs cost`, and the Studio card all read from here.
 
-Two honesty rules the gate keeps, both inherited from `month_spend`:
+One honesty rule, inherited from `month_spend`: an unpriced call is never
+counted as zero. If any call in the month had no price in
+`.mas/cost-model.yaml`, the total is reported as a FLOOR and the unpriced
+count travels with it.
 
-- an unpriced call is never counted as zero. If any call in the month had no
-  price in `.mas/cost-model.yaml`, the total is reported as a FLOOR and the
-  unpriced count travels with it. A cap compared against a total that hides
-  unpriced calls is a cap that silently stops working when you change models.
-- no cap configured means no gating. `monthly_cap_usd: 0` is the default and
-  means "not configured", stated rather than silently permissive — the gate
-  says so instead of pretending it checked.
-
-The cap blocks rather than warns, but only once a human has set one: the
-operator opts in by writing a number, and the message says exactly how to
-raise it. Agentic workflows burn 5-30x the tokens of a chat call, mostly on
-re-sent context in tool loops, so an unbounded loop is a spend incident, not
-a budgeting inconvenience.
+Deliberately NOT here: a framework-side spending cap. The framework never
+holds keys and never spends money on its own (ADR-U20); every call is billed
+to the operator's own key or subscription, and budget enforcement belongs to
+the provider account that does the billing — spend limits at the provider
+are authoritative, and a token→dollar cap here is meaningless for
+subscription billing anyway. A cap existed briefly (v0.65.0–v0.66.0) and was
+removed as a recorded decision: ADR-032. This module measures and says;
+nothing in it refuses.
 """
 
 from __future__ import annotations
@@ -72,14 +68,13 @@ class SpendEntry(BaseModel):
     stage: str = ""  # review | build | product | ... , for attribution
 
 
-class CostGateResult(BaseModel):
-    passed: bool
-    configured: bool  # False = no cap set; the gate did not check anything
+class MonthSpend(BaseModel):
+    """One month's spend, as a statement of fact — never a verdict."""
+
     month: str = ""
+    calls: int = 0
     spent_usd: float = 0.0
-    cap_usd: float = 0.0
     unpriced_calls: int = 0
-    reasons: list[str] = Field(default_factory=list)
     note: str = ""
 
     @property
@@ -315,47 +310,27 @@ def current_month() -> str:
     return dt.datetime.now(dt.UTC).strftime("%Y-%m")
 
 
-def cost_gate(
+def month_report(
     repo_dir: str | pathlib.Path, *, month: str | None = None
-) -> CostGateResult:
-    """Refuse to start new work once the month's cap is spent.
+) -> MonthSpend:
+    """This month's spend, priced where prices exist and honest where not.
 
-    Pure reads — safe before any LLM call, which is the only place a cost
-    gate is worth anything.
+    Pure reads. It states; it never refuses — budget enforcement lives at
+    the provider account that actually does the billing (ADR-032).
     """
     mas_dir = pathlib.Path(repo_dir) / ".mas"
     cost_model = load_cost_model(mas_dir)
     window = month or current_month()
-
-    if not cost_model.monthly_cap_usd:
-        return CostGateResult(
-            passed=True, configured=False, month=window,
-            note="no monthly_cap_usd in .mas/cost-model.yaml — nothing was "
-                 "checked. Set one to make the cap real.",
-        )
-
     entries = read_entries(repo_dir, month=window)
     total, unpriced = month_spend(priced(entries, cost_model))
-    cap = cost_model.monthly_cap_usd
-    result = CostGateResult(
-        passed=total < cap, configured=True, month=window,
-        spent_usd=total, cap_usd=cap, unpriced_calls=unpriced,
+    report = MonthSpend(
+        month=window, calls=len(entries), spent_usd=total,
+        unpriced_calls=unpriced,
     )
     if unpriced:
         # Stated, never folded into the total: the number is a floor.
-        result.note = (
+        report.note = (
             f"{unpriced} call(s) this month have no price in "
             "cost-model.yaml, so ${:.2f} is a FLOOR, not the total".format(total)
         )
-    if not result.passed:
-        # Framed as the operator's own standing decision, because that is what
-        # it is: the cap is off by default and only exists because somebody
-        # wrote a number. The framework never decides to spend (ADR-U20), and
-        # it should not sound like it decided to stop either.
-        result.reasons.append(
-            f"month {window} spend ${total:.2f} has reached the ${cap:.2f} "
-            "limit YOU set in .mas/cost-model.yaml, so this run stopped. "
-            "Raise monthly_cap_usd to continue, or set it to 0 to run "
-            "unlimited — it is your key and your budget."
-        )
-    return result
+    return report

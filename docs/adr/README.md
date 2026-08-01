@@ -14,6 +14,7 @@ decision wins and must be recorded. These files are that record.
 | [029](029-mcp-transport-partial.md) | MCP is the real transport for the L0 read-only tool surface; L1/L2 stay in-process | narrows the "in-process by ADR'd mapping" compromise |
 | [030](030-multi-tenant-server.md) | One `serve` process may front several isolated workspaces | "Multi-tenant SaaS" (README out-of-scope) — the server half only |
 | [031](031-policy-armed-automation.md) | Merge and deploy execution become possible, but only when a human arms a policy file | "Auto-merge to main. Auto-deploy to production." (README out-of-scope, §08.1.8) |
+| [032](032-no-framework-spending-cap.md) | Spend is measured and reported, never gated — budget limits live at the provider that does the billing | the monthly spending cap (v0.65.0–v0.66.0) |
 
 ## Format
 

@@ -17,7 +17,6 @@ from ai_venture_studio.observability import (
     CostModel,
     ToolAuditEntry,
     append_tool_audit,
-    cap_check,
     estimate_cost,
     load_cost_model,
     month_spend,
@@ -27,7 +26,8 @@ from ai_venture_studio.observability import (
 
 
 def test_cost_ledger_prices_are_config_and_unpriced_is_visible(tmp_path):
-    assert load_cost_model(tmp_path).monthly_cap_usd == 0.0
+    # An old cost-model.yaml carrying the retired `monthly_cap_usd` key must
+    # still load (ADR-032 removed the cap; the key is ignored, never an error).
     (tmp_path / "cost-model.yaml").write_text(yaml.safe_dump({
         "prices": {"claude-opus-4-8": {"input": 15.0, "output": 75.0}},
         "monthly_cap_usd": 200.0}))
@@ -38,10 +38,6 @@ def test_cost_ledger_prices_are_config_and_unpriced_is_visible(tmp_path):
     assert unpriced.cost_usd is None  # never silently zero
     total, unpriced_count = month_spend([priced, unpriced])
     assert total == 22.5 and unpriced_count == 1
-    assert cap_check([priced], model) is None
-    big = [estimate_cost("claude-opus-4-8", 10_000_000, 1_000_000, model)] * 2
-    warning = cap_check(big, model)
-    assert warning and "human decides" in warning
 
 
 def test_tool_audit_and_evidence_ledger(tmp_path):

@@ -1,9 +1,8 @@
-"""Reference prices — what makes the cost gate able to fire.
+"""Reference prices — so `avs cost` and the build report can answer in dollars.
 
-`cost_gate` has been complete since v0.59.0 and inert ever since, because
-`CostModel.prices` defaults to empty: every call was UNPRICED, the month's
-total was reported as a floor, and a cap compared against a floor never
-bites. The mechanism was right and the table was missing.
+With `CostModel.prices` empty, every call is UNPRICED and the month's total
+is a floor. Honest — but the founder signal asked "how much will a typical
+month of builds cost me?", and a floor of $0.00 does not answer it.
 
 This module ships a table of **published list prices** with a source URL and
 a retrieval date (`prices.yaml`), and imports it into a workspace's
@@ -12,10 +11,10 @@ a retrieval date (`prices.yaml`), and imports it into a workspace's
 1. **Nothing is invented.** Every entry cites the vendor page it came from
    and the date it was read — the evidence standard `claim_lint` applies to
    every other number here.
-2. **Ranges resolve upward.** A cap exists to stop spend, so under-counting
-   is the failure mode that matters; a tiered or introductory price is
-   recorded at its most expensive form, with the reason on the entry. The
-   estimate is a ceiling.
+2. **Ranges resolve upward.** Under-counting is the failure mode that
+   matters for an estimate someone budgets around; a tiered or introductory
+   price is recorded at its most expensive form, with the reason on the
+   entry. The estimate is a ceiling.
 3. **Prices rot, and the table says so.** `retrieved_at` plus
    `stale_after_days` means an old table announces itself instead of quietly
    costing a month at last quarter's rates.
@@ -23,6 +22,10 @@ a retrieval date (`prices.yaml`), and imports it into a workspace's
 They are list prices, not *your* prices — enterprise agreements, credits,
 Bedrock/Vertex rates and batch discounts all differ. Import writes them into
 the workspace, where they are yours to correct.
+
+Estimation only, by decision (ADR-032): every call is billed to the
+operator's own key or subscription, so budget *enforcement* belongs to the
+provider account that does the billing. Nothing priced here gates anything.
 """
 
 from __future__ import annotations
@@ -87,7 +90,6 @@ class ImportResult(BaseModel):
     path: str
     models_written: list[str] = Field(default_factory=list)
     models_kept: list[str] = Field(default_factory=list)
-    cap_usd: float = 0.0
     stale: bool = False
     age_days: int = 0
 
@@ -95,7 +97,6 @@ class ImportResult(BaseModel):
 def import_into_workspace(
     repo_dir: str | pathlib.Path,
     *,
-    cap_usd: float | None = None,
     overwrite: bool = False,
     reference: ReferencePrices | None = None,
     today: dt.date | None = None,
@@ -105,9 +106,7 @@ def import_into_workspace(
     A price already in the workspace WINS by default: the operator's own
     number — a negotiated rate, a correction — must not be silently replaced
     by a list price on the next import. `overwrite=True` is the explicit way
-    to refresh them. An existing `monthly_cap_usd` is preserved unless a new
-    cap is passed, because importing prices is not the same act as changing
-    the budget.
+    to refresh them.
     """
     prices = reference or load_reference_prices()
     mas = pathlib.Path(repo_dir).resolve() / ".mas"
@@ -127,25 +126,22 @@ def import_into_workspace(
         current[model] = price
         written.append(model)
 
-    cap = float(existing.get("monthly_cap_usd", 0.0) or 0.0)
-    if cap_usd is not None:
-        cap = float(cap_usd)
-
     path.write_text(
         "# Written by `avs prices --import`. These are LIST prices with a\n"
         f"# source and a date ({prices.retrieved_at}); they are not necessarily\n"
         "# yours. Correct any of them — a price already here is never\n"
         "# overwritten by a later import unless you pass --overwrite.\n"
-        "# monthly_cap_usd: 0 means no cap is configured (stated, not silent).\n"
+        "# Estimation only: nothing gates on these (ADR-032) — billing and\n"
+        "# spending limits live at your provider.\n"
         + yaml.safe_dump(
-            {"prices": current, "monthly_cap_usd": cap},
+            {"prices": current},
             sort_keys=True, allow_unicode=True,
         ),
         encoding="utf-8",
     )
     return ImportResult(
         path=str(path), models_written=sorted(written), models_kept=sorted(kept),
-        cap_usd=cap, stale=prices.stale(today), age_days=prices.age_days(today),
+        stale=prices.stale(today), age_days=prices.age_days(today),
     )
 
 

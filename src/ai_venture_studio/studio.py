@@ -512,66 +512,41 @@ def create_studio_app(
         )
         return data["profile"]
 
-    def _spend_guard_card(mode: str) -> str:
-        """Cost AND the ceiling, on the pages where money is decided.
+    def _spend_card(mode: str) -> str:
+        """What the workspace has spent, where money is decided — a
+        statement, never a gate.
 
-        The research is unambiguous: surprise bills are a top fear for
-        non-technical builders, every usage-billed platform is implicated,
-        and none set a spending cap by default — the universally recommended
-        fix is a hard cap on day one. This repo HAS the cap (`avs prices
-        --import --cap`), but it shipped CLI-only, and the founder — the one
-        persona that cannot be asked to use a CLI — saw a cost card with no
-        ceiling on it. The card now shows the cap state and sets it in one
-        click; the number is written to the same .mas/cost-model.yaml the
-        CLI owns, so the Studio stays a veneer.
+        On the confirm page (before the first dollar) and the report page.
+        The founder signal asked to SEE the number ("how much will a typical
+        month of builds cost me?"), and a figure you must go looking for
+        does not answer it. Deliberately no cap and no ceiling form: every
+        call is billed to the founder's own key or subscription, so spending
+        limits belong to the provider account that does the billing
+        (ADR-032) — a framework-side dollar cap would duplicate the
+        provider's job and mislead subscription users whose tokens do not
+        map to marginal dollars.
 
         Mode-adaptable, add-only: engineer gains the per-model table and the
-        CLI equivalents; enterprise gains the governance note. The founder
-        card is complete on its own.
+        CLI equivalents. The founder card is complete on its own.
         """
         from ai_venture_studio import spend
 
         spend.flush(root)
-        gate = spend.cost_gate(root)
-        prefix = "≥" if gate.is_floor else ""
-        if gate.configured:
-            line = html.escape(_("cap_month_line").format(
-                month=gate.month,
-                spent=f"{prefix}${gate.spent_usd:.2f}",
-                cap=f"${gate.cap_usd:.2f}",
-            ))
-        else:
+        report = spend.month_report(root)
+        prefix = "≥" if report.is_floor else ""
+        if report.calls:
             summary = spend.summarize_workspace(root)
-            line = (
-                html.escape(spend.render_plain(summary, what=_("cost_what")))
-                if summary.calls else _("cap_no_spend")
-            )
-        parts = [f"<div class=card><b>{_('h_spend_guard')}</b>", f"<p>{line}</p>"]
-        if gate.configured and gate.is_floor:
-            parts.append(f"<p class=muted>{_('cap_floor_note')}</p>")
-        cap_form = (
-            "<form method=post action=/cap>"
-            "<input name=cap inputmode=decimal value='{value}' "
-            "style='max-width:8rem'> "
-            f"<button>{_('btn_set_cap')}</button></form>"
-        )
-        if not gate.configured:
-            parts.append(f"<p class=warn>{_('cap_none_warn')}</p>")
-            parts.append(cap_form.format(value="20"))
+            line = html.escape(
+                spend.render_plain(summary, what=_("cost_what"))
+            ) + f" ({report.month}: {prefix}${report.spent_usd:.2f})"
         else:
-            if not gate.passed:
-                parts.append(f"<p class=warn><b>{_('cap_over_note')}</b></p>")
-            parts.append(
-                f"<details{' open' if not gate.passed else ''}>"
-                f"<summary class=muted>{_('cap_change_summary')}</summary>"
-                + cap_form.format(value=f"{gate.cap_usd:g}")
-                + "</details>"
-            )
+            line = _("cost_no_spend")
+        parts = [f"<div class=card><b>{_('h_cost')}</b>", f"<p>{line}</p>"]
+        if report.is_floor:
+            parts.append(f"<p class=muted>{_('cost_floor_note')}</p>")
         parts.append(f"<p class=muted>{_('cost_own_key')}</p>")
         if mode == "engineer":
             parts.append(_engineer_spend_detail())
-        if mode == "enterprise":
-            parts.append(f"<p class=muted>{_('ent_cap_note')}</p>")
         parts.append("</div>")
         return "".join(parts)
 
@@ -603,7 +578,7 @@ def create_studio_app(
             f"<details><summary class=muted>{_('eng_cost_detail')}</summary>"
             "<table><tr><th>model</th><th>calls</th><th>tokens</th><th>usd</th></tr>"
             f"{rows}</table>"
-            "<pre>avs cost\navs prices --import --cap &lt;usd&gt;</pre></details>"
+            "<pre>avs cost\navs prices --import</pre></details>"
         )
 
     @app.get("/", response_class=HTMLResponse)
@@ -761,7 +736,7 @@ def create_studio_app(
             # Cost AND the ceiling, in the founder's register, on the page
             # they land on — read from the same files `avs cost` and
             # `avs prices` own; the Studio stays a veneer.
-            cost_card = _spend_guard_card(_req_mode(request))
+            cost_card = _spend_card(_req_mode(request))
             return _render(
                 request, _("title_product"),
                 f"<pre>{_md(report)}</pre>{acceptance}"
@@ -804,7 +779,7 @@ def create_studio_app(
             return _render(
                 request, _("title_confirm_plan"),
                 f"<pre>{_md(confirmation)}</pre>"
-                + _spend_guard_card(_req_mode(request))
+                + _spend_card(_req_mode(request))
                 + f"<form method=post action=/build><button>{_('btn_start_building')}"
                 "</button></form>"
                 "<form method=post action=/reset style='margin-top:.5rem'>"
@@ -1186,29 +1161,6 @@ def create_studio_app(
             return _failure_page(request, exc)
         finally:
             thinking.pop("fdr", None)
-        return RedirectResponse("/", status_code=303)
-
-    @app.post("/cap")
-    async def set_cap(request: Request):
-        """Write the monthly cap — one click from the card, into the same
-        .mas/cost-model.yaml the CLI owns, with the packaged reference
-        prices imported so the cap can actually fire (an unpriced month is
-        a floor, and a cap compared against a floor never bites). A price
-        the operator already corrected is never overwritten."""
-        form = await request.form()
-        try:
-            value = float(str(form.get("cap", "")).strip())
-            if not (0 <= value < 1_000_000):
-                raise ValueError(value)
-        except (TypeError, ValueError):
-            return _render(
-                request, _("h_spend_guard"),
-                f"<div class=card><b class=warn>{_('cap_invalid')}</b></div>"
-                f"<p><a href='/'>{_('link_back')}</a></p>",
-            )
-        from ai_venture_studio.prices import import_into_workspace
-
-        import_into_workspace(root, cap_usd=value)
         return RedirectResponse("/", status_code=303)
 
     @app.get("/verification", response_class=HTMLResponse)

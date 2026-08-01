@@ -2029,17 +2029,18 @@ def cost_cmd(
     repo_dir: str = typer.Option(".", help="Workspace directory"),
     month: str = typer.Option(None, help="YYYY-MM (default: this month)"),
 ):
-    """What this workspace has spent, and whether the cap still allows work.
+    """What this workspace has spent — a statement, never a verdict.
 
     Prices come from `.mas/cost-model.yaml` — never constants in code, because
     prices rot. A call whose model has no price is counted as UNPRICED and
-    named, never as zero: a total that hides unpriced calls understates, and a
-    cap compared against it silently stops working the day you switch models.
+    named, never as zero: a total that hides unpriced calls understates.
+    Budget enforcement belongs to the provider account that does the billing
+    (your key, your subscription — ADR-032); nothing here refuses work.
     """
     from ai_venture_studio.observability import load_cost_model
     from ai_venture_studio.spend import (
-        cost_gate,
         current_month,
+        month_report,
         priced,
         read_entries,
     )
@@ -2048,7 +2049,7 @@ def cost_cmd(
     window = month or current_month()
     entries = read_entries(root, month=window)
     records = priced(entries, load_cost_model(root / ".mas"))
-    result = cost_gate(root, month=window)
+    report = month_report(root, month=window)
 
     console.print(f"month {window}: {len(entries)} call(s)")
     by_model: dict[str, tuple[int, int, float, int]] = {}
@@ -2070,20 +2071,14 @@ def cost_cmd(
             )
         console.print(table)
 
-    if not result.configured:
-        console.print(f"[yellow]{result.note}[/yellow]")
-        return
-    prefix = "≥" if result.is_floor else ""
+    prefix = "≥" if report.is_floor else ""
+    console.print(f"spend this month: {prefix}${report.spent_usd:.2f}")
+    if report.note:
+        console.print(f"[yellow]{report.note}[/yellow]")
     console.print(
-        f"spend {prefix}${result.spent_usd:.2f} of ${result.cap_usd:.2f} cap"
+        "[dim]billed to your own key or subscription — set spending limits "
+        "at your provider, which is where the billing actually happens[/dim]"
     )
-    if result.note:
-        console.print(f"[yellow]{result.note}[/yellow]")
-    if not result.passed:
-        for reason in result.reasons:
-            console.print(f"[red]{reason}[/red]")
-        raise typer.Exit(code=3)
-    console.print("[green]within cap[/green]")
 
 
 @app.command("prices")
@@ -2092,24 +2087,21 @@ def prices_cmd(
     import_: bool = typer.Option(
         False, "--import", help="Write these prices into .mas/cost-model.yaml",
     ),
-    cap: float = typer.Option(
-        None, help="Also set monthly_cap_usd (omit to leave the cap alone)",
-    ),
     overwrite: bool = typer.Option(
         False, "--overwrite",
         help="Replace prices already in the workspace (default: yours win)",
     ),
 ):
-    """Published list prices, and the import that makes the cost cap able to fire.
+    """Published list prices, so `avs cost` can answer in dollars.
 
-    The gate has been complete since v0.59.0 and inert ever since: with no
-    prices configured every call is UNPRICED, the month's total is a floor,
-    and a cap compared against a floor never bites. This ships the table with
-    a source URL and a date per provider — list prices, not necessarily
-    yours, and never invented.
+    With no prices configured every call is UNPRICED and the month's total
+    is a floor — honest, but "how much will a typical month cost me?" wants
+    a dollar figure. This ships the table with a source URL and a date per
+    provider — list prices, not necessarily yours, and never invented.
 
-    Where a price is a range the higher number is used: a cap exists to stop
-    spend, so the estimate is a ceiling rather than a guess.
+    Where a price is a range the higher number is used, so the estimate is
+    a ceiling rather than a guess. Estimation only: nothing here gates work
+    (ADR-032 — billing and budget limits live at your provider).
     """
     from ai_venture_studio.prices import (
         import_into_workspace,
@@ -2125,8 +2117,8 @@ def prices_cmd(
     if reference.stale():
         console.print(
             f"[yellow]stale: older than {reference.stale_after_days} days — "
-            "prices rot; re-check the source pages before trusting a total or "
-            "a cap built on these[/yellow]"
+            "prices rot; re-check the source pages before trusting a total "
+            "built on these[/yellow]"
         )
     table = Table("model", "provider", "input $/Mtok", "output $/Mtok", "note")
     for entry in reference.entries:
@@ -2141,14 +2133,12 @@ def prices_cmd(
     if not import_:
         console.print(
             "\nNothing written. `avs prices --import` writes these into "
-            ".mas/cost-model.yaml, where you own and can correct them; add "
-            "`--cap <usd>` to set the monthly cap in the same step."
+            ".mas/cost-model.yaml, where you own and can correct them — "
+            "`avs cost` and the build report then answer in dollars."
         )
         return
 
-    result = import_into_workspace(
-        repo_dir, cap_usd=cap, overwrite=overwrite, reference=reference
-    )
+    result = import_into_workspace(repo_dir, overwrite=overwrite, reference=reference)
     console.print(f"\nwrote {result.path}")
     if result.models_written:
         console.print(f"  priced: {', '.join(result.models_written)}")
@@ -2156,14 +2146,6 @@ def prices_cmd(
         console.print(
             f"  [dim]kept your existing price for: "
             f"{', '.join(result.models_kept)} (--overwrite to replace)[/dim]"
-        )
-    if result.cap_usd:
-        console.print(f"  monthly cap: ${result.cap_usd:.2f}")
-    else:
-        console.print(
-            "  [yellow]no cap configured (monthly_cap_usd: 0) — spend is "
-            "measured and reported, and nothing is refused. Set one with "
-            "`avs prices --import --cap <usd>`.[/yellow]"
         )
     missing = unpriced_models(repo_dir)
     if missing:

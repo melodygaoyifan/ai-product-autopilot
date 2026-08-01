@@ -22,8 +22,10 @@ COST_MODEL_FILE = "cost-model.yaml"
 
 class CostModel(BaseModel):
     # USD per 1M tokens; empty by default — no price, no estimate, visibly.
+    # There is deliberately no cap field: budget enforcement belongs to the
+    # provider account that does the billing (ADR-032). An old cost-model.yaml
+    # carrying `monthly_cap_usd` still loads — the key is simply ignored.
     prices: dict[str, dict[str, float]] = Field(default_factory=dict)
-    monthly_cap_usd: float = 0.0  # 0 = no cap configured (stated, not silent)
 
 
 def load_cost_model(mas_dir: str | pathlib.Path) -> CostModel:
@@ -56,17 +58,6 @@ def month_spend(records: list[CostRecord]) -> tuple[float, int]:
     the answer; a total that hides unpriced calls understates."""
     priced = sum(r.cost_usd for r in records if r.cost_usd is not None)
     return round(priced, 4), sum(1 for r in records if r.cost_usd is None)
-
-
-def cap_check(records: list[CostRecord], cost_model: CostModel) -> str | None:
-    if not cost_model.monthly_cap_usd:
-        return None
-    total, unpriced = month_spend(records)
-    if total > cost_model.monthly_cap_usd:
-        return (f"monthly spend ${total} exceeds cap "
-                f"${cost_model.monthly_cap_usd} ({unpriced} unpriced calls "
-                "not included) — a human decides what stops")
-    return None
 
 
 class ToolAuditEntry(BaseModel):

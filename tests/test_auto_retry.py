@@ -6,8 +6,7 @@ STOP-AND-ASK. Every failed task used to end the story with a retry button the
 founder had to press — and the bench record shows that button usually worked
 (t1/t2 recovered on the second pass, t5/t9 built on retry). Pressing it takes
 no judgment, only patience, so the run now presses it itself: one bounded
-pass, dependency order, cost-gate checked first, everything recorded in
-auto_approvals.
+pass, dependency order, everything recorded in auto_approvals.
 
 THE SAME ERROR REAPPEARING. A retry that does not know why the last attempt
 failed repeats it — the spec writer picks the same rejected phrasing, the
@@ -183,36 +182,6 @@ def test_record_outcome_replaces_by_task_id():
 
     assert [o.task_id for o in outcomes] == ["t1", "t2", "t3"]
     assert outcomes[1].status == "built" and outcomes[1].title == "新标题"
-
-
-def test_the_retry_pass_respects_the_cost_cap(tmp_path, monkeypatch):
-    """A run over its cap must not retry itself deeper into the cap — the
-    skip is recorded, never silent."""
-    import ai_venture_studio.upstream.autopilot as autopilot_mod
-    from ai_venture_studio import spend
-    from ai_venture_studio.prices import import_into_workspace
-
-    root = _workspace(tmp_path)
-    real = autopilot_mod.run_spec_stage
-    attempts = {"t2": 0}
-
-    def always_blocked(repo, request, **kwargs):
-        spec = real(repo, request, **kwargs)
-        if "task:t2" in request:
-            attempts["t2"] += 1
-            spec.status = "blocked"
-            spec.block_reasons = ["wall"]
-        return spec
-
-    monkeypatch.setattr(autopilot_mod, "run_spec_stage", always_blocked)
-    import_into_workspace(root, cap_usd=0.01)
-    spend.record("claude-opus-4-8", 1_000_000, 100_000)  # blows the cap
-    spend.flush(root)
-
-    result = run_autopilot(root, root / "FDR.md", provider="mock", yes=True)
-
-    assert attempts["t2"] == 1, "no retry attempt was made over the cap"
-    assert any("auto-retry skipped" in line for line in result.auto_approvals)
 
 
 def test_every_system_failure_status_is_auto_retryable():

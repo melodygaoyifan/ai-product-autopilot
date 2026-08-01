@@ -1,22 +1,20 @@
-# Reference API list prices, per 1M tokens, USD.
+# Reference API list prices, per 1M tokens, USD — estimation only.
 #
-# The cost gate has been complete and inert since v0.59.0: `cost_gate` reads
-# the month, compares it to the cap, and refuses new work — and every call was
-# UNPRICED, because `prices` defaults to empty and nothing ever populated it.
-# So the total was always a floor, and a cap compared against a floor is a cap
-# that does not bite. 2000+ calls were burned across workspaces in one day
-# with the cap "configured" and unable to fire.
+# Purpose: `avs cost` and the build report answer "how much did this cost?"
+# in dollars instead of raw token counts. Nothing gates on these numbers
+# (ADR-032): every call is billed to the operator's own key or subscription,
+# and spending limits belong to the provider account that does the billing.
 #
 # The framework will not invent a price. These are published list prices with
 # a source URL and a retrieval date, which is the same evidence standard the
 # claim ledger applies to every other number in this repo — see claim_lint's
 # `unsourced_number` and `stale` rules. They are NOT your prices: enterprise
-# agreements, credits, Bedrock/Vertex rates, and batch discounts all differ.
-# `avs prices --import` writes them into a workspace's .mas/cost-model.yaml,
-# where you own them and can correct them.
+# agreements, credits, subscriptions, Bedrock/Vertex rates, and batch
+# discounts all differ. `avs prices --import` writes them into a workspace's
+# .mas/cost-model.yaml, where you own them and can correct them.
 #
-# WHERE A PRICE IS A RANGE, THE HIGHER NUMBER IS USED. A cap exists to stop
-# spend; under-counting is the failure that matters, so a tiered or
+# WHERE A PRICE IS A RANGE, THE HIGHER NUMBER IS USED. Under-counting is the
+# failure that matters for a figure someone budgets around, so a tiered or
 # introductory price is recorded at its most expensive form and the reason is
 # stated per entry. That makes the estimate a CEILING, not a guess.
 #
@@ -51,7 +49,7 @@ prices:
     note: >-
       Standard pricing, in effect from 2026-09-01. An introductory $2/$10 runs
       through 2026-08-31, so until then this over-estimates by a third — the
-      safe direction for a cap, and correct afterwards without an edit.
+      safe direction for an estimate, and correct afterwards without an edit.
   claude-sonnet-4-6:
     provider: anthropic
     input: 3.0

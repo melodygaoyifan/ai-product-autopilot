@@ -543,24 +543,13 @@ def _retry_failed_tasks(
     presses it itself, once per failed task, in dependency order (a task
     that failed because its dependency failed retries AFTER the dependency
     recovered), with the failure handed to the writer as context. Bounded on
-    purpose: one pass, never recursive, and the cost gate is consulted first
-    so a run over its cap does not retry itself deeper into the cap.
+    purpose: one pass, never recursive.
 
     Every retry and its result land in auto_approvals — the report says what
     the machine did on the founder's behalf, never silently.
     """
     failed = {o.task_id: o for o in outcomes if o.status in _AUTO_RETRYABLE}
     if not failed:
-        return
-    from ai_venture_studio import spend
-
-    spend.flush(root)
-    gate = spend.cost_gate(root)
-    if not gate.passed:
-        auto_approvals.append(
-            f"auto-retry skipped ({len(failed)} failed task(s)): "
-            + gate.reasons[0]
-        )
         return
     recovered: list[str] = []
     for task in plan_tasks:
