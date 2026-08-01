@@ -404,6 +404,36 @@ def _why_no_files(raw: str, kept: list[str]) -> str:
     return f" — response began: {opening!r}" if opening else " — response was empty"
 
 
+# Languages a profile cannot run. Prose could not carry this: the
+# mini-program stack_hint has said "a .py test file in a 小程序 project is
+# always wrong" since v0.63, and a spec still came back with
+# tests/test_catalog_page.py — which made the build gate demand a passing
+# pytest run and killed the task three iterations later on "pytest
+# collected no tests", a message about the symptom and not the mistake.
+# WeChat runs JavaScript; there is no Python runtime anywhere in the
+# product, so a .py file is not a style preference to argue with.
+_PROFILE_FOREIGN_SUFFIXES: dict[str, dict[str, str]] = {
+    "miniprogram": {
+        ".py": "WeChat 小程序 run JavaScript — nothing in this product can "
+               "execute Python. Write the tests as *.test.js under "
+               "miniprogram/utils/ (node --test) or with miniprogram-simulate."
+    },
+}
+
+
+def foreign_language_issue(profile: str, rel: str) -> str | None:
+    """The file's language against the profile's runtime, or None."""
+    reason = _PROFILE_FOREIGN_SUFFIXES.get(profile, {}).get(Path(rel).suffix)
+    return f"{rel!r} cannot run in a {profile} product: {reason}" if reason else None
+
+
+def _workspace_profile(repo: Path) -> str:
+    try:
+        return load_project(repo).profile
+    except (FileNotFoundError, KeyError, ValueError):
+        return ""  # not an avs workspace — no profile to enforce
+
+
 def _write_files(
     repo: Path, files: list[dict], *, allowed_test_paths: set[str] | None = None
 ) -> tuple[list[str], list[str]]:
@@ -415,6 +445,7 @@ def _write_files(
     dead on this wall), and a refusal loop never converges."""
     validated: list[tuple[str, str]] = []
     kept: list[str] = []
+    profile = _workspace_profile(repo)
     for f in files[:_MAX_FILES]:
         # A malformed entry must surface as ValueError — the build loop's
         # feedback channel — not KeyError, which escapes it and kills the
@@ -428,6 +459,13 @@ def _write_files(
         rel = str(f["path"]).lstrip("/")
         if any(rel.startswith(p) for p in _FORBIDDEN_PREFIXES) or ".." in rel:
             raise ValueError(f"implementer touched forbidden path {rel!r}")
+        foreign = foreign_language_issue(profile, rel)
+        if foreign:
+            # A wall, not a hint. The profile has said this in prose since
+            # v0.63 and a spec still came back with a .py test file, whose
+            # only visible consequence three iterations later was "pytest
+            # collected no tests" — a message about the symptom.
+            raise ValueError(f"wrong language for this product: {foreign}")
         # §13.29.5 write-lock: existing non-skeleton TEST files are
         # read-only to the implementer. A blocking test is either its bug
         # or a spec gap — never a test to edit. (Reward-hacking defense,

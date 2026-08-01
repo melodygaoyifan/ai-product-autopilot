@@ -2,19 +2,13 @@ profile: miniprogram
 fdr: 小程序：团长发起接龙，住户下单。必须有：发起、下单。
 probes:
 - name: store-works
-  script: '
-
-    import glob, importlib
-
-    modules = sorted(glob.glob("feature_*.py")) or ["feature.py"]
-
-    mod = importlib.import_module(modules[0][:-3])
-
-    store = mod.ItemStore()
-
-    assert store.add("a") == 1
-
-    print("store ok")
-
-    '
+  script: "import glob, json, subprocess, sys\nmods = sorted(glob.glob('miniprogram/utils/feature_*.js'))\n\
+    mods = [m for m in mods if not m.endswith('.test.js')]\nassert mods, 'no JS module\
+    \ was built for a 小程序'\nsrc = (\n    \"const s = require('./%s');\\n\" % mods[0].split('/')[-1]\n\
+    \    + \"if (typeof s.add !== 'function') { throw new Error('no add()'); }\\n\"\
+    \n    + \"if (s.add('a') !== 1) { throw new Error('add did not return the first\
+    \ id'); }\\n\"\n    + \"console.log('store ok');\\n\"\n)\nopen('miniprogram/utils/.probe.js',\
+    \ 'w').write(src)\nout = subprocess.run([  'node', 'miniprogram/utils/.probe.js'\
+    \ ],\n                     capture_output=True, text=True, timeout=60)\nsys.stdout.write(out.stdout\
+    \ + out.stderr)\nsys.exit(out.returncode)\n"
 name: 05-miniprogram-profile

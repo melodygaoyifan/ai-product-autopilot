@@ -28,6 +28,27 @@ voters fall back visibly without them).
 | `avs attest [<review-id>]` | Chain a review's gate/verdict records into the hash-chained attestation ledger, then verify the chain |
 | `avs dwell` | Approval-dwell-time report (F-18.3): flags the rubber-stamp pattern (fast acks + zero overrides) |
 | `avs cab-package <review-id>` | Assemble a CAB change package (evidence bundle + prefill) and run the Gate-R preflight; humans complete rollback/approver and submit |
+| `avs mp-runtime` | 小程序 only: open the project in WeChat DevTools and visit every registered page — see below |
+
+### 小程序 runtime verification (`avs mp-runtime`)
+
+The build gate's loadability check is **static**: it reads `app.json` and
+asks whether DevTools *would* open the project. Whether the pages then
+render is a different question, and it needs the real thing.
+
+Three preconditions, each a visible skip when missing:
+
+1. **WeChat DevTools**, the desktop app — macOS or Windows. This can never
+   run in CI; `ubuntu-latest` cannot run it at all.
+2. **`miniprogram-automator`** in the workspace: `npm i -D miniprogram-automator`.
+3. **DevTools' service port**, switched on once by you: 设置 → 安全设置 →
+   服务端口 (Settings → Security → Service Port). The framework will not
+   flip a security setting on your machine.
+
+With the port off, the automator just times out — the CLI's own
+`IDE service port disabled` message never reaches it. That case is reported
+as **skipped**, not failed: nothing was checked, and a red result would
+read as "your pages are broken".
 
 ## Substrate ladder (traditional-industry adoption, docs 18–19)
 

@@ -1060,6 +1060,13 @@ def create_studio_app(
             on_disk = fdr_path.read_text(encoding="utf-8")
             if _fdr_fingerprint(on_disk) != base and on_disk != submitted:
                 return _conflict_page(request, submitted, on_disk)
+        # Submitting the requirements form is the founder deciding scope
+        # again, which is exactly what Gate U2's lock is not allowed to
+        # block. Release it here, where the new document is written, rather
+        # than letting the build refuse two screens later.
+        from ai_venture_studio.upstream.plan import release_lock_if_fdr_changed
+
+        release_lock_if_fdr_changed(root, submitted)
         fdr_path.write_text(submitted, encoding="utf-8")
         for stale in ("FDR-QUESTIONS.md",):
             (root / stale).unlink(missing_ok=True)

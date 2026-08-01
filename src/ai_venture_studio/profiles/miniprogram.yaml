@@ -14,4 +14,6 @@ spec_extras:
 checks:
   - package size budget (deterministic)
   - domain whitelist extraction (deterministic)
+  - loadability (deterministic, in the build gate — app.json, app.js, every registered page present, every built page registered)
+  - runtime page render (`avs mp-runtime` — opens the project in the DevTools desktop app and visits every registered page; local only, never CI, and a visible skip when DevTools, miniprogram-automator, or DevTools' service port is missing)
 stack_hint: 'Native 小程序 (WXML/WXSS/JS) unless the brief demands a framework (Taro/uni-app). LAYOUT IS FIXED, NOT YOURS TO CHOOSE: the workspace is already a loadable project — product source lives under miniprogram/, with miniprogram/app.js, miniprogram/app.json and miniprogram/pages/<name>/<name>.{js,wxml,wxss,json}; project.config.json sits at the repo root and points at it. Write pages INTO that tree, never at the repo root and never in a layout of your own. EVERY new page must be appended to the `pages` array in miniprogram/app.json in the same change that creates it — a page absent from that array cannot be opened by anyone, and the build gate rejects it. Shared logic goes in miniprogram/utils/*.js. Tests are JavaScript (node --test or miniprogram-simulate); a .py test file in a 小程序 project is always wrong.'

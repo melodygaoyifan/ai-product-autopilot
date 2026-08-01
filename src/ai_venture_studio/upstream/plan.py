@@ -60,6 +60,71 @@ class Plan(BaseModel):
     dag_issues: list[str] = Field(default_factory=list)
     critic_issues: list[dict] = Field(default_factory=list)
     revisions: int = 0
+    fdr_fingerprint: str = Field(
+        default="",
+        description="hash of the FDR this plan was decomposed from — what "
+        "lets a locked plan be reused without re-deciding scope, and what "
+        "detects an FDR edited after the lock. Empty on plans written "
+        "before the field existed.",
+    )
+
+
+class ScopeLocked(RuntimeError):
+    """Gate U2 held: the plan is locked and the FDR changed underneath it."""
+
+
+def fdr_fingerprint(text: str) -> str:
+    """Whitespace-insensitive digest of the founder's document.
+
+    Reflowing a paragraph is not a scope change; the fingerprint should
+    only move when the words do.
+    """
+    import hashlib
+
+    normalized = " ".join((text or "").split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def read_fdr(repo_dir: str | Path) -> str:
+    path = Path(repo_dir) / "FDR.md"
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def reusable_plan(repo_dir: str | Path, fdr_text: str | None = None) -> Plan | None:
+    """The locked plan, when Gate U2's lock still means what it said.
+
+    `approve_plan` has always written `status: locked`, and every following
+    `avs create` regenerated the plan anyway — so the lock was decoration,
+    planning is not deterministic (the same FDR yields different task
+    titles run to run), and the expensive upstream was re-paid on every
+    invocation. A locked plan is now the plan.
+
+    Returns the plan to reuse, or None when there is nothing locked to
+    reuse. Raises `ScopeLocked` when the FDR has changed since the lock —
+    that is a scope change after Gate U2, which belongs in an SCR or in an
+    explicit, recorded `--replan`, never in a silent re-decomposition.
+    """
+    try:
+        plan = load_plan(repo_dir)
+    except (FileNotFoundError, ValueError, yaml.YAMLError):
+        # No plan, or one this version cannot read: there is nothing to
+        # honor, so planning runs normally rather than failing the run.
+        return None
+    if plan.status != "locked" or not plan.tasks:
+        return None
+    current = fdr_text if fdr_text is not None else read_fdr(repo_dir)
+    if not plan.fdr_fingerprint or not current:
+        # Locked before fingerprints existed, or no FDR on disk to compare:
+        # honor the lock, since re-planning is the behaviour that loses work.
+        return plan
+    if fdr_fingerprint(current) == plan.fdr_fingerprint:
+        return plan
+    raise ScopeLocked(
+        "the plan is locked (Gate U2) and FDR.md has changed since — this is "
+        "a scope change after the lock. Route it through `avs add` (a new "
+        "feature FDR) or `avs scr` (a spec change request), or re-plan "
+        "deliberately with --replan, which discards the locked plan."
+    )
 
 
 def lane_check(tasks: list[Task]) -> list[str]:
@@ -270,13 +335,53 @@ tasks:
     files_expected: ["app/orders*.py"]   # globs this task will touch
 """
 
+def release_lock_if_fdr_changed(repo_dir: str | Path, fdr_text: str) -> bool:
+    """Rewriting the FDR in the Studio IS the deliberate re-decision.
+
+    The refusal in `reusable_plan` exists to stop a CLI re-run from
+    silently re-decomposing approved scope. A founder who opens the
+    requirements form and submits different words has just done the
+    opposite of that: asked for the scope to change, in the one place the
+    product offers for asking. So the lock is released here, at the moment
+    the new document is written, rather than surfacing as an error two
+    screens later on a page that cannot explain it.
+
+    Returns True when a lock was actually released (the text differed).
+    """
+    try:
+        plan = load_plan(repo_dir)
+    except (FileNotFoundError, ValueError, yaml.YAMLError):
+        return False
+    if plan.status != "locked" or not plan.fdr_fingerprint:
+        return False
+    if fdr_fingerprint(fdr_text) == plan.fdr_fingerprint:
+        return False
+    plan.status = "proposed"
+    plan.critic_issues = [
+        *plan.critic_issues,
+        {"severity": "minor", "lens": "scope",
+         "problem": "scope lock released: the FDR was rewritten by the "
+                    "founder, so this plan is re-decided"},
+    ]
+    _save(repo_dir, plan)
+    return True
+
+
 def run_planning(
     repo_dir: str | Path,
     *,
     provider: str = "anthropic",
     planner_model: str = "claude-opus-4-8",
     critic_model: str = "claude-sonnet-5",
+    fdr_text: str | None = None,
+    replan: bool = False,
 ) -> Plan:
+    # Gate U2 first: a locked plan is reused, not re-decomposed. `--replan`
+    # is the deliberate way past it and is recorded in the plan it writes.
+    if not replan:
+        reuse = reusable_plan(repo_dir, fdr_text)
+        if reuse is not None:
+            return reuse
     load_project(repo_dir)
     brief = load_brief(repo_dir)
     if brief.status != "approved":
@@ -385,6 +490,7 @@ def run_planning(
             sort_keys=False, allow_unicode=True,
         )
 
+    source_fdr = fdr_text if fdr_text is not None else read_fdr(repo_dir)
     plan = Plan(
         status="proposed" if not dag_issues else "blocked",
         brief_title=brief.title,
@@ -392,6 +498,7 @@ def run_planning(
         dag_issues=dag_issues,
         critic_issues=critics,
         revisions=revision,
+        fdr_fingerprint=fdr_fingerprint(source_fdr) if source_fdr else "",
     )
     note = calibration_note(repo_dir, tasks)
     if note:
@@ -415,8 +522,14 @@ def _save(repo_dir: str | Path, plan: Plan) -> None:
         f"# Plan — {plan.brief_title}\n\nstatus: **{plan.status}** · "
         f"{len(plan.tasks)} task(s) · revisions: {plan.revisions}\n\n"
         f"| id | task | depends on | lane | est |\n|---|---|---|---|---|\n{rows}\n\n"
-        f"Lock scope with: `avs plan-approve` (Gate U2). After the "
-        f"lock, scope changes go through an SCR, never silently.\n",
+        + (
+            "Scope is **locked** (Gate U2): later runs reuse this plan "
+            "instead of re-deciding it. Changes go through `avs add` or an "
+            "SCR; `--replan` discards the lock deliberately.\n"
+            if plan.status == "locked"
+            else "Lock scope with: `avs plan-approve` (Gate U2). After the "
+            "lock, scope changes go through an SCR, never silently.\n"
+        ),
         encoding="utf-8",
     )
 

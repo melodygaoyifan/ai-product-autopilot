@@ -292,11 +292,24 @@ class MockProvider(Provider):
         ]
         return yaml.safe_dump({"proposals": proposals}, sort_keys=False)
 
+    @staticmethod
+    def _is_miniprogram(user: str) -> bool:
+        """The prompt carries the workspace profile (spec.py sends
+        `profile:` plus the stack_hint). The mock used to answer with a
+        Python module whatever the platform was, which is a fiction: WeChat
+        小程序 cannot execute Python, and every hermetic miniprogram test
+        was therefore exercising a product that could never have run. The
+        cost of that fiction was invisible until the language rule became a
+        wall."""
+        return "miniprogram" in user or "小程序" in user
+
     def _spec(self, user: str) -> str:
         """Canned item-store spec; emits a vague criterion on the first pass
         when the request asks for it, clean once revision feedback arrives.
         A task:<id> marker in the request uniquifies the title/tests so
-        autopilot runs produce distinct specs per task."""
+        autopilot runs produce distinct specs per task. JavaScript for
+        小程序 workspaces, Python everywhere else — the mock answers in the
+        language the profile can actually run."""
         task = re.search(r"task:([\w-]+)", user)
         suffix = f" {task.group(1)}" if task else ""
         vague_first_pass = "make it vague" in user and "revision_feedback" not in user
@@ -312,6 +325,23 @@ class MockProvider(Provider):
             if task
             else "feature"
         )
+        if self._is_miniprogram(user):
+            return yaml.safe_dump(
+                {
+                    "title": f"Item store API{suffix}",
+                    "design": f"Single module `miniprogram/utils/{module}.js` with an "
+                    "in-memory ItemStore; tests drive add() and listItems().",
+                    "criteria": criteria,
+                    "test_skeletons": [
+                        {
+                            "path": f"miniprogram/utils/{module}.test.js",
+                            "purpose": "add returns id; list returns newest first",
+                            "covers": [0, 1],
+                        }
+                    ],
+                },
+                sort_keys=False,
+            )
         return yaml.safe_dump(
             {
                 "title": f"Item store API{suffix}",
@@ -347,6 +377,50 @@ class MockProvider(Provider):
             return yaml.safe_dump(
                 {"files": [{"path": match.group(1),
                             "new_content": match.group(2) + "\n# reviewed\n"}]},
+                sort_keys=False,
+            )
+        js = re.search(r"Single module `miniprogram/utils/(feature[\w-]*)\.js`", user)
+        if js:
+            # Real JavaScript, runnable by `node --test`: a mock whose output
+            # the product's own gate cannot execute teaches the suite nothing.
+            module = js.group(1)
+            return yaml.safe_dump(
+                {
+                    "files": [
+                        {
+                            "path": f"miniprogram/utils/{module}.js",
+                            "new_content": (
+                                "const items = [];\n\n"
+                                "function add(name) {\n"
+                                "  if (!name) throw new Error('name required');\n"
+                                "  const id = items.length + 1;\n"
+                                "  items.push({ id, name });\n"
+                                "  return id;\n"
+                                "}\n\n"
+                                "function listItems() {\n"
+                                "  return items.slice().reverse();\n"
+                                "}\n\n"
+                                "module.exports = { add, listItems };\n"
+                            ),
+                        },
+                        {
+                            "path": f"miniprogram/utils/{module}.test.js",
+                            "new_content": (
+                                "const test = require('node:test');\n"
+                                "const assert = require('node:assert');\n"
+                                f"const store = require('./{module}.js');\n\n"
+                                "test('add returns an id', () => {\n"
+                                "  assert.strictEqual(typeof store.add('a'), 'number');\n"
+                                "});\n\n"
+                                "test('list is newest first', () => {\n"
+                                "  store.add('b');\n"
+                                "  assert.strictEqual(store.listItems()[0].name, 'b');\n"
+                                "});\n"
+                            ),
+                        },
+                    ],
+                    "notes": "mock implementation (小程序 / JavaScript)",
+                },
                 sort_keys=False,
             )
         design = re.search(r"Single module `(feature[\w-]*)\.py`", user)

@@ -755,6 +755,10 @@ def brief_approve(repo_dir: str = typer.Option(".", help="Workspace directory"))
 def plan(
     repo_dir: str = typer.Option(".", help="Workspace directory"),
     provider: str = typer.Option("anthropic", help="Provider (e.g. 'mock')"),
+    replan: bool = typer.Option(
+        False, "--replan",
+        help="Discard a locked plan and decompose again (Gate U2)",
+    ),
 ):
     """Planning stage: task DAG from the approved brief (dag-checked)."""
     # Substrate ladder guard (ADR-U15): a stage below its
@@ -767,8 +771,18 @@ def plan(
         console.print("Run `avs readiness` for the rung roadmap.")
         raise typer.Exit(code=4) from exc
     from ai_venture_studio.upstream import run_planning
+    from ai_venture_studio.upstream.plan import ScopeLocked
 
-    result = run_planning(repo_dir, provider=provider)
+    try:
+        result = run_planning(repo_dir, provider=provider, replan=replan)
+    except ScopeLocked as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    if result.status == "locked" and not replan:
+        console.print(
+            f"[yellow]locked[/yellow] — reusing the approved plan "
+            f"({len(result.tasks)} task(s)); --replan to decide scope again"
+        )
     color = {"proposed": "green", "blocked": "red"}.get(result.status, "yellow")
     console.print(f"\n[bold {color}]{result.status}[/bold {color}] — {len(result.tasks)} task(s)")
     for t in result.tasks:
@@ -795,10 +809,19 @@ def plan_approve(repo_dir: str = typer.Option(".", help="Workspace directory")):
 @app.command()
 def create(
     directory: str = typer.Argument(..., help="Where your product lives (created if new)"),
-    profile: str = typer.Option(..., help="web | miniprogram | app"),
+    profile: str = typer.Option(
+        None,
+        help="web | miniprogram | app — required for a NEW workspace only; "
+        "an existing one already declares its profile",
+    ),
     tier: str = typer.Option("standard", help="thin | standard | deep. thin builds ONE working end-to-end slice first (fastest to something real); you add the next piece with `avs add`. Narrows, never widens."),
     fdr: str = typer.Option(None, help="Your FDR file (default: <dir>/FDR.md)"),
     yes: bool = typer.Option(False, "--yes", help="Confirm the plan and build everything"),
+    replan: bool = typer.Option(
+        False, "--replan",
+        help="Discard the locked plan and decide scope again (Gate U2). "
+        "Without this, a locked plan is reused as-is.",
+    ),
     provider: str = typer.Option("anthropic", help="Provider (e.g. 'mock')"),
 ):
     """The non-technical flow: write ONE document (the FDR), the system
@@ -808,12 +831,34 @@ def create(
     from ai_venture_studio.upstream.fdr import write_template
 
     root = Path(directory).resolve()
+    # --profile answers a question only a NEW workspace has. Demanding it
+    # again for a workspace that already declares one made every re-run
+    # (resume, --yes after a confirmation, a second feature) an error that
+    # taught the founder to pass a flag that is then ignored — and a
+    # mistyped one would have read as a request to change profiles.
     if not (root / ".mas" / "project.yaml").exists():
+        if not profile:
+            console.print(
+                "[red]--profile is required for a new workspace: "
+                "web | miniprogram | app[/red]"
+            )
+            raise typer.Exit(code=2)
         try:
             init_workspace(root, root.name, profile, scope_tier=tier)
         except ValueError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=2) from exc
+    elif profile:
+        from ai_venture_studio.upstream.workspace import load_project
+
+        declared = load_project(root).profile
+        if profile != declared:
+            console.print(
+                f"[red]this workspace is a {declared!r} project; --profile "
+                f"{profile!r} would be a different product.[/red] Build it in "
+                "its own directory, or drop the flag to continue this one."
+            )
+            raise typer.Exit(code=2)
     fdr_path = Path(fdr) if fdr else root / "FDR.md"
     if not fdr_path.exists() or not fdr_path.read_text(encoding="utf-8").strip():
         write_template(root)
@@ -834,7 +879,9 @@ def create(
 
     progress.set_sink(lambda line: console.print(f"[dim]{line}[/dim]"))
     try:
-        result = run_autopilot(root, fdr_path, provider=provider, yes=yes)
+        result = run_autopilot(
+            root, fdr_path, provider=provider, yes=yes, replan=replan
+        )
     finally:
         progress.set_sink(None)
     if result.status == "needs_answers":
@@ -1197,14 +1244,22 @@ def retry_task(
 ):
     """M7 — retry ONE failed module without rebuilding anything else."""
     from ai_venture_studio.upstream import approve_spec, run_build, run_spec_stage
-    from ai_venture_studio.upstream.plan import load_plan
+    from ai_venture_studio.upstream.autopilot import review_and_repair
+    from ai_venture_studio.upstream.plan import load_plan, read_fdr
 
     plan_result = load_plan(repo_dir)
     task = next((t for t in plan_result.tasks if t.id == task_id), None)
     if task is None:
         console.print(f"[red]no task {task_id!r} in the plan[/red]")
         raise typer.Exit(code=1)
-    spec = run_spec_stage(repo_dir, f"{task.description} (task:{task.id})", provider=provider)
+    # The founder's document is the literal interface contract, and the
+    # retry path was the one build path that never passed it — so a retried
+    # module was free to invent field names its siblings had agreed on.
+    contract = read_fdr(repo_dir)
+    spec = run_spec_stage(
+        repo_dir, f"{task.description} (task:{task.id})", provider=provider,
+        source_contract=contract,
+    )
     if spec.status != "proposed":
         reasons = "; ".join(spec.block_reasons) or "blocked (no reasons recorded)"
         record_retry_outcome(repo_dir, task, None, status="spec_blocked",
@@ -1213,20 +1268,38 @@ def retry_task(
         raise typer.Exit(code=1)
     approve_spec(repo_dir, spec.slug)
     result = run_build(repo_dir, spec.slug, provider=provider,
-                       task_lane=task.lane, task_estimate_hours=task.estimate_hours)
+                       task_lane=task.lane, task_estimate_hours=task.estimate_hours,
+                       source_contract=contract)
+    # Gate 3, which this path used to skip outright: a module retried here
+    # reached the founder with no reviewer having read it and an empty
+    # verdict in the report, sitting next to modules `create` had reviewed.
+    verdict = None
+    if result.status == "built":
+        console.print("[dim]checking the code that was written[/dim]")
+        verdict, extra_detail, approvals = review_and_repair(
+            Path(repo_dir).resolve(), provider=provider,
+            model="claude-opus-4-8" if provider != "mock" else "mock",
+            label=spec.slug, detail=result.detail,
+        )
+        result.detail = extra_detail
+        for line in approvals:
+            console.print(f"[dim]{line}[/dim]")
     # Record it. Without this a successful retry changed nothing the founder
     # can see: outcomes.yaml still said the module had failed, so the report
     # and the Studio's "modules that did not build" card kept offering to
     # retry something that was already built and committed.
-    record_retry_outcome(repo_dir, task, result)
+    record_retry_outcome(repo_dir, task, result, verdict=verdict)
     color = "green" if result.status == "built" else "red"
-    console.print(f"[bold {color}]{result.status}[/bold {color}] {result.detail}")
+    console.print(f"[bold {color}]{result.status}[/bold {color}] {result.detail}"
+                  + (f" · review: {verdict}" if verdict else ""))
     if result.status != "built":
         raise typer.Exit(code=1)
 
 
 
-def record_retry_outcome(repo_dir, task, result, *, status="", detail="") -> None:
+def record_retry_outcome(
+    repo_dir, task, result, *, status="", detail="", verdict=None
+) -> None:
     """Update this task's row in product/outcomes.yaml after a retry.
 
     The autopilot writes outcomes as it goes; `retry-task` did not, so a
@@ -1248,6 +1321,7 @@ def record_retry_outcome(repo_dir, task, result, *, status="", detail="") -> Non
             task_id=task.id,
             title=task.title,
             status=status or (result.status if result else "error"),
+            review_verdict=verdict,
             detail=detail or (result.detail if result else ""),
             iterations=result.iterations if result else 0,
             files_written=list(result.files_written) if result else [],
@@ -1258,7 +1332,8 @@ def record_retry_outcome(repo_dir, task, result, *, status="", detail="") -> Non
             if isinstance(existing, dict) and existing.get("task_id") == task.id:
                 # Keep the review verdict from the original run only when the
                 # retry did not produce a new one.
-                row.setdefault("review_verdict", existing.get("review_verdict"))
+                if row.get("review_verdict") is None:
+                    row["review_verdict"] = existing.get("review_verdict")
                 rows[index] = row
                 replaced = True
                 break
@@ -1296,6 +1371,32 @@ def verify(
     path = verify_product(repo_dir, provider=provider)
     console.print(path.read_text(encoding="utf-8"))
     console.print(f"saved: {path}")
+
+
+@app.command("mp-runtime")
+def mp_runtime(
+    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    timeout: int = typer.Option(120, help="Seconds to wait for DevTools"),
+    cli_path: str = typer.Option(None, help="Path to the DevTools cli binary"),
+):
+    """小程序: open the project in WeChat DevTools and visit every registered
+    page — the runtime half of the loadability gate.
+
+    The gate in the build loop is static (does app.json name pages that
+    exist); this answers whether those pages actually render. It needs the
+    DevTools desktop app, `miniprogram-automator`, and DevTools' service
+    port switched on by you — a missing precondition is a visible skip
+    naming the remedy, never a pass.
+    """
+    from ai_venture_studio.lanes.miniprogram import mp_runtime_check
+
+    report = mp_runtime_check(repo_dir, timeout_s=timeout, cli_path=cli_path)
+    color = {"ok": "green", "skipped": "yellow"}.get(report.status, "red")
+    console.print(f"[bold {color}]{report.status}[/bold {color}] — {report.detail}")
+    for finding in report.findings:
+        console.print(f"  [red]{finding.message}[/red]")
+    if report.status == "failed":
+        raise typer.Exit(code=1)
 
 
 @app.command("setup-tests")

@@ -71,3 +71,34 @@ def test_bookkeeping_never_fails_the_retry(tmp_path):
     blocked = tmp_path / "product"
     blocked.write_text("not a directory", encoding="utf-8")
     record_retry_outcome(tmp_path, _task(), BuildResult(slug="s", status="built"))
+
+
+def test_a_retry_records_the_verdict_the_review_gate_returned(tmp_path):
+    """Item P1.1: `retry-task` ran spec + build and stopped there.
+
+    In one real run four of seven modules reached the founder that way —
+    no reviewer had read them, and their rows carried an empty verdict
+    beside modules `create` had reviewed properly. The retry now runs the
+    same Gate 3 and records what it said.
+    """
+    record_retry_outcome(
+        tmp_path, _task(), BuildResult(slug="s", status="built"),
+        verdict="APPROVE_WITH_NOTES",
+    )
+    assert _outcomes(tmp_path)[0]["review_verdict"] == "APPROVE_WITH_NOTES"
+
+
+def test_an_unreviewed_retry_keeps_the_verdict_from_the_original_run(tmp_path):
+    """`setdefault` on a model_dump could never fire — the key is always
+    present, set to None — so the "keep the old verdict" branch had been
+    silently overwriting it with nothing."""
+    (tmp_path / "product").mkdir()
+    (tmp_path / "product" / "outcomes.yaml").write_text(yaml.safe_dump([
+        {"task_id": "t5", "title": "虚拟配送倒计时", "status": "build_failed",
+         "review_verdict": "REQUEST_CHANGES"},
+    ]), encoding="utf-8")
+
+    record_retry_outcome(tmp_path, _task(), None, status="spec_blocked",
+                         detail="blocked again")
+
+    assert _outcomes(tmp_path)[0]["review_verdict"] == "REQUEST_CHANGES"

@@ -24,7 +24,13 @@ from ai_venture_studio.providers import get_provider
 from ai_venture_studio.upstream import progress
 from ai_venture_studio.upstream.discover import approve_brief, run_discovery
 from ai_venture_studio.upstream.fdr import Assessment, assess_fdr
-from ai_venture_studio.upstream.plan import approve_plan, load_plan, run_planning
+from ai_venture_studio.upstream.plan import (
+    ScopeLocked,
+    approve_plan,
+    load_plan,
+    reusable_plan,
+    run_planning,
+)
 from ai_venture_studio.upstream.spec import approve_spec, run_spec_stage
 from ai_venture_studio.upstream.build import run_build
 from ai_venture_studio.yamlx import extract_mapping
@@ -100,6 +106,7 @@ def run_autopilot(
     yes: bool = False,
     max_tasks: int = 12,
     parallel: bool = False,
+    replan: bool = False,
 ) -> AutopilotResult:
     root = Path(workspace).resolve()
     fdr_text = Path(fdr_path).read_text(encoding="utf-8")
@@ -109,6 +116,48 @@ def run_autopilot(
     import datetime as _dt
 
     run_started_at = _dt.datetime.now(_dt.UTC).isoformat()
+
+    auto_approvals: list[str] = []
+    # Gate U2, honored. `approve_plan` has always written `status: locked`,
+    # and every later `avs create` re-decomposed the brief anyway: assess,
+    # discovery, four charter voters with a verify pass, a leader, then
+    # planning — minutes and real money — to arrive at a DIFFERENT plan,
+    # because planning is not deterministic. That is what made resume unable
+    # to recognize its own work (t4 was 结算页 in one run and 购物车 in the
+    # next). A locked plan is now the plan.
+    try:
+        locked = None if replan else reusable_plan(root, fdr_text)
+    except ScopeLocked as exc:
+        return AutopilotResult(status="failed", confirmation=str(exc))
+    if replan:
+        auto_approvals.append(
+            "Gate U2: --replan given — the locked plan (if any) is discarded "
+            "and scope is decided again"
+        )
+    assessment: Assessment | None = None
+    if locked is not None:
+        progress.step(root, progress.SETUP, "plan",
+                      "reusing the plan you already approved")
+        auto_approvals.append(
+            f"Gate U2 (scope lock): reused the locked plan "
+            f"({len(locked.tasks)} task(s)) — FDR.md is unchanged since it "
+            "was approved, so discovery and planning did not re-run "
+            "(`--replan` re-decomposes deliberately)"
+        )
+        confirmation = _locked_confirmation(root, locked)
+        if not yes:
+            return AutopilotResult(
+                status="awaiting_confirmation", confirmation=confirmation
+            )
+        _provision(root, auto_approvals)
+        brief_title = locked.brief_title
+        return _build_plan(
+            root, locked,
+            fdr_text=fdr_text, brief_title=brief_title, confirmation=confirmation,
+            assessment=assessment, auto_approvals=auto_approvals,
+            provider=provider, model=model, max_tasks=max_tasks,
+            parallel=parallel, run_started_at=run_started_at,
+        )
 
     # The pre-task phases are the longest silent stretch in a run — assess,
     # brief, four charter voters with a verify pass, leader, then planning —
@@ -128,7 +177,6 @@ def run_autopilot(
         )
         return AutopilotResult(status="needs_answers", assessment=assessment)
 
-    auto_approvals: list[str] = []
     progress.step(root, progress.SETUP, "plan",
                   "working out what to build — the longest step")
     brief = run_discovery(root, fdr_text, provider=provider)
@@ -159,6 +207,52 @@ def run_autopilot(
     approve_brief(root)
     auto_approvals.append("Gate U1 (brief): confirmed via --yes on the plain-language summary")
 
+    _provision(root, auto_approvals)
+    progress.step(root, progress.SETUP, "plan",
+                  "breaking it into modules to build")
+    plan = run_planning(root, provider=provider, fdr_text=fdr_text, replan=replan)
+    if plan.status == "blocked":
+        return AutopilotResult(
+            status="failed", assessment=assessment,
+            confirmation=confirmation, auto_approvals=auto_approvals,
+        )
+    approve_plan(root)
+    auto_approvals.append("Gate U2 (scope lock): auto — dag_check passed")
+    return _build_plan(
+        root, plan,
+        fdr_text=fdr_text, brief_title=brief.title, confirmation=confirmation,
+        assessment=assessment, auto_approvals=auto_approvals,
+        provider=provider, model=model, max_tasks=max_tasks,
+        parallel=parallel, run_started_at=run_started_at,
+    )
+
+
+def _locked_confirmation(root: Path, plan) -> str:
+    """What the founder sees when the plan is the one they already approved.
+
+    The stored CONFIRMATION.md if it survives — it is the text they read the
+    first time — and otherwise the task list itself. Deliberately not a
+    model call: reusing a locked plan should cost nothing.
+    """
+    stored = root / "product" / "CONFIRMATION.md"
+    if stored.exists():
+        text = stored.read_text(encoding="utf-8").strip()
+        if text:
+            return (
+                text
+                + "\n\n---\n这是你上次确认过的计划，需求没有改动，所以直接沿用。"
+                "/ This is the plan you already approved; FDR.md has not "
+                "changed, so it is reused as-is.\n"
+            )
+    rows = "\n".join(f"- {t.title}" for t in plan.tasks)
+    return (
+        "沿用你已确认的计划 / Reusing the plan you already approved "
+        f"({len(plan.tasks)} 个模块 / modules):\n\n{rows}\n\n"
+        "加 `--yes` 开始建 / add `--yes` to start building.\n"
+    )
+
+
+def _provision(root: Path, auto_approvals: list[str]) -> None:
     from ai_venture_studio.upstream.provisioning import provision_local, write_cloud_guide
     from ai_venture_studio.upstream.workspace import load_project as _lp
 
@@ -167,16 +261,30 @@ def run_autopilot(
     auto_approvals.append(
         "services: local SQLite provisioned (data/app.db); cloud options in SERVICES.md"
     )
-    progress.step(root, progress.SETUP, "plan",
-                  "breaking it into modules to build")
-    plan = run_planning(root, provider=provider)
-    if plan.status == "blocked":
-        return AutopilotResult(
-            status="failed", assessment=assessment,
-            confirmation=confirmation, auto_approvals=auto_approvals,
-        )
-    approve_plan(root)
-    auto_approvals.append("Gate U2 (scope lock): auto — dag_check passed")
+
+
+def _build_plan(
+    root: Path,
+    plan,
+    *,
+    fdr_text: str,
+    brief_title: str,
+    confirmation: str,
+    assessment,
+    auto_approvals: list[str],
+    provider: str,
+    model: str,
+    max_tasks: int,
+    parallel: bool,
+    run_started_at: str,
+) -> AutopilotResult:
+    """Spec → build → review every task in the plan, then report.
+
+    Shared by both entry paths: a freshly decomposed plan and a locked one
+    reused from an earlier run take exactly the same route from here, so
+    reuse can never mean a weaker build.
+    """
+    provider_impl = get_provider(provider)
 
     # Task-level resume (plan item 15, upstream half). The expensive unit
     # here is a TASK — spec + build + review, minutes and real money each —
@@ -227,36 +335,11 @@ def run_autopilot(
         verdict = None
         detail = built.detail
         if built.status == "built":
-            progress.step(root, task.id, "review", "checking the code that was written")
-            review = _review_head(root, provider)
-            verdict = review.verdict.value if review else None
-            # Fix loop: critical/high findings get ONE bounded repair
-            # iteration — recorded, re-reviewed, never silent.
-            serious = [
-                f for f in (review.findings if review else [])
-                if f.severity.value in ("critical", "high")
-            ]
-            if serious:
-                progress.step(
-                    root, task.id, "fix",
-                    f"fixing {len(serious)} serious issue(s) the review found",
-                )
-            if serious:
-                landed, after = _fix_iteration(root, provider, model, serious)
-                if after:
-                    verdict = after.verdict.value
-                if landed:
-                    auto_approvals.append(
-                        f"fix iteration ({spec.slug}): {len(serious)} serious "
-                        "review finding(s) repaired; suite re-passed and the "
-                        "re-review found nothing serious"
-                    )
-                    detail = (detail + " " if detail else "") + "(after fix iteration)"
-                else:
-                    detail = (detail + " " if detail else "") + (
-                        "(a fix was attempted and rolled back — it did not "
-                        "clear the review)"
-                    )
+            verdict, detail, approvals = review_and_repair(
+                root, provider=provider, model=model, label=spec.slug,
+                task_id=task.id, detail=detail,
+            )
+            auto_approvals.extend(approvals)
         outcomes.append(
             TaskOutcome(
                 task_id=task.id, title=task.title,
@@ -276,7 +359,7 @@ def run_autopilot(
         user=yaml.safe_dump(
             {
                 "fdr_language_sample": fdr_text[:400],
-                "brief_title": brief.title,
+                "brief_title": brief_title,
                 "outcomes": [o.model_dump() for o in outcomes],
                 "auto_approvals": auto_approvals,
             },
@@ -535,6 +618,62 @@ def undo_last(root: Path) -> dict:
         return {"status": "error", "detail": reset.stderr[:200]}
     subprocess.run(["git", "tag", "-d", tags[-1]], cwd=root, capture_output=True, timeout=60)
     return {"status": "undone", "restored_to": target, "rescue_branch": rescue}
+
+
+def review_and_repair(
+    root: Path,
+    *,
+    provider: str,
+    model: str,
+    label: str,
+    task_id: str = "",
+    detail: str = "",
+) -> tuple[str | None, str, list[str]]:
+    """Gate 3 for one just-built module: review, one bounded repair pass on
+    critical/high findings, re-review, roll back if it did not clear.
+
+    Shared so that every path which builds a module also reviews it.
+    `retry-task` used to skip this entirely — it ran spec + build and
+    stopped — so a founder who retried four failed modules ended up with
+    four modules that no reviewer had ever looked at, each carrying an
+    empty verdict in the report while the modules built by `create` beside
+    them carried a real one. A retry is not a lesser build.
+
+    Returns (verdict, detail, auto-approval lines).
+    """
+    approvals: list[str] = []
+    if task_id:
+        progress.step(root, task_id, "review", "checking the code that was written")
+    review = _review_head(root, provider)
+    verdict = review.verdict.value if review else None
+    # Fix loop: critical/high findings get ONE bounded repair iteration —
+    # recorded, re-reviewed, never silent.
+    serious = [
+        f for f in (review.findings if review else [])
+        if f.severity.value in ("critical", "high")
+    ]
+    if serious and task_id:
+        progress.step(
+            root, task_id, "fix",
+            f"fixing {len(serious)} serious issue(s) the review found",
+        )
+    if serious:
+        landed, after = _fix_iteration(root, provider, model, serious)
+        if after:
+            verdict = after.verdict.value
+        if landed:
+            approvals.append(
+                f"fix iteration ({label}): {len(serious)} serious review "
+                "finding(s) repaired; suite re-passed and the re-review "
+                "found nothing serious"
+            )
+            detail = (detail + " " if detail else "") + "(after fix iteration)"
+        else:
+            detail = (detail + " " if detail else "") + (
+                "(a fix was attempted and rolled back — it did not clear "
+                "the review)"
+            )
+    return verdict, detail, approvals
 
 
 def _review_head(root: Path, provider: str):

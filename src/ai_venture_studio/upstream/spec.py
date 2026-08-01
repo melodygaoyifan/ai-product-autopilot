@@ -170,6 +170,29 @@ def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:48] or "feature"
 
 
+def _foreign_skeletons(spec_data: dict, profile: str) -> list[str]:
+    """Test skeletons in a language the product cannot run.
+
+    The spec is where this has to be caught: a `tests/test_catalog_page.py`
+    skeleton in a 小程序 spec makes the build gate demand a passing pytest
+    run against a project that has no Python in it, and the task dies three
+    iterations later on "pytest collected no tests" — a true sentence about
+    the wrong thing. The build boundary refuses these too, but by then the
+    approved spec is already asking for the impossible.
+    """
+    from ai_venture_studio.upstream.build import foreign_language_issue
+
+    issues = []
+    for skeleton in spec_data.get("test_skeletons") or []:
+        path = str((skeleton or {}).get("path", "")) if isinstance(skeleton, dict) else ""
+        if not path:
+            continue
+        issue = foreign_language_issue(profile, path)
+        if issue:
+            issues.append(f"test skeleton in the wrong language: {issue}")
+    return issues
+
+
 def _coverage_gaps(spec_data: dict) -> list[int]:
     covered = {
         i
@@ -271,6 +294,7 @@ def run_spec_stage(
             continue
         lint = ears.lint_criteria([str(c) for c in spec_data.get("criteria", [])])
         gaps = _coverage_gaps(spec_data)
+        foreign = _foreign_skeletons(spec_data, project.profile)
         # Charter roster (doc 13 §25.1): Testability, Consistency,
         # Completeness, Ambiguity, InterfaceImpact — the two ad-hoc critic
         # prompts retired here (plan phase D13). The roster sees the same
@@ -298,13 +322,14 @@ def run_spec_stage(
         )
         critics = roster.as_issues()[:10]
         majors = [c for c in critics if c.get("severity") == "major"]
-        if not lint and not gaps and not majors:
+        if not lint and not gaps and not majors and not foreign:
             break
         feedback = yaml.safe_dump(
             {
                 "ears_lint": [i.model_dump() for i in lint],
                 "uncovered_criteria_indices": gaps,
                 "critic_majors": majors,
+                "wrong_language_skeletons": foreign,
             },
             sort_keys=False, allow_unicode=True,
         )
@@ -312,12 +337,19 @@ def run_spec_stage(
         pass
 
     gaps = _coverage_gaps(spec_data)
+    foreign = _foreign_skeletons(spec_data, project.profile)
     has_criteria = bool(spec_data.get("criteria"))
-    status = "proposed" if has_criteria and not lint and not gaps else "blocked"
+    status = (
+        "proposed"
+        if has_criteria and not lint and not gaps and not foreign
+        else "blocked"
+    )
     block_reasons: list[str] = []
     if status == "blocked":
         if not has_criteria:
             block_reasons.append("no acceptance criteria")
+        if foreign:
+            block_reasons.append("; ".join(foreign))
         if lint:
             block_reasons.append(
                 f"{len(lint)} EARS lint issue(s): "
