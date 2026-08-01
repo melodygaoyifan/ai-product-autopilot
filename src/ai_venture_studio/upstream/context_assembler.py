@@ -94,6 +94,14 @@ class ManifestEntry(BaseModel):
         "writer's prompt proves the entry reached it — the receipt mechanism "
         "for pushed context (see grounding_receipts)",
     )
+    probes: list[str] = Field(
+        default_factory=list,
+        description="several distinctive lines; ANY of them appearing "
+        "proves the entry reached the prompt. One line was too brittle — "
+        "a prompt that legitimately reformats the artifact (spec.yaml's "
+        "`purpose:` rendered as `- <path>: <purpose>`) failed the check "
+        "and killed the task",
+    )
 
 
 class ContextManifest(BaseModel):
@@ -133,18 +141,45 @@ def normalize(text: str) -> str:
 
 
 def make_probe(text: str) -> str:
-    """The most distinctive line in an artifact.
+    """The single most distinctive line — kept for forensics and for
+    manifests written before `make_probes` existed."""
+    probes = make_probes(text, count=1)
+    return probes[0] if probes else normalize(text)[:PROBE_CHARS]
 
-    The longest line is a good proxy: in a spec it is an acceptance
-    criterion, in CLAUDE.md a constraint, in a module spec an invariant —
-    exactly the content whose absence from a prompt would matter. Short
-    files fall back to their whole normalized text.
+
+def make_probes(text: str, count: int = 3) -> list[str]:
+    """Several distinctive lines, any one of which proves the artifact
+    reached the prompt.
+
+    One contiguous line was too brittle. The longest line in a spec.yaml is
+    often a `purpose:` inside test_skeletons, and the build prompt renders
+    skeletons as `- <path>: <purpose> (covers …)` — same content, different
+    shape — so the probe was absent, grounding reported a violation, and the
+    task died with an unrecoverable error while the writer in fact had every
+    acceptance criterion in front of it. Which line happened to be longest
+    decided whether a task built.
+
+    So: the top `count` longest lines, plus the value half of any `key:
+    value` line, and a receipt is granted if ANY of them appears. An
+    artifact that genuinely never reached the prompt still scores zero — the
+    bug this check exists to catch (a prompt assembled without the
+    module-spec invariants the artifact is judged against) is unaffected.
     """
     lines = [normalize(line) for line in (text or "").splitlines()]
-    meaningful = [line for line in lines if len(line) >= 20]
+    meaningful = sorted(
+        {line for line in lines if len(line) >= 20}, key=len, reverse=True
+    )
     if not meaningful:
-        return normalize(text)[:PROBE_CHARS]
-    return max(meaningful, key=len)[:PROBE_CHARS]
+        whole = normalize(text)[:PROBE_CHARS]
+        return [whole] if whole else []
+    probes: list[str] = []
+    for line in meaningful[:count]:
+        probes.append(line[:PROBE_CHARS])
+        # `key: value` survives re-serialization as the value alone.
+        _, sep, tail = line.partition(": ")
+        if sep and len(tail) >= 20:
+            probes.append(tail[:PROBE_CHARS])
+    return probes
 
 
 def _candidate(
@@ -164,6 +199,7 @@ def _candidate(
         content_hash=content_hash(text),
         tokens=estimate_tokens(text),
         probe=make_probe(text),
+        probes=make_probes(text),
     )
 
 
@@ -351,8 +387,10 @@ def grounding_receipts(
     haystack = normalize(prompt_text)
     receipts: dict[str, str] = {}
     for entry in manifest.entries:
-        probe = normalize(entry.probe)
-        if probe and probe in haystack:
+        # `probes` is absent on manifests written before it existed; the
+        # single probe still works for those.
+        candidates = [normalize(p) for p in (entry.probes or [entry.probe])]
+        if any(probe and probe in haystack for probe in candidates):
             receipts[entry.path] = entry.content_hash
     return receipts
 
