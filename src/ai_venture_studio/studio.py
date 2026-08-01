@@ -194,6 +194,11 @@ def _build_running(root: Path) -> bool:
     return pid_alive(pid)
 
 
+#: How long a foreground failure is still worth showing. Long enough for the
+#: working page's own reload to catch it, short enough that it cannot
+#: ambush someone who comes back after a successful build.
+_FAILURE_TTL_S = 120.0
+
 _STATE_ICON = {"built": "✅", "pending": "⏳"}
 # Same shape the server's review routes enforce — a review id is a path
 # segment, so anything else is a traversal attempt, not a typo.
@@ -346,7 +351,34 @@ def create_studio_app(
     #: usually navigated away from that request by then, so without this the
     #: founder watches a spinner and then lands on an ordinary page with no
     #: sign that anything went wrong. Which is precisely what happened.
-    last_failure: dict[str, Exception] = {}
+    last_failure: dict[str, object] = {}
+
+    def _stash_failure(exc: Exception) -> None:
+        import time as _time
+
+        last_failure.clear()
+        last_failure["exc"] = exc
+        last_failure["at"] = _time.monotonic()
+
+    def _take_fresh_failure() -> Exception | None:
+        """The pending failure, if it is still about what the founder is
+        looking at.
+
+        Without an expiry this was a landmine: a failure nobody happened to
+        load the page for sat in memory, and the next visitor got "That step
+        did not finish" ahead of the product a later run had successfully
+        built. An hour-old error is not news, it is a scare.
+        """
+        import time as _time
+
+        if not last_failure:
+            return None
+        age = _time.monotonic() - float(last_failure.get("at", 0))
+        exc = last_failure.pop("exc", None)
+        last_failure.clear()
+        if age > _FAILURE_TTL_S:
+            return None
+        return exc if isinstance(exc, Exception) else None
 
     def _failure_page(
         request: Request, exc: Exception, *, record: bool = True
@@ -362,7 +394,7 @@ def create_studio_app(
         """
         if record:
             record_failure(root, exc)
-            last_failure["exc"] = exc
+            _stash_failure(exc)
         return _render(
             request, _("title_failed"),
             f"<div class=card><b class=bad>{_('failed_lead')}</b>"
@@ -488,10 +520,11 @@ def create_studio_app(
         # and the thinking page reloads here on a timer.
         if thinking:
             return _thinking_page(request, next(iter(thinking.values())))
-        if last_failure:
+        stale = _take_fresh_failure()
+        if stale is not None:
             # Shown once, to whoever gets here first — usually the working
             # page's own reload, which is the only thing still watching.
-            return _failure_page(request, last_failure.pop("exc"), record=False)
+            return _failure_page(request, stale, record=False)
         fdr = root / "FDR.md"
         report = root / "product" / "BUILD-REPORT.md"
         confirmation = root / "product" / "CONFIRMATION.md"

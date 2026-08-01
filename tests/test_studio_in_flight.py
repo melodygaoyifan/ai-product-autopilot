@@ -131,3 +131,60 @@ def test_the_failure_is_shown_once_and_then_cleared(tmp_path):
         assert "transient thing" not in client.get("/").text
     finally:
         autopilot.run_autopilot = original
+
+
+def test_a_stale_failure_does_not_ambush_a_later_visitor(tmp_path, monkeypatch):
+    """An hour-old error is not news, it is a scare. Observed: a failure
+    nobody had loaded the page for was still queued, so the first visit
+    after a SUCCESSFUL build showed "That step did not finish" ahead of the
+    product."""
+    import ai_venture_studio.studio as studio_mod
+
+    root = init_workspace(tmp_path / "stale", "stale", "web")
+    original = autopilot.run_autopilot
+
+    def boom(*args, **kwargs):
+        raise ValueError("an old failure")
+
+    autopilot.run_autopilot = boom
+    try:
+        client = TestClient(
+            create_studio_app(root, spawn=lambda r: 1, provider="mock"),
+            raise_server_exceptions=False,
+        )
+        client.post("/fdr", data={"fdr": "# a\nb\n"}, follow_redirects=True)
+
+        # Time passes — well past the window the working page reloads in.
+        # `_take_fresh_failure` imports time inside the function, so the
+        # module attribute is what has to move.
+        import time as _time
+
+        later = _time.monotonic() + studio_mod._FAILURE_TTL_S + 60
+        monkeypatch.setattr(_time, "monotonic", lambda: later)
+
+        landed = client.get("/").text
+    finally:
+        autopilot.run_autopilot = original
+
+    assert "an old failure" not in landed
+    assert "did not finish" not in landed
+
+
+def test_a_fresh_failure_is_still_delivered(tmp_path):
+    """The expiry must not undo the hand-off it was added to protect."""
+    root = init_workspace(tmp_path / "fresh", "fresh", "web")
+    original = autopilot.run_autopilot
+
+    def boom(*args, **kwargs):
+        raise ValueError("just happened")
+
+    autopilot.run_autopilot = boom
+    try:
+        client = TestClient(
+            create_studio_app(root, spawn=lambda r: 1, provider="mock"),
+            raise_server_exceptions=False,
+        )
+        client.post("/fdr", data={"fdr": "# a\nb\n"}, follow_redirects=True)
+        assert "just happened" in client.get("/").text
+    finally:
+        autopilot.run_autopilot = original

@@ -71,6 +71,23 @@ for a non-technical founder, in the SAME LANGUAGE as the FDR: what was
 built (per task, as user-visible abilities), what the automated reviewers
 flagged (plain words: "needs attention" not verdict codes), and what the
 founder should do next (try it, answer open questions). No jargon.
+
+WHOSE FAULT A FAILURE IS — this matters more than the wording:
+- `spec_blocked` is OUR failure, never the founder's. It means OUR spec
+  writer produced something OUR OWN internal checks rejected (requirements
+  grammar, coverage). The founder's description had nothing to do with it.
+  Say so plainly — "our checks blocked this one, you can retry it" — and
+  NEVER write that their requirements were unclear, vague, or insufficient.
+  A founder who is told to rewrite a description that was never the problem
+  will spend a day changing nothing.
+- `build_failed` / `error` are also ours: the code we wrote did not pass
+  the tests we wrote.
+- The ONLY thing to ask a founder to clarify is a question that was
+  actually put to them before the build started. If none was, there is
+  nothing for them to answer.
+
+Do not state counts or totals — a tally is appended to your text
+mechanically. Describe, do not add up.
 Respond with the markdown only."""
 
 
@@ -263,6 +280,11 @@ def run_autopilot(
         max_tokens=2048,
     )
     report_path = root / "product" / "BUILD-REPORT.md"
+    # The tally, as arithmetic rather than prose. The reporter wrote "five of
+    # nine" for a run that built six, and separately blamed three
+    # spec_blocked tasks on the founder's requirements when they were our own
+    # lint rejecting our own writer. A count is not a thing to narrate.
+    tally_block = _outcome_tally(outcomes)
     # What it cost, in the report the founder actually reads. The signal this
     # answers asked to SEE the number — "how much will a typical month of
     # builds cost me? I'm scared to leave autopilot running" — and a figure
@@ -286,7 +308,7 @@ def run_autopilot(
         "\nThis is billed to your own API key — the framework never spends "
         "money on your behalf.\n"
     )
-    report_path.write_text(report + cost_block, encoding="utf-8")
+    report_path.write_text(report + tally_block + cost_block, encoding="utf-8")
 
     built_count = sum(1 for o in outcomes if o.status == "built")
     status = "completed" if built_count == len(outcomes) and outcomes else "failed"
@@ -302,6 +324,42 @@ def run_autopilot(
         report_path=str(report_path),
         auto_approvals=auto_approvals,
     )
+
+
+#: Statuses that mean the SYSTEM failed, not the founder. `spec_blocked` is
+#: our spec writer failing our own requirements-grammar and coverage checks;
+#: the founder's description is not the thing being checked.
+_OURS = {"spec_blocked": "our checks blocked it",
+         "build_failed": "our code did not pass our tests",
+         "error": "the run hit an error",
+         "merge_conflict": "two parallel lanes collided"}
+
+
+def _outcome_tally(outcomes) -> str:
+    """The counted truth, appended under the reporter's prose.
+
+    Deterministic on purpose: the model narrates, arithmetic counts. It also
+    labels every failure as ours, because every status in `_OURS` is.
+    """
+    built = [o for o in outcomes if o.status == "built"]
+    failed = [o for o in outcomes if o.status != "built"]
+    lines = [
+        "\n\n---\n\n## 结果清单 / What happened, counted\n",
+        f"**{len(built)} / {len(outcomes)}** 个模块建成 / modules built.\n",
+    ]
+    for outcome in outcomes:
+        if outcome.status == "built":
+            note = {"APPROVE": "已通过检查 / clean"}.get(
+                outcome.review_verdict or "", "建好了，检查有意见 / built, review had notes"
+            )
+            lines.append(f"- ✅ **{outcome.title}** — {note}")
+        else:
+            lines.append(
+                f"- ❌ **{outcome.title}** — {_OURS.get(outcome.status, outcome.status)}"
+                "（这不是你的需求写得不好，是我们这边没过；可以单独重试）"
+                " / not your requirements — ours; retry it on its own"
+            )
+    return "\n".join(lines) + "\n"
 
 
 def estimate_hint(root: Path, item_count: int) -> str:
