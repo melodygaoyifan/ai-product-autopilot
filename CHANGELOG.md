@@ -4,6 +4,76 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.62.0 — the run that could not build, and the page that never said why
+
+Everything here was found by running the product against one real founder
+FDR (a WeChat mini-program, written in Chinese) and fixing whatever stopped
+it, in order. Four of these are defects that made a whole run impossible.
+
+**`avs create` could not build a single task, on any run, with any FDR.**
+The implementer asks for `max_tokens=32000` — it returns whole files, and
+16384 truncated real builds — and the SDK refuses a non-streaming request
+whose size implies it might run past ten minutes, raising *before sending*:
+`ValueError: Streaming is required for operations that may take longer than
+10 minutes`. Every build died at "writing the code (attempt 1/3)". Requests
+above 8192 output tokens now stream; metering, stop-reason and the
+empty-response diagnostics are unchanged and pinned by tests, because a
+streaming path that silently dropped usage would break the cost gate and
+the truncation guards at once. **v0.60.0 and v0.61.0 on PyPI cannot build;
+this release is the fix.**
+
+**A 529 killed runs that were already eleven minutes in.** The transient
+retry existed but spent its whole budget in fourteen seconds (four attempts,
+2/4/8s). Now six attempts capped at 60s, honouring `retry-after` when the
+server sends one, with jitter — the review voters run in a thread pool, and
+without jitter they all retry in the same instant.
+
+**A botched final revision threw away a good brief.** Discovery's loop set
+`brief = None` on a parse failure, so an attempt that had already passed
+schema *and* the four charter voters was discarded when a later polish
+attempt came back as malformed YAML. Two runs died holding a usable brief.
+It now keeps the last good one and appends a visible note that the final
+revision failed, rather than presenting a mid-revision draft as finished.
+
+**EARS rejected correct requirements.** `When fetchFn rejects …,
+loadCatalog shall return …` was refused for "does not match any EARS
+pattern" because the grammar demanded a literal `the` before the subject —
+satisfying it would mean writing "the loadCatalog shall". Three of nine
+tasks in one run were blocked by this alone. The article is now optional;
+bare subjects must look like identifiers, so `We shall see whether the
+founders like it.` is still not a requirement.
+
+**The report blamed the founder for our bug.** Those three blocked tasks
+were reported as "三项因为需求描述不够清楚" — three could not start because
+the requirements were unclear. False: `spec_blocked` means our spec writer
+failed our own checks, and the founder's description is not what is being
+checked. The reporter is now told whose failure each status is and told
+never to describe a blocked task as unclear requirements. The same report
+said "five of nine" for a run that built six, so the tally is now appended
+deterministically, the way the cost line already is.
+
+**A conversational way in, and it is now the front door.** One question at
+a time, composing FDR.md — the form asked for 4000 characters at once and
+then, when the assessor returned five questions, asked you to edit the right
+lines inside that textarea. Clarify rounds are capped, every turn offers
+"that's enough, go to the plan", and skipping is a recorded answer: a loop
+that asks until the model is satisfied is worse than a slightly
+under-specified FDR. `--entry form` restores the old landing page.
+
+**The wait before the first module is no longer blank.** Assess, brief, four
+charter voters, leader, planning — the longest stretch of a run — narrated
+nothing until tasks existed. Still no percentages and no ETA.
+
+Smaller, all found the same way: the FDR form no longer silently overwrites
+an FDR that changed under it (a stale tab destroyed five answered clarify
+questions, and the assessor then asked them again); a failure names its real
+cause instead of asserting a missing API key for everything; failures are
+recorded to `.mas/studio-failures.jsonl`; the working page polls instead of
+bouncing you to the page you just left; the interrupted page shows why the
+worker died instead of only that it did; and `failed_hint` was defined twice
+in the string table, so the "modules that did not build" card had been
+telling founders their API key was exhausted.
+
 ## v0.61.0 — the enterprise you actually work at: GitLab, Bedrock, a proxy
 
 Started by adopting one real enterprise data-pipeline repo (a BigQuery
