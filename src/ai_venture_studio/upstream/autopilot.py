@@ -597,7 +597,18 @@ def _fix_iteration(root: Path, provider: str, model: str, findings) -> bool:
         return False
     if not written:
         return False
-    if _pytest_in_subprocess(root).status not in ("passed", "no_tests"):
+    # The SAME gate the build loop uses. This used to run bare pytest, which
+    # on a 小程序 returns "no_tests" — so a fix iteration on a JS product
+    # committed without the JavaScript suite ever executing. One did exactly
+    # that: `fix: address serious review findings` deleted an `onAdd` handler,
+    # cart.page.test.js started failing, and because the build gate runs the
+    # whole suite and existing tests are read-only walls to later
+    # implementers, the next FOUR tasks could not be built. One unchecked fix
+    # cost four modules.
+    from ai_venture_studio.testing import combine_reports, run_js_tests
+
+    verdict = combine_reports(_pytest_in_subprocess(root), run_js_tests(root))
+    if verdict.status not in ("passed", "no_tests", "skipped"):
         subprocess.run(["git", "checkout", "--", "."], cwd=root, capture_output=True, timeout=60)
         # checkout restores tracked files only — NEW files the fix wrote
         # would stay as untracked residue (run-4 workspace contamination).

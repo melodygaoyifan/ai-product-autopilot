@@ -187,7 +187,17 @@ def run_js_tests(worktree: Path) -> TestReport | None:
         if "test" in scripts:
             proc = _run(["npm", "test", "--silent"], worktree)
             return _classify(proc.returncode, proc.stdout or proc.stderr, sandbox="subprocess")
-    test_files = sorted(str(p.relative_to(worktree)) for p in worktree.glob("**/*.test.js"))
+    # NEVER inside .mas: it holds preserved copies of FAILED attempts
+    # (.mas/failed-builds/), and pathlib's ** walks hidden directories. Once
+    # one task failed, every later task's gate was running that task's broken
+    # snapshot as if it were the product — 31 of 37 matched files in one real
+    # run. node_modules and .git are excluded for the obvious reasons.
+    _SKIP = {".mas", "node_modules", ".git", ".venv"}
+    test_files = sorted(
+        str(p.relative_to(worktree))
+        for p in worktree.glob("**/*.test.js")
+        if not _SKIP.intersection(p.relative_to(worktree).parts)
+    )
     if not test_files:
         return None
     proc = _run(["node", "--test", *test_files], worktree)
