@@ -101,11 +101,21 @@ def test_ship_web_writes_dockerfile_and_guide(tmp_path):
     assert "railway" in guide.read_text() or "flyctl" in guide.read_text()
 
 
-def test_ship_miniprogram_writes_project_config(tmp_path):
+def test_ship_miniprogram_leaves_a_config_devtools_can_open(tmp_path):
+    """init now scaffolds project.config.json (with miniprogramRoot, which
+    ship's placeholder never had), so ship no longer writes one — it must
+    not clobber it either. Telling the founder to swap the tourist AppID for
+    their own moved to DEPLOY.md, where the rest of the publish steps are."""
+    import json
+
     root = init_workspace(tmp_path / "m", "m", "miniprogram")
     guide = ship(root)
-    assert "AppID" in (root / "project.config.json").read_text()
+
+    config = json.loads((root / "project.config.json").read_text(encoding="utf-8"))
+    assert config["miniprogramRoot"] == "miniprogram/"
+    assert config["appid"] == "touristappid"
     assert "微信开发者工具" in guide.read_text()
+    assert "AppID" in guide.read_text(), "the founder is never told to set one"
 
 
 # --- parallel lanes ----------------------------------------------------------

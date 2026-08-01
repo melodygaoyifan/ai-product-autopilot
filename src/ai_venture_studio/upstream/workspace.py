@@ -101,6 +101,7 @@ def init_workspace(
         )
 
     _write_design_baseline(root, profile)
+    _scaffold_miniprogram(root, name, profile)
 
     if not (root / ".git").exists():
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
@@ -150,6 +151,105 @@ padding:20rpx 0;text-align:center;font-size:32rpx}
 padding:18rpx;margin:12rpx 0}
 .muted{color:#888;font-size:24rpx}
 """
+
+
+#: WeChat's documented "no AppID" mode. A real-looking AppID must never be
+#: invented here — one run's implementer produced `wxb1e7d6736079f6c3` out of
+#: nowhere, which is somebody's identifier or nobody's, and neither is ours
+#: to write. The founder replaces this in project.config.json.
+_TOURIST_APPID = "touristappid"
+
+_MP_APP_JS = """// The App instance. Global state that outlives a single page
+// belongs here; per-page state belongs in the page's own Page({}).
+App({
+  globalData: {},
+})
+"""
+
+_MP_INDEX_JS = """Page({
+  data: {},
+  onLoad() {},
+})
+"""
+
+_MP_INDEX_WXML = """<view class="page">
+  <text>{{title}}</text>
+</view>
+"""
+
+
+def _scaffold_miniprogram(root: Path, name: str, profile: str) -> None:
+    """A 小程序 workspace starts as a project WeChat DevTools can open.
+
+    Without this the layout was whatever the implementer invented that run:
+    one run produced `miniprogram/pages/...`, the next produced `utils/` and
+    `server/` at the repo root, and neither produced an app.json — so
+    DevTools could not open either, every page was unreachable, and the
+    loadability gate silently no-opped because it could not find a project
+    to check. A generator cannot be asked to rediscover the platform's
+    required layout on every run; the layout is the platform's, not a design
+    decision.
+
+    The skeleton is deliberately minimal — one blank launch page — so tasks
+    EXTEND a loadable project instead of assembling one.
+    """
+    if profile != "miniprogram":
+        return
+    import json
+
+    src = root / "miniprogram"
+    (src / "pages" / "index").mkdir(parents=True, exist_ok=True)
+
+    # project.config.json lives at the repo root: that is what the founder
+    # points DevTools at, and miniprogramRoot keeps product source out of
+    # the workspace bookkeeping (product/, specs/, .mas/).
+    (root / "project.config.json").write_text(
+        json.dumps(
+            {
+                "miniprogramRoot": "miniprogram/",
+                "projectname": name,
+                "appid": _TOURIST_APPID,
+                "compileType": "miniprogram",
+                "libVersion": "latest",
+                "setting": {"urlCheck": False, "es6": True, "postcss": True},
+            },
+            indent=2, ensure_ascii=False,
+        ) + "\n",
+        encoding="utf-8",
+    )
+    (src / "app.js").write_text(_MP_APP_JS, encoding="utf-8")
+    (src / "app.json").write_text(
+        json.dumps(
+            {
+                "pages": ["pages/index/index"],
+                "window": {
+                    "navigationBarTitleText": name,
+                    "navigationBarBackgroundColor": "#ffffff",
+                    "backgroundColor": "#f6f7f9",
+                },
+                "style": "v2",
+            },
+            indent=2, ensure_ascii=False,
+        ) + "\n",
+        encoding="utf-8",
+    )
+    (src / "app.wxss").write_text(
+        ".page{padding:24rpx;background:#f6f7f9;min-height:100vh}\n"
+        ".card{background:#fff;border-radius:16rpx;padding:24rpx;margin:16rpx 0}\n"
+        ".btn-primary{background:#07c160;color:#fff;border-radius:12rpx}\n",
+        encoding="utf-8",
+    )
+    (src / "sitemap.json").write_text(
+        json.dumps({"rules": [{"action": "allow", "page": "*"}]}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    index = src / "pages" / "index"
+    (index / "index.js").write_text(_MP_INDEX_JS, encoding="utf-8")
+    (index / "index.wxml").write_text(_MP_INDEX_WXML, encoding="utf-8")
+    (index / "index.wxss").write_text("", encoding="utf-8")
+    (index / "index.json").write_text(
+        json.dumps({"usingComponents": {}}, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def _write_design_baseline(root: Path, profile: str) -> None:
