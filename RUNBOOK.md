@@ -136,7 +136,21 @@ token in the repo, in a secret, or on anyone's laptop. A one-time setup at
 <https://pypi.org/manage/account/publishing/> registers this repository and
 `publish.yml` as the publisher; after that a release is:
 
+**Run `avs smoke` first. Every time.** v0.60.0 and v0.61.0 went to PyPI
+unable to build a single task — the implementer's `max_tokens` made the SDK
+refuse the request *before sending*, and 1441 hermetic tests were green
+throughout, because a mock is written by the same person holding the same
+wrong belief about the SDK. The smoke makes four real calls per configured
+provider, costs a fraction of a cent on your own key, and checks the things
+only a real call can: that a call returns text, that a large `max_tokens`
+streams instead of raising, that a capped response is detectable as
+truncated, and that the spend ledger saw it. A provider with no key is a
+loud skip — and a skip is not a pass.
+
 ```
+# 0. the live boundary, before anything else
+avs smoke
+
 # 1. bump the version and land it
 #    pyproject.toml: version = "0.55.0"   (must match the CHANGELOG entry)
 git commit -am "release: v0.55.0" && git push

@@ -1373,6 +1373,66 @@ def verify(
     console.print(f"saved: {path}")
 
 
+@app.command()
+def smoke(
+    provider: list[str] = typer.Option(
+        None, "--provider", help="Provider to check (repeatable). "
+        "Default: anthropic, openai, google",
+    ),
+    model: str = typer.Option(None, help="Override the model for every provider"),
+    repo_dir: str = typer.Option(".", help="Where to flush the spend ledger"),
+):
+    """Live-boundary smoke — run this before every release.
+
+    Four real calls per configured provider, costing a fraction of a cent,
+    against the boundaries the hermetic suite cannot model: a call returns
+    text, a large max_tokens request streams instead of raising (the bug
+    that shipped twice, unable to build anything), a capped response is
+    detectable as truncated, and the spend ledger saw it all.
+
+    An unconfigured provider is skipped, loudly, naming the variable.
+    """
+    from ai_venture_studio import smoke as smoke_mod
+    from ai_venture_studio import spend
+
+    console.print(
+        "[dim]This makes real API calls on your own key — a few tenths of a "
+        "cent — because that is the only way to check these.[/dim]"
+    )
+    results = smoke_mod.run_smoke(list(provider) if provider else None, model=model)
+    worst = "ok"
+    for result in results:
+        color = {"ok": "green", "skipped": "yellow"}.get(result.status, "red")
+        console.print(
+            f"\n[bold {color}]{result.status}[/bold {color}] "
+            f"{result.provider} · {result.model}"
+        )
+        for check in result.checks:
+            mark = {"ok": "[green]✓[/green]", "skipped": "[yellow]—[/yellow]"}.get(
+                check.status, "[red]✗[/red]"
+            )
+            console.print(f"  {mark} {check.name}: {check.detail}")
+        if result.status == "failed":
+            worst = "failed"
+        elif result.status == "skipped" and worst == "ok":
+            worst = "skipped"
+    spend.flush(repo_dir)
+    cost = spend.summarize_workspace(repo_dir)
+    if cost.calls:
+        console.print(f"\n[dim]{spend.render_plain(cost, what='This workspace')}[/dim]")
+    if worst == "failed":
+        console.print(
+            "\n[red]Do not release.[/red] A failed check here is a product "
+            "that cannot do its job with a real key, whatever the suite says."
+        )
+        raise typer.Exit(code=1)
+    if worst == "skipped":
+        console.print(
+            "\n[yellow]Some providers were not checked[/yellow] — a skip is "
+            "not a pass; set the named variables to check them."
+        )
+
+
 @app.command("mp-runtime")
 def mp_runtime(
     repo_dir: str = typer.Option(".", help="Workspace directory"),

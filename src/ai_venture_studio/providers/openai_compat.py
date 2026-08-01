@@ -70,7 +70,15 @@ class _ChatCompletionsProvider(Provider):
             # OpenAI-compatible bodies say finish_reason: "length" for the
             # ran-out-of-budget case.
             record_stop_reason(choice.get("finish_reason"))
-            return choice["message"]["content"]
+            # `content` is null, not "", when a reasoning model spends its
+            # whole budget thinking — observed on gpt-5 at a small cap, where
+            # the answer came back empty with finish_reason=length. Every
+            # caller does `raw.strip()`, so a None here raised AttributeError
+            # inside the voter's generic retry and surfaced as
+            # BLOCKED_TOOL_FAILURE with a message about attributes rather
+            # than about budget. The empty string is the honest answer: the
+            # model said nothing, and the recorded stop_reason says why.
+            return choice["message"].get("content") or ""
         response.raise_for_status()
         raise ProviderError(f"{self.name}: both token params rejected for {model}")
 
