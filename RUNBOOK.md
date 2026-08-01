@@ -29,6 +29,36 @@ voters fall back visibly without them).
 | `avs dwell` | Approval-dwell-time report (F-18.3): flags the rubber-stamp pattern (fast acks + zero overrides) |
 | `avs cab-package <review-id>` | Assemble a CAB change package (evidence bundle + prefill) and run the Gate-R preflight; humans complete rollback/approver and submit |
 | `avs mp-runtime` | 小程序 only: open the project in WeChat DevTools and visit every registered page — see below |
+| `avs cost` | What this workspace spent this month, per model, and whether the cap still allows work |
+| `avs prices [--import] [--cap <usd>]` | Published list prices with a source and a date; `--import` writes them into `.mas/cost-model.yaml` — see below |
+
+### Making the cost cap able to fire (`avs prices`)
+
+The cost gate has been complete since v0.59.0 and inert ever since. With no
+prices configured, every call is **UNPRICED**, the month's total is reported as
+a **floor**, and a cap compared against a floor never bites — 2000+ calls were
+burned across workspaces in one day with a cap "configured" and structurally
+unable to stop anything.
+
+```
+avs prices                              # the table, with its sources and age
+avs prices --import --cap 50            # write them in, set a $50/month cap
+```
+
+Three properties, because a price is a claim like any other here:
+
+- **Nothing is invented.** Every entry cites the vendor pricing page and the
+  date it was read — the standard `claim_lint` applies to every other number
+  in this repo. These are **list** prices, not necessarily yours: enterprise
+  agreements, credits, Bedrock/Vertex rates and batch discounts all differ.
+  Correct them in `.mas/cost-model.yaml`; a price already there is never
+  overwritten by a later import unless you pass `--overwrite`.
+- **A range resolves upward.** A cap exists to stop spend, so under-counting
+  is the failure that matters. Sonnet 5's introductory rate is lower than the
+  standard one it carries; Gemini's larger-prompt tier is the one recorded.
+  The estimate is a ceiling, and each such entry says why.
+- **A model with no sourced price stays unpriced and is named.** The total is
+  labelled a floor rather than quietly counting that call as zero.
 
 ### 小程序 runtime verification (`avs mp-runtime`)
 

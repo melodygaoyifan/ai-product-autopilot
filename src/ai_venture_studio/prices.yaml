@@ -1,0 +1,82 @@
+# Reference API list prices, per 1M tokens, USD.
+#
+# The cost gate has been complete and inert since v0.59.0: `cost_gate` reads
+# the month, compares it to the cap, and refuses new work — and every call was
+# UNPRICED, because `prices` defaults to empty and nothing ever populated it.
+# So the total was always a floor, and a cap compared against a floor is a cap
+# that does not bite. 2000+ calls were burned across workspaces in one day
+# with the cap "configured" and unable to fire.
+#
+# The framework will not invent a price. These are published list prices with
+# a source URL and a retrieval date, which is the same evidence standard the
+# claim ledger applies to every other number in this repo — see claim_lint's
+# `unsourced_number` and `stale` rules. They are NOT your prices: enterprise
+# agreements, credits, Bedrock/Vertex rates, and batch discounts all differ.
+# `avs prices --import` writes them into a workspace's .mas/cost-model.yaml,
+# where you own them and can correct them.
+#
+# WHERE A PRICE IS A RANGE, THE HIGHER NUMBER IS USED. A cap exists to stop
+# spend; under-counting is the failure that matters, so a tiered or
+# introductory price is recorded at its most expensive form and the reason is
+# stated per entry. That makes the estimate a CEILING, not a guess.
+#
+# A model absent from this table stays unpriced and is reported as such —
+# never as zero.
+
+retrieved_at: "2026-08-01"
+stale_after_days: 90
+
+sources:
+  anthropic: "https://platform.claude.com/docs/en/about-claude/pricing"
+  openai: "https://developers.openai.com/api/docs/pricing"
+  google: "https://ai.google.dev/gemini-api/docs/pricing"
+
+prices:
+  claude-opus-5:
+    provider: anthropic
+    input: 5.0
+    output: 25.0
+  claude-opus-4-8:
+    provider: anthropic
+    input: 5.0
+    output: 25.0
+  claude-opus-4-7:
+    provider: anthropic
+    input: 5.0
+    output: 25.0
+  claude-sonnet-5:
+    provider: anthropic
+    input: 3.0
+    output: 15.0
+    note: >-
+      Standard pricing, in effect from 2026-09-01. An introductory $2/$10 runs
+      through 2026-08-31, so until then this over-estimates by a third — the
+      safe direction for a cap, and correct afterwards without an edit.
+  claude-sonnet-4-6:
+    provider: anthropic
+    input: 3.0
+    output: 15.0
+  claude-haiku-4-5-20251001:
+    provider: anthropic
+    input: 1.0
+    output: 5.0
+  claude-haiku-4-5:
+    provider: anthropic
+    input: 1.0
+    output: 5.0
+  gpt-5:
+    provider: openai
+    input: 1.25
+    output: 10.0
+  gemini-3.1-pro:
+    provider: google
+    input: 4.0
+    output: 18.0
+    note: >-
+      The >200k-prompt tier. Prompts at or under 200k tokens are billed
+      $2/$12; this repo's voter prompts carry whole diffs and repo context, so
+      the larger tier is the honest ceiling.
+
+# Deliberately absent: grok-4 (repo_graph voter). No published per-token list
+# price was sourced, and a number nobody can cite is worse than a visible
+# UNPRICED count — that is the whole point of the floor.

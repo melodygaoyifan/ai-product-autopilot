@@ -2052,6 +2052,94 @@ def cost_cmd(
     console.print("[green]within cap[/green]")
 
 
+@app.command("prices")
+def prices_cmd(
+    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    import_: bool = typer.Option(
+        False, "--import", help="Write these prices into .mas/cost-model.yaml",
+    ),
+    cap: float = typer.Option(
+        None, help="Also set monthly_cap_usd (omit to leave the cap alone)",
+    ),
+    overwrite: bool = typer.Option(
+        False, "--overwrite",
+        help="Replace prices already in the workspace (default: yours win)",
+    ),
+):
+    """Published list prices, and the import that makes the cost cap able to fire.
+
+    The gate has been complete since v0.59.0 and inert ever since: with no
+    prices configured every call is UNPRICED, the month's total is a floor,
+    and a cap compared against a floor never bites. This ships the table with
+    a source URL and a date per provider — list prices, not necessarily
+    yours, and never invented.
+
+    Where a price is a range the higher number is used: a cap exists to stop
+    spend, so the estimate is a ceiling rather than a guess.
+    """
+    from ai_venture_studio.prices import (
+        import_into_workspace,
+        load_reference_prices,
+        unpriced_models,
+    )
+
+    reference = load_reference_prices()
+    console.print(
+        f"reference prices retrieved {reference.retrieved_at} "
+        f"({reference.age_days()} days ago)"
+    )
+    if reference.stale():
+        console.print(
+            f"[yellow]stale: older than {reference.stale_after_days} days — "
+            "prices rot; re-check the source pages before trusting a total or "
+            "a cap built on these[/yellow]"
+        )
+    table = Table("model", "provider", "input $/Mtok", "output $/Mtok", "note")
+    for entry in reference.entries:
+        table.add_row(
+            entry.model, entry.provider, f"{entry.input:g}", f"{entry.output:g}",
+            (entry.note[:60] + "…") if len(entry.note) > 60 else entry.note,
+        )
+    console.print(table)
+    for provider, url in sorted(reference.sources.items()):
+        console.print(f"[dim]{provider}: {url}[/dim]")
+
+    if not import_:
+        console.print(
+            "\nNothing written. `avs prices --import` writes these into "
+            ".mas/cost-model.yaml, where you own and can correct them; add "
+            "`--cap <usd>` to set the monthly cap in the same step."
+        )
+        return
+
+    result = import_into_workspace(
+        repo_dir, cap_usd=cap, overwrite=overwrite, reference=reference
+    )
+    console.print(f"\nwrote {result.path}")
+    if result.models_written:
+        console.print(f"  priced: {', '.join(result.models_written)}")
+    if result.models_kept:
+        console.print(
+            f"  [dim]kept your existing price for: "
+            f"{', '.join(result.models_kept)} (--overwrite to replace)[/dim]"
+        )
+    if result.cap_usd:
+        console.print(f"  monthly cap: ${result.cap_usd:.2f}")
+    else:
+        console.print(
+            "  [yellow]no cap configured (monthly_cap_usd: 0) — spend is "
+            "measured and reported, and nothing is refused. Set one with "
+            "`avs prices --import --cap <usd>`.[/yellow]"
+        )
+    missing = unpriced_models(repo_dir)
+    if missing:
+        console.print(
+            f"  [yellow]still unpriced, called by this workspace: "
+            f"{', '.join(missing)} — the month's total stays a floor until "
+            f"you add them[/yellow]"
+        )
+
+
 @app.command("mvp")
 def mvp_cmd(
     slice_file: str = typer.Argument(
