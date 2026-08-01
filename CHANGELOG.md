@@ -4,6 +4,44 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.67.0 — spend is measured and reported, never gated (ADR-032)
+
+An operator decision, recorded as
+[ADR-032](docs/adr/032-no-framework-spending-cap.md): every model call is
+billed to the operator's **own key or subscription**, so budget enforcement
+belongs to the provider account that does the billing. Provider-side
+spending limits are authoritative — they see all usage on the key, not just
+this framework's slice, and cannot be bypassed by a bug here. A
+framework-side cap duplicates that control at best and contradicts it at
+worst: for subscription billing, tokens do not map to marginal dollars, so
+a token-priced cap would pause builds over money that was never being
+spent. The gate's own refusal message already had to strain to attribute
+the stop to the operator ("the limit YOU set") — a sign the mechanism sat
+on the wrong side of the ADR-U20 boundary ("the framework never spends
+money").
+
+**Removed:** the monthly cap and everything that refused over it —
+`cost_gate` at Gate 1 and per build task, the auto-retry precheck,
+`monthly_cap_usd`, `avs prices --cap`, the Studio ceiling form and its
+`/cap` route, and the `avs cost` exit-3 path. An old `cost-model.yaml`
+carrying the retired key still loads; the key is ignored, never an upgrade
+error.
+
+**Kept, deliberately — the answer to "how much will a typical month cost
+me?" is visibility, not refusal:** the ledger metering every call at the
+adapter, the build report's arithmetic cost line, `avs cost` per model, the
+Studio cost card on the confirm page (before the first dollar) and the
+report page, and the sourced reference price table as pure estimation —
+ranges still resolve upward, operator corrections still survive re-import,
+and an unpriced call still keeps the total labelled a FLOOR rather than
+counted as zero. The surfaces now point at provider-side limits, where a
+ceiling is both effective and complete.
+
+The removal is pinned as firmly as the presence was: a month of heavy spend
+must not stop a build or a review, the Studio renders no ceiling form and
+no refusal copy, `POST /cap` is gone, and legacy-key compatibility is a
+test.
+
 ## v0.66.0 — the spend guard: the ceiling reaches the one persona that cannot use a CLI
 
 Built from research rather than intuition. The published record on
