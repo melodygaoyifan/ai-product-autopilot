@@ -194,9 +194,15 @@ is in [claims/platform.yaml](claims/platform.yaml).
 - **Perf-lane calibration**: 5 of 5 seeded defects caught (catch rate 100%)
   at the 3x relative-detection factor, loopback low-parity environment,
   2026-07-26 ([manifest](benchmarks/perf_seeded/calibration.yaml)).
-- **1475 hermetic tests** (`uv run pytest`, no network, no keys); every PR
+- **1524 hermetic tests** (`uv run pytest`, no network, no keys); every PR
   in this repo was reviewed by avs itself, and five of those reviews caught
   real bugs.
+- **A hermetic suite is not enough, and this repo says so.** Twelve real
+  defects were found in one day of running the product against one real
+  requirements document, with every test green — two of them at the model-SDK
+  boundary, where a mock is authored by the same person holding the same
+  wrong belief. `avs smoke` makes four real calls per configured provider
+  and is step 0 of every release ([runbook](RUNBOOK.md#releasing-to-pypi)).
 
 ## How does it compare?
 

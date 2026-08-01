@@ -4,6 +4,113 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.64.0 — the rules that were only ever sentences
+
+Five things this system said and did not enforce. Every one had the same
+shape: a rule written in prose, next to a code path free to ignore it — and
+in four of the five cases the code path had already been taking the free
+option in real runs.
+
+**Gate U2's scope lock was decoration.** `approve_plan` wrote
+`status: locked` and the next `avs create` re-decomposed the brief anyway:
+assess, discovery, four charter voters with a verify pass, a leader, then
+planning — minutes and real money — to arrive at a *different* plan, because
+planning is not deterministic. That is also what made resume unable to
+recognize its own work, since ids are positional: run 2's `t4` (购物车与结算UI)
+matched run 1's `t4` (结算页与下单记录界面). A locked plan is now the plan,
+keyed on a whitespace-insensitive fingerprint of the FDR it came from —
+reflowing a paragraph is not a scope change, different words are. After the
+lock, different words are refused with the routes named (`avs add`, `avs
+scr`, or a deliberate `--replan`) instead of silently re-planned.
+Re-running `create` on an unchanged FDR now costs **nothing at all**: the
+reuse path makes no model call, not even for the confirmation.
+
+The one place that must never hit that refusal is the Studio's requirements
+form. A founder rewriting the FDR there has asked for scope to change, in
+the place the product offers for asking, so the lock is released at the
+write rather than surfacing as an error two screens later on a page that
+cannot explain it.
+
+**A retried module was never reviewed.** `retry-task` ran spec + build and
+stopped. In one real run four of the seven modules that reached the founder
+came through that path: no reviewer had read them, no fix iteration could
+fire, and their rows carried an empty verdict beside modules `create` had
+reviewed properly. Gate 3 — review, one bounded repair, re-review, roll back
+if it did not clear — is now shared code rather than a copy, so the two
+paths cannot drift apart again. The retry path was also the only build path
+that never carried the founder's FDR as its `source_contract`, so a retried
+module was free to invent field names its siblings had agreed on. And
+`setdefault` on a `model_dump` could never fire (the key is always present,
+set to `None`), so "keep the verdict from the original run" had been
+overwriting it with nothing.
+
+**"A .py file in a 小程序 is always wrong" was a sentence in a prompt.** A
+spec came back with `tests/test_catalog_page.py` regardless, which made the
+build gate demand a passing pytest run against a project with no Python in
+it; the task died three iterations later on "pytest collected no tests" — a
+true sentence about the wrong thing. It is now checked at both boundaries:
+the spec blocks with the JS alternative spelled out, and the write refuses.
+Per-runtime, not a dislike of Python — the web profile *is* Python and is
+untouched.
+
+**The mock was the reason that could happen.** It answered with a Python
+item-store for every profile, so every hermetic mini-program test was
+exercising a product WeChat could never load — 1478 green tests over a
+fiction. It now answers in the language the profile actually runs, and a
+小程序 autopilot run under the mock builds real JavaScript that
+`node --test` executes. The bench case followed: its probe had been
+importing a Python module out of a mini-program.
+
+**And the 小程序 "it works" claim is finally checkable.** The build gate's
+loadability check is static — it asks whether DevTools *would* open the
+project. `avs mp-runtime` opens it for real and visits every registered
+page. Three preconditions, each a visible skip naming its remedy: the
+DevTools desktop app (macOS/Windows, never CI), `miniprogram-automator`, and
+DevTools' service port, which is a one-time human toggle in its security
+settings. With the port off the automator swallows the CLI's own
+`IDE service port disabled` and simply times out, so that case is reported
+as **skipped, not failed** — nothing was checked, and red would read as
+"your pages are broken".
+
+### `avs smoke` — and it earned its place on the first run
+
+Twelve real defects were found in one day of running this product against
+one real FDR. The suite was green for every one of them, and it was right to
+be: they lived where a mock cannot go. The expensive one shipped to PyPI
+twice — v0.60.0 and v0.61.0 could not build a single task, because the
+implementer asks for 32000 output tokens and the SDK refuses a
+non-streaming request that might run past ten minutes, raising before it
+sends anything. 1441 tests passed. Every real build died at "attempt 1/3".
+
+Writing more mocks does not fix that; a mock is authored by the same person
+holding the same wrong belief about the SDK, so it agrees with the bug.
+`avs smoke` makes four real calls per configured provider, costs a fraction
+of a cent on your own key, and is now **step 0 of every release**:
+`reachable`, `streams_large` (the bug above, as a check),
+`truncation_visible` (what stops half a file reaching disk), and
+`usage_metered` (so the cost gate is not reading a silent zero). An
+unconfigured provider is a loud skip naming the variable — "we did not
+check" and "it works" must not look alike.
+
+Its first run found gpt-5 answering empty: a reasoning model at
+`max_tokens=16` spends the whole budget reasoning and returns
+`content: null` with `finish_reason=length` (512 and up answer normally —
+measured, not assumed). Two things were wrong. The check's: no caller in
+this system passes 16, so it was testing a configuration that does not
+exist. The product's: `choice["message"]["content"]` was returned unguarded
+and every caller does `raw.strip()`, so a null reached the voter's generic
+retry as an AttributeError about attributes rather than about budget.
+
+Also in this release: `avs create --profile` is optional for a workspace
+that already declares one (demanding it on every re-run made resume,
+`--yes`-after-confirmation and every later feature an error, and a mistyped
+value would have read as a request to change what the product *is*); the
+demo scripts left `/tmp`, where one machine's home directory had been baked
+into them, for `scripts/demo/` with paths as inputs; and CI moved past the
+deprecated Node 20 runtime (`checkout@v7`, `setup-uv@v9.0.0` — that action
+publishes no floating major tag, which cost one four-second red build to
+learn).
+
 ## v0.63.0 — a 小程序 that opens, and a repair that has to prove itself
 
 Seven fixes, all of them found the same way: by running one real founder
