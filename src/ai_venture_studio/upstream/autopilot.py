@@ -185,16 +185,14 @@ def run_autopilot(
     # super-step-granular like the review graph: a task interrupted halfway
     # restarts that task, and the ones before it stay done.
     outcomes: list[TaskOutcome] = _resume_outcomes(root)
-    resumed = {o.task_id for o in outcomes if o.status == "built"}
+    ordered, resumed = tasks_to_build(
+        outcomes, _topo_order(load_plan(root).tasks)[:max_tasks]
+    )
     if resumed:
         auto_approvals.append(
             f"resumed: {len(resumed)} task(s) already built "
             f"({', '.join(sorted(resumed))}) — not rebuilt"
         )
-    ordered = [
-        t for t in _topo_order(load_plan(root).tasks)[:max_tasks]
-        if t.id not in resumed
-    ]
     if parallel:
         auto_approvals.append("parallel lanes: wave scheduling (one task per lane per wave)")
         for wave in schedule_waves(ordered):
@@ -360,6 +358,29 @@ def _outcome_tally(outcomes) -> str:
                 " / not your requirements — ours; retry it on its own"
             )
     return "\n".join(lines) + "\n"
+
+
+def tasks_to_build(outcomes, tasks) -> tuple[list, list[str]]:
+    """Split the plan into (still to build, already built).
+
+    A task is skipped ONLY when a built outcome shares both its id and its
+    title. Matching on the id alone was a silent-work-loss bug: ids are
+    positional (t1..tN) and the plan is regenerated on every `avs create`,
+    so the same id routinely names different work between runs —
+
+        run 1   t4  结算页与下单记录界面     (built)
+        run 2   t4  购物车与结算UI          (never built, skipped as done)
+
+    and the report would announce "resumed: 1 task already built" for a
+    module that does not exist. Skipping work is only safe when we can say
+    what work it was.
+    """
+    built = {
+        (o.task_id, o.title) for o in outcomes if o.status == "built"
+    }
+    todo = [t for t in tasks if (t.id, t.title) not in built]
+    skipped = [t.id for t in tasks if (t.id, t.title) in built]
+    return todo, skipped
 
 
 def estimate_hint(root: Path, item_count: int) -> str:
