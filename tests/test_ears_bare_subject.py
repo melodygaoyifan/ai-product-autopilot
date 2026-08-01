@@ -104,3 +104,27 @@ def test_ordinary_english_subjects_still_need_their_article(criterion):
     word-search for 'shall'."""
     assert classify(criterion) == "invalid"
     assert lint_criteria([criterion])
+
+
+# ── the connective is optional too ───────────────────────────────────────
+# Found on a retry: the article fix unblocked the task, the writer rephrased
+# the next draft as "If X, the system shall Y" — no "then" — and the
+# unwanted pattern rejected it. Same pedantry, second helping.
+
+@pytest.mark.parametrize(
+    "criterion",
+    [
+        "If httpGet is unusable and readCache rejects, the system shall "
+        "return an empty result without throwing.",
+        "If the payload is malformed, the API shall return 400.",
+        "If the payload is malformed, then the API shall return 400.",
+        "If the cache is cold, loadCatalog shall fetch from the network.",
+    ],
+)
+def test_if_criteria_pass_with_or_without_then(criterion):
+    assert classify(criterion) == "unwanted"
+    assert lint_criteria([criterion]) == []
+
+
+def test_if_still_needs_a_shall():
+    assert lint_criteria(["If the payload is malformed, the API returns 400."])

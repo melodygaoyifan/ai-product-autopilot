@@ -1206,15 +1206,71 @@ def retry_task(
         raise typer.Exit(code=1)
     spec = run_spec_stage(repo_dir, f"{task.description} (task:{task.id})", provider=provider)
     if spec.status != "proposed":
-        console.print(f"[red]spec blocked: {spec.lint_issues}[/red]")
+        reasons = "; ".join(spec.block_reasons) or "blocked (no reasons recorded)"
+        record_retry_outcome(repo_dir, task, None, status="spec_blocked",
+                             detail=reasons)
+        console.print(f"[red]spec blocked: {reasons}[/red]")
         raise typer.Exit(code=1)
     approve_spec(repo_dir, spec.slug)
     result = run_build(repo_dir, spec.slug, provider=provider,
                        task_lane=task.lane, task_estimate_hours=task.estimate_hours)
+    # Record it. Without this a successful retry changed nothing the founder
+    # can see: outcomes.yaml still said the module had failed, so the report
+    # and the Studio's "modules that did not build" card kept offering to
+    # retry something that was already built and committed.
+    record_retry_outcome(repo_dir, task, result)
     color = "green" if result.status == "built" else "red"
     console.print(f"[bold {color}]{result.status}[/bold {color}] {result.detail}")
     if result.status != "built":
         raise typer.Exit(code=1)
+
+
+
+def record_retry_outcome(repo_dir, task, result, *, status="", detail="") -> None:
+    """Update this task's row in product/outcomes.yaml after a retry.
+
+    The autopilot writes outcomes as it goes; `retry-task` did not, so a
+    module that a founder successfully retried stayed listed as failed
+    forever — the Studio kept offering the retry button for code that was
+    already committed. Best-effort: a bookkeeping failure must not turn a
+    successful build into a failed command.
+    """
+    import yaml as _yaml
+
+    from ai_venture_studio.upstream.autopilot import TaskOutcome
+
+    try:
+        path = Path(repo_dir) / "product" / "outcomes.yaml"
+        rows = []
+        if path.exists():
+            rows = _yaml.safe_load(path.read_text(encoding="utf-8")) or []
+        row = TaskOutcome(
+            task_id=task.id,
+            title=task.title,
+            status=status or (result.status if result else "error"),
+            detail=detail or (result.detail if result else ""),
+            iterations=result.iterations if result else 0,
+            files_written=list(result.files_written) if result else [],
+            test_summary=result.test_summary if result else "",
+        ).model_dump()
+        replaced = False
+        for index, existing in enumerate(rows):
+            if isinstance(existing, dict) and existing.get("task_id") == task.id:
+                # Keep the review verdict from the original run only when the
+                # retry did not produce a new one.
+                row.setdefault("review_verdict", existing.get("review_verdict"))
+                rows[index] = row
+                replaced = True
+                break
+        if not replaced:
+            rows.append(row)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            _yaml.safe_dump(rows, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+    except Exception:  # noqa: BLE001 — bookkeeping never fails a retry
+        return
 
 
 @app.command()

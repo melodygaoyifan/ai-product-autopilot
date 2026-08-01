@@ -28,7 +28,12 @@ from pydantic import BaseModel
 _PATTERNS = [
     ("event", re.compile(r"^When .+?, (?:the )?.+? shall .+", re.IGNORECASE)),
     ("state", re.compile(r"^While .+?, (?:the )?.+? shall .+", re.IGNORECASE)),
-    ("unwanted", re.compile(r"^If .+?, then (?:the )?.+? shall .+", re.IGNORECASE)),
+    # `then` is optional for the same reason the article is: "If the payload
+    # is malformed, the API shall return 400" is a clear unwanted-behaviour
+    # requirement, and demanding the connective adds no testability. This
+    # blocked a task on the retry that the article fix had just unblocked —
+    # the writer simply phrased the next draft without it.
+    ("unwanted", re.compile(r"^If .+?, (?:then )?(?:the )?.+? shall .+", re.IGNORECASE)),
     ("optional", re.compile(r"^Where .+?, (?:the )?.+? shall .+", re.IGNORECASE)),
     # Ubiquitous keeps a tighter shape: with no leading keyword, dropping the
     # article entirely would make `^.+? shall .+` match nearly any sentence
