@@ -4,6 +4,70 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.65.0 — the run presses its own retry button, and the cost cap can fire
+
+Two changes, both against the failure modes that matter most for autonomous
+development: a run stopping to ask a human for something mechanical, and the
+same error recurring because nothing carried the diagnosis forward.
+
+**A failed task no longer ends with a button.** Every `spec_blocked` /
+`build_failed` / `merge_conflict` outcome used to be recorded and left for
+the founder's retry button — and the bench record shows that button usually
+worked (t1/t2 recovered on the second pass, t5/t9 built on retry). Pressing
+it takes patience, not judgment, so the run presses it itself: **one bounded
+retry pass** after the first pass over the plan, in dependency order (a task
+that failed because its dependency failed retries *after* the dependency
+recovered), gated on the cost cap (a run over its cap does not retry itself
+deeper into the cap), every attempt and result recorded in the report's
+auto-approvals. Applies to `create`, the parallel-wave path (a
+`merge_conflict` retried serially is exactly the fix), and `add`. The
+judgment gates are untouched: FDR questions, plan confirmation, and review
+escalations still wait for the human — those stops are the point.
+
+**A retry is a different attempt, not a replay.** The spec writer and the
+implementer had no channel for "the previous attempt failed because X", so
+every retry started blind — the writer picked the same rejected phrasing,
+the implementer re-invented the same phantom import (run-3 forensics). The
+previous attempt's status, detail, and test summary now travel into both
+prompts as `<previous_attempt_failed>`; `avs retry-task` reads the recorded
+failure out of `outcomes.yaml` and passes it the same way; and a retry that
+also fails keeps **both** diagnoses so a later attempt starts from the
+accumulated history.
+
+**And the bug that made recovery invisible.** A resumed run that rebuilt a
+previously-failed task *appended* a second outcome row, so the tally counted
+the ghost: a workspace whose failed task was rebuilt on the next run
+reported "3/4 modules built" and status `failed` for a product that was
+entirely built — then asked the founder to retry work that was already done.
+A run that says failed when it succeeded is a manufactured stop-and-ask.
+Outcome rows are now replaced, never shadowed.
+
+The per-task attempt (spec → Gate U3 → build → review → repair) is now one
+shared code path for the first pass, the auto-retry, and the feature flow —
+hand-copied variants are how `retry-task` once shipped without the review
+gate. The feature path gains review parity and progress narration for free.
+
+**The cost cap can fire** (`avs prices`). The gate has been complete since
+v0.59.0 and inert ever since: with `prices` empty, every call was UNPRICED,
+the month's total was a FLOOR, and a cap compared against a floor never
+bites. The package now ships published list prices with a vendor URL and a
+retrieval date per provider — the same evidence standard `claim_lint`
+applies to every other number in this repo — and `avs prices --import
+[--cap <usd>]` writes them into `.mas/cost-model.yaml`, where you own them.
+Ranges resolve **upward** (Sonnet 5 carries the standard price, not the
+introductory one; Gemini's larger-prompt tier is the one recorded), so the
+estimate is a ceiling, not a guess. Your own price always survives a
+re-import; a model with no sourced price (grok-4) stays visibly unpriced
+rather than invented, and keeps the total labelled a floor. Verified end to
+end: a simulated month reported `spend ≥$46.76 of $25.00 cap`, refused new
+work naming the file the cap was set in, and the auto-retry pass respects
+the same gate.
+
+Also: a test-isolation bug found by that work — spend is recorded into a
+process-global buffer, so a test that recorded without flushing leaked rows
+into the next test's workspace ledger. The suite now drains the buffer
+around every test.
+
 ## v0.64.0 — the rules that were only ever sentences
 
 Five things this system said and did not enforce. Every one had the same
