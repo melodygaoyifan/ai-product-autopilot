@@ -108,6 +108,37 @@ def _make_client():
 #: ours to depend on.
 _STREAM_ABOVE = 8192
 
+#: Transient-failure budget. Four attempts with 2/4/8s backoff spent the
+#: whole allowance in fourteen seconds, which is nothing next to a real
+#: overload event — a 529 on one voter killed a build that had already run
+#: for eleven minutes. Six attempts capped at 60s is worst-case just over two
+#: minutes of waiting, which is obviously the right trade against losing an
+#: hour-long run.
+_TRANSIENT_ATTEMPTS = 6
+_BACKOFF_CAP_S = 60.0
+
+
+def _backoff_seconds(attempt: int, exc: Exception | None = None) -> float:
+    """How long to wait before retry `attempt` (0-based).
+
+    Honours a `retry-after` header when the server sends one — it knows more
+    than our exponent does. Jitter matters because the review voters run in a
+    thread pool: without it, six voters that all got 529 retry in lockstep
+    and hammer the same instant.
+    """
+    import random
+
+    response = getattr(exc, "response", None)
+    header = getattr(response, "headers", None)
+    if header is not None:
+        try:
+            after = float(header.get("retry-after") or 0)
+            if after > 0:
+                return min(after, _BACKOFF_CAP_S)
+        except (TypeError, ValueError):
+            pass
+    return min(2.0 ** (attempt + 1), _BACKOFF_CAP_S) + random.random()
+
 
 @register
 class AnthropicProvider(Provider):
@@ -131,7 +162,7 @@ class AnthropicProvider(Provider):
         # site (writers, critics, implementer) inherits it — a 529 killed
         # an entire 2-hour bench run before this existed.
         response = None
-        for attempt in range(4):
+        for attempt in range(_TRANSIENT_ATTEMPTS):
             try:
                 if max_tokens > _STREAM_ABOVE:
                     # The SDK REFUSES a non-streaming request whose max_tokens
@@ -168,9 +199,9 @@ class AnthropicProvider(Provider):
                 transient = status in (429, 500, 502, 503, 529) or isinstance(
                     exc, anthropic.APIConnectionError
                 )
-                if not transient or attempt == 3:
+                if not transient or attempt == _TRANSIENT_ATTEMPTS - 1:
                     raise
-                time.sleep(2 ** (attempt + 1))
+                time.sleep(_backoff_seconds(attempt, exc))
         # Record why the model stopped on EVERY response, not only the empty
         # ones. `stop_reason == "max_tokens"` means the text below is a partial
         # answer, and a partial answer that parses is worse than one that
