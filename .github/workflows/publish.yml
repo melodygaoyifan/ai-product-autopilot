@@ -30,8 +30,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9
       - run: |
           git config --global user.email ci@example.invalid
           git config --global user.name avs-ci
@@ -55,8 +55,8 @@ jobs:
     permissions:
       id-token: write          # the OIDC token Trusted Publishing exchanges
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9
       - run: uv build
       - name: check artifacts the way PyPI will
         run: uvx twine check dist/*

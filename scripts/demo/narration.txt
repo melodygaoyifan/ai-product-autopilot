@@ -1,0 +1,29 @@
+AI Venture Studio — demo narration
+Total runtime 144.8s (2m24s). Read at a normal pace; each block has ~1.5s of padding.
+
+[0:00]  (8.7s on screen, 7.2s of speech)
+AI Venture Studio takes one plain-language document, and returns a planned, built, tested, and reviewed product.
+
+[0:08]  (14.1s on screen, 12.6s of speech)
+Everything starts here. Six questions, answered in your own words. No technical terms, no spec, no diagrams. And if your answers are unclear, it asks you follow-up questions instead of guessing.
+
+[0:22]  (20.0s on screen, 12.9s of speech)
+This is one real answer: a shared task list for a two-person studio that keeps losing track of work in chat messages. Notice question four, what it should not build. Scope you exclude is enforced, not just advice.
+
+[0:42]  (26.0s on screen, 18.0s of speech)
+Before any code is written, it restates your intent: what will be built, what is deliberately out of this version, and how you will know it worked, with a real deadline attached. It also sets expectations honestly: roughly four to seven modules, ten to thirty minutes each. Nothing is built until you confirm.
+
+[1:08]  (10.0s on screen, 8.0s of speech)
+Then it plans. No progress bar, and no estimated finish time, because it does not yet know whether the next attempt will be the last one.
+
+[1:18]  (16.0s on screen, 10.9s of speech)
+The plan becomes seven named modules. Each one gets a specification, an implementation, its own tests, and an independent code review. Progress updates live as each finishes.
+
+[1:34]  (26.0s on screen, 20.9s of speech)
+And here is the part most demos leave out. This report says the product is partly built. Some pieces work. One needs changes before you rely on it. One could not be completed at all. Each is named, in plain language, with every failed attempt preserved so you can retry just those. A demo you can only pass is marketing. This one can fail in public.
+
+[2:00]  (16.0s on screen, 7.5s of speech)
+And this is the product that run actually produced. Running in the browser, task list working. Not a mockup, and not a rendering.
+
+[2:16]  (8.0s on screen, 4.6s of speech)
+You can run the review pipeline yourself, offline, with no API key.
