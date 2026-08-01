@@ -4,6 +4,96 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.63.0 — a 小程序 that opens, and a repair that has to prove itself
+
+Seven fixes, all of them found the same way: by running one real founder
+FDR — a WeChat mini-program, written in Chinese — three times over and
+fixing whatever stopped it. None of them were found by the hermetic suite,
+which was green throughout. Every one lived past the point a mock provider
+can see: in the assembled output, in the repair loop, in the bookkeeping
+between runs.
+
+**Nine modules built, zero of them reachable.** A run produced seven page
+directories and no `app.json`, so WeChat DevTools could not open the
+project at all. Every module had passed its own tests. The web profile has
+had a boot gate since product-bench run 4 — built every task, failed every
+probe on "server never listened" — and it was never ported to 小程序,
+whose own checks (size, domain allowlist, setData lint) a project with no
+entry point passes comfortably. The mini-program gate is static, because
+DevTools is a desktop application and cannot be driven headlessly, and it
+blocks on exactly what makes a project unopenable: no `app.json`, no
+`app.js`, an empty or unparseable `pages` array, a registered page whose
+files are missing, and a page directory that exists but is registered
+nowhere — a page nobody can navigate to was built for no one.
+
+**A gate can only check a layout somebody guarantees.** Two runs of that
+same FDR produced two different trees, and the new gate silently no-opped
+on the second because it found no anchor. `avs init --profile miniprogram`
+now scaffolds a minimal *loadable* project and commits it, so every task
+extends a real project instead of assembling one. The appid is WeChat's
+documented `touristappid`, never a plausible-looking one: an implementer
+invented `wxb1e7d6736079f6c3` in an earlier run, and that string is either
+somebody's identifier or nobody's.
+
+**A repair that made the product worse was committed anyway.** Told that a
+cart's `onAdd` handler was never wired to any control, the fix deleted the
+handler — the cheapest way to satisfy "this is never used". The next review
+called it critical, certain, verified, score 100, "breaking core feature",
+and nothing acted on it, because that review ran in the caller *after* the
+commit purely to record a verdict. The re-review now runs inside the fix
+iteration and can veto: any remaining critical/high resets the workspace to
+the commit before the fix, and a rolled-back repair says so in the outcome
+rather than looking like no repair was tried. Same number of review calls —
+it moved, it did not multiply.
+
+**One unchecked fix iteration cost four modules.** That deleted handler
+broke a committed test, and because the build gate runs the whole suite
+while existing tests are read-only walls to later implementers, the next
+four tasks could not be built by anyone. Not four problems — one, four
+times. It went unchecked because the fix iteration validated with bare
+pytest, which returns `no_tests` on a 小程序, while the build loop
+validates with pytest *and* the JS suite: two standards in one repo, and
+the weaker one guarding the path that edits already-committed code.
+Separately, and enough on its own to guarantee a cascade, the JS runner
+globbed `**/*.test.js`, and `**` walks hidden directories — so it collected
+`.mas/failed-builds/<slug>/tests/*.test.js`, the preserved copies of FAILED
+attempts. In that workspace it was 31 of 37 matched files: once one task
+failed, every later task's gate ran that task's broken snapshot as if it
+were the product.
+
+**A reformatted artifact is not a missing one.** A task died on
+`grounding violation: required context missing from the implementer's
+prompt`, and the writer had not been blind — every acceptance criterion was
+there. The probe is the artifact's longest line; here that was a `purpose:`
+inside `test_skeletons`, which the prompt renders in a different shape.
+Same content, no substring match, and a grounding violation is
+unrecoverable rather than retried, so the task was simply lost. Grounding
+now tries several probes and grants the receipt if any appears. The bug the
+check exists to catch — a prompt assembled without the invariants the
+artifact will be judged against — is untouched: an absent artifact scores
+zero on every probe.
+
+**Resume skipped work it could not name.** Task ids are positional, and
+planning is not deterministic, so `t4` was 结算页与下单记录界面 in one run
+and 购物车与结算UI in the next. Matching on the id alone meant the second
+run skipped a module that had never been built, while the report announced
+"resumed: 1 task(s) already built". Resume now matches on (id, title).
+
+**EARS rejected correct requirements, one clause over from last time.**
+v0.62 made the article optional; the writer then phrased its next draft
+without the connective and the same task was blocked again by the same
+class of pedantry. `then` is now optional too — "If the payload is
+malformed, the API shall return 400" is not a worse requirement than the
+version with it. A missing `shall` is still rejected. And a successful
+`retry-task` now records its result: retries rebuilt and committed two
+modules while `product/outcomes.yaml` went on calling them `spec_blocked`,
+so the Studio kept offering to retry work that was already done.
+
+Known and unchanged in this release: `approve_plan` sets the plan `locked`
+(Gate U2, scope lock) and the next `avs create` regenerates it anyway, so
+the expensive upstream is re-paid every run. Reusing a locked plan is a
+behaviour change and wants its own release.
+
 ## v0.62.0 — the run that could not build, and the page that never said why
 
 Everything here was found by running the product against one real founder
