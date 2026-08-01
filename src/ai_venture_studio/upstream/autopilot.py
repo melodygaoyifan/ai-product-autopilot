@@ -241,15 +241,22 @@ def run_autopilot(
                     root, task.id, "fix",
                     f"fixing {len(serious)} serious issue(s) the review found",
                 )
-            if serious and _fix_iteration(root, provider, model, serious):
-                auto_approvals.append(
-                    f"fix iteration ({spec.slug}): {len(serious)} serious review "
-                    "finding(s) fed back to the implementer; suite re-passed"
-                )
-                re_review = _review_head(root, provider)
-                if re_review:
-                    verdict = re_review.verdict.value
+            if serious:
+                landed, after = _fix_iteration(root, provider, model, serious)
+                if after:
+                    verdict = after.verdict.value
+                if landed:
+                    auto_approvals.append(
+                        f"fix iteration ({spec.slug}): {len(serious)} serious "
+                        "review finding(s) repaired; suite re-passed and the "
+                        "re-review found nothing serious"
+                    )
                     detail = (detail + " " if detail else "") + "(after fix iteration)"
+                else:
+                    detail = (detail + " " if detail else "") + (
+                        "(a fix was attempted and rolled back — it did not "
+                        "clear the review)"
+                    )
         outcomes.append(
             TaskOutcome(
                 task_id=task.id, title=task.title,
@@ -556,9 +563,14 @@ def _review_head(root: Path, provider: str):
     return review
 
 
-def _fix_iteration(root: Path, provider: str, model: str, findings) -> bool:
-    """One bounded repair pass: findings → implementer → suite must pass →
-    commit. Returns True when a fix commit landed."""
+def _fix_iteration(root: Path, provider: str, model: str, findings):
+    """One bounded repair pass: findings → implementer → suite must pass
+    → commit → RE-REVIEW, rolled back if it made things worse.
+
+    Returns (landed, review_after). `review_after` is handed back so the
+    caller records the post-fix verdict without paying for a second
+    review.
+    """
     import subprocess
 
     from ai_venture_studio.testing import _pytest_in_subprocess
@@ -594,9 +606,9 @@ def _fix_iteration(root: Path, provider: str, model: str, findings) -> bool:
         data = extract_mapping(raw, ("files",))
         written, _kept = _write_files(root, data.get("files") or [])
     except ValueError:
-        return False
+        return False, None
     if not written:
-        return False
+        return False, None
     # The SAME gate the build loop uses. This used to run bare pytest, which
     # on a 小程序 returns "no_tests" — so a fix iteration on a JS product
     # committed without the JavaScript suite ever executing. One did exactly
@@ -616,14 +628,43 @@ def _fix_iteration(root: Path, provider: str, model: str, findings) -> bool:
             ["git", "clean", "-qfd", "--", *written],
             cwd=root, capture_output=True, timeout=60,
         )
-        return False
+        return False, None
+    before = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,
+        timeout=60, text=True,
+    ).stdout.strip()
     subprocess.run(["git", "add", "-A"], cwd=root, capture_output=True, timeout=60)
     committed = subprocess.run(
         ["git", "-c", "user.email=autoproduct@local", "-c", "user.name=autoproduct",
          "commit", "-qm", "fix: address serious review findings"],
         cwd=root, capture_output=True, timeout=60, text=True,
     )
-    return committed.returncode == 0
+    if committed.returncode != 0:
+        return False, None
+
+    # THE FIX IS REVIEWED BEFORE IT STANDS. This review used to run in the
+    # caller, after the commit, purely to record a verdict — so a "fix" that
+    # made the product worse was written into history and the bad news went
+    # into the report. It happened: told that an onAdd handler was never
+    # wired to a control, the fix deleted the handler instead of adding the
+    # control. The next review said so at critical/certain, score 100,
+    # "breaking core feature" — and nothing acted on it. Four later tasks
+    # then could not build against the broken suite.
+    #
+    # Same number of review calls as before; the difference is that this one
+    # can say no.
+    after = _review_head(root, provider)
+    still_serious = [
+        f for f in (after.findings if after else [])
+        if f.severity.value in ("critical", "high")
+    ]
+    if still_serious:
+        subprocess.run(
+            ["git", "reset", "--hard", before or "HEAD~1"],
+            cwd=root, capture_output=True, timeout=60,
+        )
+        return False, after
+    return True, after
 
 
 from ai_venture_studio.upstream.plan import PLANNER_MARKER as _PLANNER_MARKER
@@ -783,13 +824,15 @@ def run_feature(
             verdict = review.verdict.value if review else None
             serious = [f for f in (review.findings if review else [])
                        if f.severity.value in ("critical", "high")]
-            if serious and _fix_iteration(root, provider, model, serious):
-                auto_approvals.append(
-                    f"fix iteration ({spec.slug}): {len(serious)} finding(s) repaired"
-                )
-                re_review = _review_head(root, provider)
-                if re_review:
-                    verdict = re_review.verdict.value
+            if serious:
+                landed, after = _fix_iteration(root, provider, model, serious)
+                if after:
+                    verdict = after.verdict.value
+                if landed:
+                    auto_approvals.append(
+                        f"fix iteration ({spec.slug}): {len(serious)} finding(s) "
+                        "repaired and re-reviewed clean"
+                    )
         outcomes.append(TaskOutcome(task_id=task.id, title=task.title,
                                     status=built.status, review_verdict=verdict,
                                     detail=built.detail))
