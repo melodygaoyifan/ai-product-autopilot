@@ -200,6 +200,87 @@ def _miniprogram_root(repo: Path) -> Path:
     return repo / "miniprogram" if (repo / "miniprogram").is_dir() else repo
 
 
+_MP_REQUIRE_RE = re.compile(r"require\s*\(\s*['\"]([^'\"]+)['\"]\s*\)")
+_MP_IMPORT_RE = re.compile(r"^\s*import\b[^'\"\n]*['\"]([^'\"]+)['\"]", re.MULTILINE)
+_MP_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_MP_LINE_COMMENT_RE = re.compile(r"(?<!:)//[^\n]*")
+
+
+def _mp_module_specs(source: str) -> list[str]:
+    """Relative and root-absolute module specifiers a JS file loads.
+
+    Comments are stripped first (the `(?<!:)` keeps `https://` string
+    literals whole). Bare names (`miniprogram-automator`) are npm
+    territory — resolved through miniprogram_npm/ by a build step this
+    gate cannot see — so they are not judged here.
+    """
+    text = _MP_BLOCK_COMMENT_RE.sub("", source)
+    text = _MP_LINE_COMMENT_RE.sub("", text)
+    specs = _MP_REQUIRE_RE.findall(text) + _MP_IMPORT_RE.findall(text)
+    return [s for s in specs if s.startswith((".", "/"))]
+
+
+def _mp_resolve(spec: str, requiring: Path, root: Path) -> Path:
+    """The normalized path WeChat's CommonJS loader would look at:
+    relative to the requiring file, or from the mini-program root for
+    `/`-absolute specs. Existence is the caller's question."""
+    import os
+
+    base = root / spec.lstrip("/") if spec.startswith("/") else requiring.parent / spec
+    return Path(os.path.normpath(base))
+
+
+def _mp_require_problems(root: Path, repo: Path, entries: list[Path]) -> list[str]:
+    """Walk relative require()/import chains from every entry file.
+
+    The lesson is avs-studio-3 (2026-08-01): the builder wrote
+    utils/telemetry.js OUTSIDE miniprogramRoot and three pages imported
+    it via inconsistent relative paths. A module that throws at require
+    time means Page() never registers — a blank page — and this gate
+    passed 7/7 because every page FILE existed. Both failure shapes are
+    mechanically detectable with no DevTools and no LLM: a spec that
+    resolves to nothing, and a spec that resolves outside the root
+    DevTools packages.
+    """
+    problems: list[str] = []
+    seen: set[Path] = set()
+    queue = [entry for entry in entries if entry.is_file()]
+    while queue:
+        current = queue.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        try:
+            source = current.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        rel = current.relative_to(repo)
+        for spec in _mp_module_specs(source):
+            target = _mp_resolve(spec, current, root)
+            if not target.is_relative_to(root):
+                problems.append(
+                    f"{rel} requires {spec!r}, which resolves outside the "
+                    f"mini-program root — DevTools only packages files under "
+                    f"{root.relative_to(repo)}/, so the module is missing at "
+                    "runtime and the page goes blank"
+                )
+                continue
+            candidates = (
+                [target] if target.suffix == ".js"
+                else [Path(str(target) + ".js"), target / "index.js"]
+            )
+            hit = next((c for c in candidates if c.is_file()), None)
+            if hit is None:
+                problems.append(
+                    f"{rel} requires {spec!r}, which does not resolve to any "
+                    "file — the page throws at require time, Page() never "
+                    "registers, and the page renders blank"
+                )
+                continue
+            queue.append(hit)
+    return problems
+
+
 def _miniprogram_gate(repo: Path) -> str | None:
     """Gate U4 for 小程序: the product must LOAD, not just pass its suite.
 
@@ -217,6 +298,10 @@ def _miniprogram_gate(repo: Path) -> str | None:
     """
     import json
 
+    # _miniprogram_root resolves a declared miniprogramRoot (symlinks and
+    # all — /tmp vs /private/tmp on macOS); repo must match or every
+    # relative_to below is a ValueError.
+    repo = repo.resolve()
     root = _miniprogram_root(repo)
     pages_dir = root / "pages"
     if not pages_dir.is_dir() and not (root / "app.json").exists():
@@ -259,6 +344,13 @@ def _miniprogram_gate(repo: Path) -> str | None:
             "these pages exist but are not in app.json `pages`, so nothing "
             "can open them: " + ", ".join(unreachable[:8])
         )
+
+    # A page whose file exists can still be blank: a require() that does
+    # not resolve throws before Page() runs (avs-studio-3 lost 3 of 7
+    # pages this way while this gate said 7/7).
+    entries = [root / "app.js"] + [root / f"{page}.js" for page in registered]
+    problems.extend(_mp_require_problems(root, repo, entries))
+
     if not problems:
         return None
     return (
