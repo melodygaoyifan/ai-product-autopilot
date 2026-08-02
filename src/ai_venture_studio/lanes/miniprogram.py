@@ -1,4 +1,4 @@
-"""小程序 deterministic checks (doc 17 §43.1) — the four named preflights.
+"""小程序 deterministic checks (doc 17 §43.1) — the named preflights.
 
 mp_size_check (the 2MB main-package budget, per compiled target),
 mp_domain_check (every request host on the declared whitelist),
@@ -123,6 +123,10 @@ class MpRuntimeReport(BaseModel):
     detail: str = ""
     pages_checked: list[str] = []
     findings: list[MpFinding] = []
+    #: Where the per-page PNGs landed (.mas/mp-runtime/). "Rendered" from the
+    #: protocol only means reLaunch did not throw — the screenshots are the
+    #: evidence a human can actually judge blankness by.
+    screenshot_dir: str = ""
 
 
 def devtools_cli(explicit: str | None = None) -> str | None:
@@ -182,27 +186,39 @@ def mp_runtime_check(
                    "static gate covers this case and blocks on it.",
         )
 
-    with tempfile.TemporaryDirectory() as tmp:
-        driver = pathlib.Path(tmp) / "runtime-check.js"
-        driver.write_text(_DRIVER_JS, encoding="utf-8")
-        proc = subprocess.run(
-            ["node", str(driver)],
-            cwd=driver_dir,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s + 30,
-            env={
-                **_clean_env(),
-                # The driver lives in a temp dir, so `require` resolves from
-                # THERE, not from cwd — NODE_PATH is what points it at the
-                # workspace's node_modules.
-                "NODE_PATH": str(driver_dir / "node_modules"),
-                "AVS_CLI_PATH": cli,
-                "AVS_PROJECT": str(_project_root(root)),
-                "AVS_PAGES": json.dumps(pages),
-                "AVS_TIMEOUT": str(timeout_s * 1000),
-            },
-        )
+    shot_dir = root / ".mas" / "mp-runtime"
+    shot_dir.mkdir(parents=True, exist_ok=True)
+    auto_proc, auto_port, start_error = _start_automation(
+        cli, _project_root(root), shot_dir=shot_dir
+    )
+    if start_error:
+        return MpRuntimeReport(status="skipped", detail=start_error)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = pathlib.Path(tmp) / "runtime-check.js"
+            driver.write_text(_DRIVER_JS, encoding="utf-8")
+            proc = subprocess.run(
+                ["node", str(driver)],
+                cwd=driver_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s + 30,
+                env={
+                    **_clean_env(),
+                    # The driver lives in a temp dir, so `require` resolves
+                    # from THERE, not from cwd — NODE_PATH is what points it
+                    # at the workspace's node_modules (`ws` arrives with
+                    # miniprogram-automator).
+                    "NODE_PATH": str(driver_dir / "node_modules"),
+                    "AVS_AUTO_PORT": str(auto_port),
+                    "AVS_SHOT_DIR": str(shot_dir),
+                    "AVS_PAGES": json.dumps(pages),
+                    "AVS_TIMEOUT": str(timeout_s * 1000),
+                },
+            )
+    finally:
+        if auto_proc is not None:
+            auto_proc.terminate()
     raw = (proc.stdout or "").strip().splitlines()
     payload = next(
         (json.loads(line) for line in reversed(raw) if line.startswith("{")), None
@@ -248,19 +264,190 @@ def mp_runtime_check(
         return MpRuntimeReport(status="failed", detail=detail)
 
     failed = [p for p in payload.get("pages", []) if not p.get("ok")]
+    findings = [
+        MpFinding(check="mp_runtime_check", rule="page_did_not_render",
+                  message=f"{p['path']}: {p.get('error', 'no error reported')}")
+        for p in failed
+    ]
+    # The screenshot is the judge of blankness, not the protocol: a page
+    # whose JS threw before Page() still "renders" (reLaunch succeeds, a
+    # placeholder page sits on the stack, the runtime's console line does
+    # not reliably reach a fresh automation session) — it is just pure
+    # white. A single flat color is mechanical to detect and cause-agnostic.
+    for entry in payload.get("pages", []):
+        if not entry.get("ok"):
+            continue
+        shot = shot_dir / (entry["path"].replace("/", "_") + ".png")
+        if shot.exists() and _is_flat_png(shot):
+            findings.append(MpFinding(
+                check="mp_runtime_check", rule="page_blank",
+                message=f"{entry['path']}: rendered a single flat color — no "
+                        f"visible content ({shot}). A require chain that "
+                        "throws before Page() is the known cause; a page with "
+                        "no content is the other.",
+            ))
     return MpRuntimeReport(
-        status="failed" if failed else "ok",
+        status="failed" if findings else "ok",
         detail=(
-            f"{len(failed)} of {len(pages)} registered page(s) did not render"
-            if failed
-            else f"all {len(pages)} registered page(s) rendered"
+            f"{len(findings)} of {len(pages)} registered page(s) did not "
+            f"render visible content — screenshots in {shot_dir}"
+            if findings
+            else f"all {len(pages)} registered page(s) rendered — screenshots "
+                 f"in {shot_dir} are the judgeable evidence"
         ),
         pages_checked=[p["path"] for p in payload.get("pages", [])],
-        findings=[
-            MpFinding(check="mp_runtime_check", rule="page_did_not_render",
-                      message=f"{p['path']}: {p.get('error', 'no error reported')}")
-            for p in failed
-        ],
+        findings=findings,
+        screenshot_dir=str(shot_dir),
+    )
+
+
+def _is_flat_png(path) -> bool:
+    """True when every pixel of the PNG is the same color.
+
+    Stdlib-only on purpose (no PIL dependency): parse IHDR, inflate the
+    IDAT stream, undo the five scanline filters, compare pixels. Handles
+    the 8-bit RGB/RGBA/greyscale images DevTools' captureScreenshot emits;
+    anything else (palette, 16-bit, interlaced) is conservatively treated
+    as not-flat so an exotic encoding can never fail a healthy page.
+    """
+    import struct
+    import zlib
+
+    data = path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return False
+    pos, width = 8, 0
+    bit_depth = color_type = interlace = 0
+    idat = b""
+    while pos + 8 <= len(data):
+        length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + length]
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type, _, _, interlace = (
+                struct.unpack(">IIBBBBB", body))
+        elif kind == b"IDAT":
+            idat += body
+        elif kind == b"IEND":
+            break
+        pos += 12 + length
+    channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(color_type)
+    if not width or bit_depth != 8 or channels is None or interlace:
+        return False
+    try:
+        raw = zlib.decompress(idat)
+    except zlib.error:
+        return False
+    stride = width * channels
+    first_pixel = None
+    prior = bytearray(stride)
+    offset = 0
+    while offset + 1 + stride <= len(raw):
+        filter_type = raw[offset]
+        line = bytearray(raw[offset + 1:offset + 1 + stride])
+        for i in range(stride):
+            a = line[i - channels] if i >= channels else 0
+            b = prior[i]
+            if filter_type == 1:
+                line[i] = (line[i] + a) & 0xFF
+            elif filter_type == 2:
+                line[i] = (line[i] + b) & 0xFF
+            elif filter_type == 3:
+                line[i] = (line[i] + (a + b) // 2) & 0xFF
+            elif filter_type == 4:
+                c = prior[i - channels] if i >= channels else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                pred = a if pa <= pb and pa <= pc else (b if pb <= pc else c)
+                line[i] = (line[i] + pred) & 0xFF
+        pixel = bytes(line[:channels])
+        if first_pixel is None:
+            first_pixel = pixel
+        for i in range(0, stride, channels):
+            if bytes(line[i:i + channels]) != first_pixel:
+                return False
+        prior = line
+        offset += 1 + stride
+    return first_pixel is not None
+
+
+_AUTO_PORT_RANGE = range(9420, 9440)  # 9420 is the automator convention
+
+
+def _port_open(port: int) -> bool:
+    import socket
+
+    with socket.socket() as sock:
+        sock.settimeout(1)
+        try:
+            sock.connect(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
+
+def _start_automation(cli, project_root, *, shot_dir, wait_s: int = 300):
+    # 300s, not 60: opening a NEW project window (compile + window) took
+    # 60-150s+ on the reference machine depending on how many windows the
+    # IDE already had; giving up early leaves the IDE-side session to bind
+    # the port AFTER we stopped listening for it. A CLI error in the log
+    # aborts the wait early, so the ceiling is only paid when it is real.
+    """Bring up `cli auto` for THIS project and wait for its WebSocket.
+
+    Spawned HERE, not by miniprogram-automator: the automator's own
+    launch()/connect() hang without diagnosis against IDE 2.01.2510290,
+    while the CLI it would have spawned works and states its errors plainly
+    (its output lands in <shot_dir>/cli-auto.log).
+
+    Never reuses a port that is already listening — a leftover session
+    serves whatever project IT opened, and reusing it once verified the
+    wrong app under this one's name (all pages "rendered", none of them
+    ours). A fresh session on a fresh port is the only way the results are
+    about this project.
+
+    Returns (proc | None, port, skip_detail | None); skip_detail is None
+    exactly when the port is up.
+    """
+    import subprocess
+    import time
+
+    port = next((p for p in _AUTO_PORT_RANGE if not _port_open(p)), None)
+    if port is None:
+        return None, 0, (
+            f"every automation port in {_AUTO_PORT_RANGE.start}-"
+            f"{_AUTO_PORT_RANGE.stop - 1} is taken — stale `cli auto` "
+            "sessions from earlier runs are the known cause; "
+            "`pkill -f 'cli auto'` and re-run."
+        )
+    log_path = shot_dir / "cli-auto.log"
+    log = log_path.open("ab")
+    proc = subprocess.Popen(  # noqa: S603
+        [cli, "auto", "--project", str(project_root), "--auto-port", str(port)],
+        stdout=log, stderr=subprocess.STDOUT,
+        env=_clean_env(), start_new_session=True,
+    )
+    deadline = time.monotonic() + wait_s
+    while time.monotonic() < deadline:
+        if _port_open(port):
+            return proc, port, None
+        try:
+            words = log_path.read_bytes()
+        except OSError:
+            words = b""
+        if b"[error]" in words or b"service port disabled" in words.lower():
+            break  # the CLI has already said why — waiting longer is theater
+        if proc.poll() is not None:
+            break
+        time.sleep(1)
+    proc.terminate()
+    return None, port, (
+        "DevTools never accepted the automation connection (the port stayed "
+        f"closed for {wait_s}s; the CLI's own words are in "
+        f"{shot_dir / 'cli-auto.log'}). Almost always the service port: open "
+        "DevTools → 设置 → 安全设置 → 服务端口 (Settings → Security → Service "
+        "Port) and switch it on — a one-time toggle on your own machine that "
+        "the framework will not flip for you. A cold CLI boot can also hang "
+        "for minutes; starting the IDE first (open -a wechatwebdevtools) and "
+        "re-running is the other known remedy."
     )
 
 
@@ -306,32 +493,93 @@ def _registered_pages(root) -> list[str]:
 
 
 #: Visits every registered page and reports per-page, as one JSON line.
-#: Deliberately dumb: it renders and reads back the page path. A page that
-#: throws on load fails here, which is the whole question the static gate
-#: cannot answer.
+#: Speaks the automation protocol raw over WebSocket — NOT through
+#: miniprogram-automator, whose launch() and connect() both hang without
+#: diagnosis against IDE 2.01.2510290 (its Connection layer; the protocol
+#: itself answers instantly). Three signals per page, because "reLaunch did
+#: not throw" alone once reported three blank pages as rendered:
+#:   1. reLaunch succeeded;
+#:   2. no `Page "<path>" has not been registered` console line — the
+#:      runtime's own words for "this page's JS threw before Page()";
+#:   3. a screenshot on disk a human can judge for blankness.
+#: (`ws` resolves via NODE_PATH; it ships inside miniprogram-automator's
+#: install, which stays the one-line remedy.)
 _DRIVER_JS = """
-const automator = require('miniprogram-automator');
+const WebSocket = require('ws');
+const fs = require('fs');
 const pages = JSON.parse(process.env.AVS_PAGES);
-const out = { pages: [] };
-automator.launch({
-  cliPath: process.env.AVS_CLI_PATH,
-  projectPath: process.env.AVS_PROJECT,
-  timeout: Number(process.env.AVS_TIMEOUT),
-}).then(async (mp) => {
-  for (const path of pages) {
-    try {
-      const page = await mp.reLaunch('/' + path);
-      await page.waitFor(300);
-      out.pages.push({ path, ok: true });
-    } catch (e) {
-      out.pages.push({ path, ok: false, error: String(e).slice(0, 300) });
-    }
+const shotDir = process.env.AVS_SHOT_DIR || '';
+const ws = new WebSocket('ws://127.0.0.1:' + (process.env.AVS_AUTO_PORT || '9420'));
+let seq = 0;
+const pending = new Map();
+const notRegistered = new Set();
+function send(method, params) {
+  return new Promise((resolve, reject) => {
+    const id = ++seq;
+    pending.set(id, { resolve, reject });
+    ws.send(JSON.stringify({ id, method, params: params || {} }));
+    setTimeout(() => {
+      if (pending.has(id)) { pending.delete(id); reject(new Error(method + ' timed out')); }
+    }, 15000);
+  });
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+ws.on('message', (raw) => {
+  const msg = JSON.parse(raw);
+  if (msg.id && pending.has(msg.id)) {
+    const cb = pending.get(msg.id);
+    pending.delete(msg.id);
+    msg.error ? cb.reject(new Error(msg.error.message)) : cb.resolve(msg.result);
+  } else if (msg.method === 'App.logAdded') {
+    const text = ((msg.params || {}).args || []).map(String).join(' ');
+    const m = text.match(/Page "(.+?)" has not been registered/);
+    if (m) notRegistered.add(m[1]);
   }
-  await mp.close();
-  console.log(JSON.stringify(out));
-  process.exit(0);
-}).catch((e) => {
-  console.log(JSON.stringify({ error: String(e).slice(0, 400) }));
+});
+ws.on('error', (e) => {
+  console.log(JSON.stringify({ error: 'ws: ' + e.message }));
   process.exit(0);
 });
+ws.on('open', async () => {
+  const out = { pages: [] };
+  try {
+    const info = await send('Tool.getInfo');
+    out.sdk = info.SDKVersion || '';
+    try { await send('App.enableLog'); } catch (e) {}
+    const visitError = {};
+    for (const path of pages) {
+      try {
+        await send('App.callWxMethod', { method: 'reLaunch', args: [{ url: '/' + path }] });
+        await sleep(1500);
+        if (shotDir) {
+          try {
+            const shot = await send('App.captureScreenshot');
+            fs.writeFileSync(shotDir + '/' + path.replace(/\\//g, '_') + '.png',
+                             Buffer.from(shot.data, 'base64'));
+          } catch (e) { /* a missing shot must not fail the visit */ }
+        }
+      } catch (e) {
+        visitError[path] = String(e).slice(0, 300);
+      }
+    }
+    await sleep(500); // let straggler console events land before judging
+    for (const path of pages) {
+      const err = notRegistered.has(path)
+        ? 'Page() never registered — the page JS threw before registration ' +
+          '(broken require chains are the known cause; the loadability ' +
+          "gate's require scan catches this class statically)"
+        : visitError[path];
+      out.pages.push(err ? { path, ok: false, error: err } : { path, ok: true });
+    }
+    console.log(JSON.stringify(out));
+    process.exit(0);
+  } catch (e) {
+    console.log(JSON.stringify({ error: String(e).slice(0, 400) }));
+    process.exit(0);
+  }
+});
+setTimeout(() => {
+  console.log(JSON.stringify({ error: 'driver global timeout' }));
+  process.exit(0);
+}, Number(process.env.AVS_TIMEOUT) || 120000);
 """

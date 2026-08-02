@@ -14,6 +14,12 @@ Verified by hand on a machine that has DevTools installed: with the service
 port off, the CLI prints "IDE service port disabled ... set Service Port
 On" while miniprogram-automator, which spawns that same CLI and swallows
 its stderr, just times out. That is why a timeout is classified as a skip.
+
+The driver itself speaks the automation protocol raw (the automator's
+launch() AND connect() hang without diagnosis against IDE 2.01.2510290),
+and judges a page by three signals, because "reLaunch did not throw" alone
+once reported three blank pages as rendered: the visit succeeded, no
+`has not been registered` console line, and a screenshot on disk.
 """
 
 import json
@@ -116,15 +122,167 @@ def test_no_registered_pages_defers_to_the_static_gate(project, monkeypatch):
     assert "registers no pages" in report.detail
 
 
+def test_a_port_that_never_opens_is_a_skip_naming_both_remedies(
+    project, monkeypatch
+):
+    """cli auto spawned, automation port stayed closed. Almost always the
+    service port; a cold CLI boot hanging is the other observed cause —
+    the skip names both and points at the CLI's own log."""
+    monkeypatch.setattr(mp, "devtools_cli", lambda explicit=None: "/fake/cli")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/node")
+    (project / "node_modules" / "miniprogram-automator").mkdir(
+        parents=True, exist_ok=True
+    )
+    monkeypatch.setattr(
+        mp, "_start_automation",
+        lambda *a, **k: (None, 9421, "DevTools never accepted the automation "
+                                     "connection … 服务端口 (Settings → Security "
+                                     "→ Service Port) … cli-auto.log"),
+    )
+
+    report = mp.mp_runtime_check(project)
+
+    assert report.status == "skipped"
+    assert "服务端口" in report.detail
+    assert "cli-auto.log" in report.detail
+
+
+def test_a_page_that_never_registered_is_a_finding_not_a_render(
+    project, monkeypatch
+):
+    """The avs-studio-3 lesson: reLaunch succeeds on a page whose JS threw
+    before Page() — it just renders pure white. The driver reads the
+    runtime's own console line and reports it as a failure."""
+    _pretend_ready(project, monkeypatch)
+    _driver_says(monkeypatch, {"pages": [{
+        "path": "pages/index/index", "ok": False,
+        "error": "Page() never registered — the page JS threw before "
+                 "registration (broken require chains are the known cause)",
+    }]})
+
+    report = mp.mp_runtime_check(project)
+
+    assert report.status == "failed"
+    assert report.findings[0].rule == "page_did_not_render"
+    assert "never registered" in report.findings[0].message
+
+
+def test_rendered_pages_point_at_the_screenshot_evidence(project, monkeypatch):
+    """"Rendered" from the protocol alone is weak evidence; the report must
+    say where the judgeable pixels are."""
+    _pretend_ready(project, monkeypatch)
+    _driver_says(monkeypatch, {"pages": [{"path": "pages/index/index", "ok": True}]})
+
+    report = mp.mp_runtime_check(project)
+
+    assert report.status == "ok"
+    assert report.screenshot_dir.endswith("mp-runtime")
+    assert "screenshots" in report.detail
+
+
+def test_the_automation_session_is_cleaned_up_even_on_driver_error(
+    project, monkeypatch
+):
+    """A spawned cli auto must not outlive the check — zombie sessions
+    queue-block every later automation handshake (observed: a 90-minute-old
+    one hung three consecutive runs)."""
+    torn_down = []
+
+    class _Proc:
+        def terminate(self):
+            torn_down.append(True)
+
+    monkeypatch.setattr(mp, "devtools_cli", lambda explicit=None: "/fake/cli")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/node")
+    monkeypatch.setattr(mp, "_start_automation", lambda *a, **k: (_Proc(), 9420, None))
+    (project / "node_modules" / "miniprogram-automator").mkdir(
+        parents=True, exist_ok=True
+    )
+
+    def _boom(*a, **k):
+        raise RuntimeError("driver exploded")
+
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", _boom)
+    with pytest.raises(RuntimeError):
+        mp.mp_runtime_check(project)
+    assert torn_down == [True]
+
+
+def _write_png(path, pixels):
+    """Minimal RGB PNG encoder (filter 0) for fixture screenshots."""
+    import struct
+    import zlib
+
+    height, width = len(pixels), len(pixels[0])
+    raw = b"".join(
+        b"\x00" + b"".join(bytes(px) for px in row) for row in pixels
+    )
+
+    def chunk(kind, body):
+        payload = kind + body
+        return (struct.pack(">I", len(body)) + payload
+                + struct.pack(">I", zlib.crc32(payload)))
+
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+
+
+def test_a_flat_screenshot_is_detected_and_a_real_one_is_not(tmp_path):
+    """The blank-page judge is the pixels, not the protocol: a page whose
+    JS threw before Page() still reLaunches fine and sits on the stack —
+    it is just one flat color. (The runtime's console line about it does
+    not reliably reach a fresh automation session; the screenshot always
+    exists.)"""
+    flat = tmp_path / "flat.png"
+    _write_png(flat, [[(246, 247, 249)] * 4 for _ in range(3)])
+    assert mp._is_flat_png(flat)
+
+    real = tmp_path / "real.png"
+    rows = [[(246, 247, 249)] * 4 for _ in range(3)]
+    rows[1][2] = (7, 193, 96)
+    _write_png(real, rows)
+    assert not mp._is_flat_png(real)
+
+    not_png = tmp_path / "junk.png"
+    not_png.write_bytes(b"not a png at all")
+    assert not mp._is_flat_png(not_png), "junk must never fail a healthy page"
+
+
+def test_a_blank_page_fails_the_check_even_when_the_protocol_says_ok(
+    project, monkeypatch
+):
+    """End to end through mp_runtime_check: driver reports ok, screenshot
+    is one flat color -> finding `page_blank`, status failed."""
+    _pretend_ready(project, monkeypatch)
+    _driver_says(monkeypatch, {"pages": [{"path": "pages/index/index", "ok": True}]})
+    shot_dir = project / ".mas" / "mp-runtime"
+    shot_dir.mkdir(parents=True)
+    _write_png(shot_dir / "pages_index_index.png",
+               [[(255, 255, 255)] * 4 for _ in range(3)])
+
+    report = mp.mp_runtime_check(project)
+
+    assert report.status == "failed"
+    assert report.findings[0].rule == "page_blank"
+    assert "flat color" in report.findings[0].message
+
+
 def test_api_keys_never_reach_the_node_driver(project, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-travel")
     assert "ANTHROPIC_API_KEY" not in mp._clean_env()
 
 
 def _pretend_ready(project, monkeypatch):
-    """DevTools, node and the automator all present."""
+    """DevTools, node, the automator and a listening automation port."""
     monkeypatch.setattr(mp, "devtools_cli", lambda explicit=None: "/fake/cli")
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/node")
+    monkeypatch.setattr(mp, "_start_automation", lambda *a, **k: (None, 9420, None))
     (project / "node_modules" / "miniprogram-automator").mkdir(parents=True, exist_ok=True)
 
 

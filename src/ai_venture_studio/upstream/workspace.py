@@ -166,14 +166,21 @@ App({
 })
 """
 
+#: __MP_TITLE__ is replaced with the JSON-encoded project name at scaffold
+#: time. The earlier skeleton bound {{title}} to an empty data object — a
+#: home page blank by construction, and the share-QR landing page at that.
+#: Minimal still means visible: name + where the features will appear.
 _MP_INDEX_JS = """Page({
-  data: {},
+  data: { title: __MP_TITLE__ },
   onLoad() {},
 })
 """
 
 _MP_INDEX_WXML = """<view class="page">
-  <text>{{title}}</text>
+  <view class="card">
+    <text>{{title}}</text>
+    <view class="muted">项目已创建 — 功能构建完成后会出现在这里</view>
+  </view>
 </view>
 """
 
@@ -244,7 +251,10 @@ def _scaffold_miniprogram(root: Path, name: str, profile: str) -> None:
         encoding="utf-8",
     )
     index = src / "pages" / "index"
-    (index / "index.js").write_text(_MP_INDEX_JS, encoding="utf-8")
+    (index / "index.js").write_text(
+        _MP_INDEX_JS.replace("__MP_TITLE__", json.dumps(name, ensure_ascii=False)),
+        encoding="utf-8",
+    )
     (index / "index.wxml").write_text(_MP_INDEX_WXML, encoding="utf-8")
     (index / "index.wxss").write_text("", encoding="utf-8")
     (index / "index.json").write_text(
