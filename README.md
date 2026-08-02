@@ -226,8 +226,12 @@ split:
   artifacts + instructions, and the button stays yours until you arm a
   policy that says otherwise ([ADR-031](docs/adr/031-policy-armed-automation.md)
   — disarmed by default, attributed, expiring).
-- 小程序 page-level testing needs `miniprogram-simulate` installed;
-  pure-logic modules are gated via `node --test` today.
+- 小程序 runtime verification (`avs mp-runtime`) needs the WeChat DevTools
+  desktop app plus a one-time human toggle (Settings → Security → Service
+  Port), so it runs on macOS/Windows and **never in CI**; every missing
+  precondition is a visible skip naming its remedy, never a silent pass.
+  Page-level unit testing still needs `miniprogram-simulate`; pure-logic
+  modules are gated via `node --test`.
 - Single-machine operation; crash recovery resumes reviews, deploy reviews,
   and incidents from their checkpoints, but multi-instance supervision
   remains the documented upgrade path.
@@ -260,6 +264,7 @@ Claude-written code. Setup, env vars, and operations: [RUNBOOK.md](RUNBOOK.md).
 | `bench` · `product-bench` · `voter-gate` · `compound --pr` | the benchmarks, voter registration gates, and the weekly compounding loop |
 | `automerge` · `deploy-execute` | exist but stay disarmed until a human writes an attributed, expiring policy ([ADR-031](docs/adr/031-policy-armed-automation.md)) |
 | `readiness` · `attest` · `cab-package` · `sweep` | the enterprise adoption surface: substrate ladder, attestation ledger, change control, the janitor |
+| `mp-runtime` | opens a built 小程序 in WeChat DevTools, visits every registered page and screenshots it — the blank-page check the static gate cannot make ([pipeline guide](docs/miniprogram-pipeline.md)) |
 
 </details>
 
@@ -302,6 +307,16 @@ every relative `require` chain resolving to a file inside the mini-program
 root, because a module that throws at require time is a page that renders
 blank. Both checks exist because real runs produced green suites over
 products that could not load.
+
+For 小程序 there is a rung past that, on your own machine: `avs mp-runtime`
+opens the built product in WeChat DevTools, visits every registered page and
+**screenshots it**. A page counts as broken when its screenshot is a single
+flat colour — because "the page opened without throwing" is not evidence: a
+page whose JS died before `Page()` still opens, still sits on the page
+stack, and still renders pure white. That check exists because a build was
+reported as seven pages rendered while three of them were blank. The
+[pipeline guide](docs/miniprogram-pipeline.md) has the four rungs and the
+failure that justified each.
 
 The run retries its own mechanical failures first: one bounded pass, in
 dependency order, with the previous attempt's diagnosis handed to the writer

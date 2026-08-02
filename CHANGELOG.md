@@ -4,6 +4,73 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.68.0 — a blank page is no longer a passing page (小程序)
+
+The 小程序 runtime check reported **"all 7 registered pages rendered"** for a
+build in which three were pure white. Nothing lied: the check's only signal
+was that `reLaunch` did not throw, and it does not throw for a page whose JS
+died before `Page()` ran — the page still opens, still sits on the page
+stack, and still renders nothing. This release makes the evidence match the
+claim, at both the static and the runtime rung.
+
+**Static (free, no DevTools, runs in CI).** The loadability gate now walks
+the relative `require()`/`import` chains from `app.js` and every registered
+page, failing on a specifier that resolves to no file and on one that
+escapes `miniprogramRoot` — DevTools cannot package what is outside the
+root, so that import throws at evaluation time and the page goes blank. The
+incident that named this: a builder wrote `utils/telemetry.js` at the repo
+root and three pages imported it by three different relative paths; every
+page *file* existed, so the gate passed 7/7.
+
+**Runtime (`avs mp-runtime`, your machine only).** Every page is now
+screenshotted into `.mas/mp-runtime/`, and **a single flat colour is a
+`page_blank` finding** — a judge that is cause-agnostic, so an empty WXML
+and a dead require fail the same way. PNG decoding is stdlib-only (IHDR,
+inflate, the five scanline filters); anything exotic is conservatively
+treated as not-flat, so an encoding surprise can never fail a healthy page.
+
+Two driver defects fixed with it. The check no longer drives through
+`miniprogram-automator`, whose `launch()` **and** `connect()` hang without
+diagnosis against IDE `2.01.2510290` — it speaks the automation protocol
+raw over WebSocket and spawns `cli auto` itself, whose own words land in
+`.mas/mp-runtime/cli-auto.log`. And it never reuses a listening automation
+port: a leftover session serves whatever project *it* opened, which once
+verified the wrong app under this project's name, all green. Each run takes
+a free port from 9420–9439, spawns its own session, and terminates it in a
+`finally`.
+
+Validated against the incident in both directions: a copy of the affected
+workspace with one require path re-broken reports `page_blank` on exactly
+that page; the repaired workspace reports ok on all seven. The flat-colour
+judge separates every real screenshot from that investigation — three blank,
+three rendered.
+
+Also in this release:
+
+- **A re-run remembers why it failed.** Recorded failure context reached
+  only same-run retries, so pressing "continue the build" re-attempted every
+  failed task blind — same inputs, same writer, same wall. Run 2's *first*
+  attempt at a task run 1 could not build now carries run 1's diagnosis, on
+  both the sequential and the parallel-wave path.
+- **Continuing is one click, not one per module.** The Studio's interrupted
+  page and failed-modules card lead with a single "Continue the build"
+  (locked plan reused, built modules skipped, failures re-attempted with
+  context); per-module buttons remain for surgical retries. The `/retry`
+  path also regained two previously-fixed properties, now pinned by tests:
+  its output goes to `.mas/build.log` rather than `DEVNULL`, and it inherits
+  the Studio's `--provider`.
+- **The scaffold's index page no longer ships blank by construction** —
+  `{{title}}` was bound to an empty data object, and that page is where a
+  share-QR scan lands.
+- [docs/miniprogram-pipeline.md](docs/miniprogram-pipeline.md): the four
+  rungs (unit tests → loadability gate → runtime screenshots → a
+  per-product designed-flow script), each with the failure that justified
+  it, plus the operational notes that cost a session to learn — zombie
+  `cli auto` sessions block later handshakes, cold project boots take
+  60–150s, and `libVersion: "latest"` breaks the automation handshake.
+
+Suite 1560 hermetic tests.
+
 ## v0.67.0 — spend is measured and reported, never gated (ADR-032)
 
 An operator decision, recorded as
