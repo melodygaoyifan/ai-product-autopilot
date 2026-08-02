@@ -82,6 +82,10 @@ STRINGS: dict[str, dict[str, str]] = {
     },
     "btn_retry": {"zh": "重试", "en": "Retry"},
     "btn_resume": {"zh": "继续", "en": "Resume"},
+    "btn_continue_build": {
+        "zh": "▶ 继续构建（自动补齐没做成的）/ Continue the build",
+        "en": "▶ Continue the build (finishes what failed)",
+    },
     # --- headings and prose -------------------------------------------
     "h_screenshots": {"zh": "页面截图 / Screenshots", "en": "Screenshots"},
     "h_features": {"zh": "功能 / Features", "en": "Features"},
@@ -152,8 +156,11 @@ STRINGS: dict[str, dict[str, str]] = {
               "preview</code> in the terminal to see the product.",
     },
     "interrupted_resume": {
-        "zh": "已完成的模块都保留着，逐个继续就行：",
-        "en": "Finished modules are kept. Resume the rest one at a time:",
+        "zh": "已完成的模块都保留着。一键继续，剩下的会带着上次失败的原因重新做；"
+              "也可以逐个继续：",
+        "en": "Finished modules are kept. Continue in one click — the rest "
+              "are re-attempted knowing why they failed last time — or "
+              "resume one at a time:",
     },
     # --- studio modes (v0.55) -------------------------------------------
     "h_engineer": {

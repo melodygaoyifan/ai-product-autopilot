@@ -19,6 +19,15 @@ for the headline numbers.
 | 7 | …0844, reconstructed (partial) | 2f323e9 | 42% | 90% | 0% | both contract fixes land; whole-surface-in-one-task appears |
 | 8 | result-2026-07-26-2152 (lost) | 2bb4808 | 44% | 75% | 0% | flat; case 01 cross-iteration phantom-import signature |
 | 9 | result-2026-07-26-2320.yaml (original) | 043176b | 54% | 75% | 8% | case 01 perfect + first clean review; case 03 probegen produced 0 probes |
+| 10 | result-2026-07-27-0129.yaml | a0a4469 | 75% | 75% | 43% | best composite; fixture visibility ended case-04 decomposition deaths; SSRF scoping moved clean reviews off 0% |
+| 11 | result-2026-07-27-0449.yaml | f246a4c | 74% | 75% | 38% | scoreboard HOLDS (same code as run 10, repeat within noise); case 02 perfect for the first time — intensive run phase ended per the stopping rule |
+
+> **Comparability break after run 11:** v0.65.0 added the in-run auto-retry
+> (each failed task re-attempted once with its failure as context) and later
+> commits added cross-run failure memory. Runs ≥ 12 therefore measure the
+> pipeline *with* self-retry — build rates are expected to move up for
+> reasons unrelated to writer quality. Compare runs ≥ 12 against each other,
+> not against this table's trajectory.
 
 Fix lineage: 991c28c (bench crash fixes) → 8b422a3 (scope law, boot gate,
 workspace hygiene) → 972a680 (spec gets the FDR verbatim) → 9ea8769 (bench

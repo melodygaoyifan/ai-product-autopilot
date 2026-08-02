@@ -296,3 +296,42 @@ def test_recorded_failure_is_best_effort():
     from ai_venture_studio.cli import _recorded_failure
 
     assert _recorded_failure("/nonexistent", "t1") == ""
+
+
+def test_a_rerun_attempts_a_previously_failed_task_with_its_history(
+    tmp_path, monkeypatch
+):
+    """Cross-run error memory: the failure context used to reach only
+    same-run retries, so "continue the build" re-attempted every failed task
+    BLIND — same inputs, same writer, same wall. Run 2's FIRST attempt at a
+    task run 1 could not build now carries run 1's diagnosis."""
+    import ai_venture_studio.upstream.autopilot as autopilot_mod
+
+    root = _workspace(tmp_path)
+    real = autopilot_mod.run_spec_stage
+
+    def always_blocked(repo, request, **kwargs):
+        spec = real(repo, request, **kwargs)
+        if "task:t2" in request:
+            spec.status = "blocked"
+            spec.block_reasons = ["THE-RUN-ONE-WALL"]
+        return spec
+
+    monkeypatch.setattr(autopilot_mod, "run_spec_stage", always_blocked)
+    assert run_autopilot(root, root / "FDR.md", provider="mock", yes=True).status == "failed"
+
+    seen: dict = {}
+
+    def spy(repo, request, **kwargs):
+        if "task:t2" in request and "t2" not in seen:
+            seen["t2"] = kwargs.get("prior_failure", "")
+        return real(repo, request, **kwargs)
+
+    monkeypatch.setattr(autopilot_mod, "run_spec_stage", spy)
+    second = run_autopilot(root, root / "FDR.md", provider="mock", yes=True)
+
+    assert second.status == "completed"
+    assert "THE-RUN-ONE-WALL" in seen["t2"], (
+        "run 2's first attempt was blind to run 1's failure"
+    )
+    assert "spec_blocked" in seen["t2"]

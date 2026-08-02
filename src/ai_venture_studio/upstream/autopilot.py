@@ -300,12 +300,25 @@ def _build_plan(
             f"resumed: {len(resumed)} task(s) already built "
             f"({', '.join(sorted(resumed))}) — not rebuilt"
         )
+    # A re-run's first attempt at a previously-failed task must know why it
+    # failed last time. The failure context used to reach only same-run
+    # retries, so pressing "continue the build" after an interrupted or
+    # failed run re-attempted every failed task BLIND — same inputs, same
+    # writer, same wall, which is precisely the error-recurrence this system
+    # promises not to have. Captured before any attempt because
+    # record_outcome replaces the row the moment the new attempt lands.
+    prior_failures = {
+        o.task_id: _failure_context(o)
+        for o in outcomes
+        if o.status in _AUTO_RETRYABLE
+    }
     if parallel:
         auto_approvals.append("parallel lanes: wave scheduling (one task per lane per wave)")
         for wave in schedule_waves(ordered):
             for wave_outcome in _build_wave_parallel(
                 root, wave, provider=provider, model=model,
                 auto_approvals=auto_approvals, fdr_text=fdr_text,
+                prior_failures=prior_failures,
             ):
                 record_outcome(outcomes, wave_outcome)
         ordered = []
@@ -313,6 +326,7 @@ def _build_plan(
         outcome = _attempt_task(
             root, task, provider=provider, model=model, fdr_text=fdr_text,
             auto_approvals=auto_approvals,
+            prior_failure=prior_failures.get(task.id, ""),
         )
         record_outcome(outcomes, outcome)
         # Persist immediately: a crash after this point must not lose the
@@ -1151,13 +1165,20 @@ def schedule_waves(tasks) -> list[list]:
     return waves
 
 
-def _build_wave_parallel(root, wave, *, provider, model, auto_approvals, fdr_text=""):
+def _build_wave_parallel(
+    root, wave, *, provider, model, auto_approvals, fdr_text="",
+    prior_failures=None,
+):
     """Each task of the wave builds in its own worktree branch; merges are
-    applied serially afterwards; bookkeeping runs post-merge."""
+    applied serially afterwards; bookkeeping runs post-merge.
+    `prior_failures` maps task_id → the recorded failure of a previous run's
+    attempt, so a resumed parallel run is no blinder than a sequential one."""
     import subprocess
     from concurrent.futures import ThreadPoolExecutor
 
     from ai_venture_studio.upstream.build import finalize_build_bookkeeping
+
+    prior_failures = prior_failures or {}
 
     def build_one(item):
         task, spec_slug = item
@@ -1165,6 +1186,7 @@ def _build_wave_parallel(root, wave, *, provider, model, auto_approvals, fdr_tex
             root, spec_slug, provider=provider, model=model, in_branch=True,
             task_lane=task.lane, task_estimate_hours=task.estimate_hours,
             source_contract=fdr_text,
+            prior_failure=prior_failures.get(task.id, ""),
         )
 
     prepared = []
@@ -1173,6 +1195,7 @@ def _build_wave_parallel(root, wave, *, provider, model, auto_approvals, fdr_tex
         spec = run_spec_stage(
             root, f"{task.description} (task:{task.id})", provider=provider,
             source_contract=fdr_text,
+            prior_failure=prior_failures.get(task.id, ""),
         )
         if spec.status != "proposed":
             outcomes.append(

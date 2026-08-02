@@ -652,6 +652,17 @@ def create_studio_app(
         if interrupted:
             tasks = progress["tasks"]
             unbuilt = [t for t in tasks if t["state"] != "built"]
+            # One click, not one per module. The interrupted page used to
+            # offer only per-module resume buttons — N mechanical clicks for
+            # something the resume machinery does whole: re-running the build
+            # reuses the locked plan (no model calls), skips what is built,
+            # attempts the rest with each task's recorded failure as context,
+            # and auto-retries what still fails. The per-module buttons stay
+            # for the founder who wants exactly one module back.
+            continue_all = (
+                "<form method=post action=/build style='display:inline'>"
+                f"<button>{_('btn_continue_build')}</button></form> "
+            )
             retries = "".join(
                 f"<form method=post action=/retry style='display:inline'>"
                 f"<input type=hidden name=task_id value='{html.escape(task['id'])}'>"
@@ -662,7 +673,7 @@ def create_studio_app(
             done_note = (
                 f"<p class=ok>{_('interrupted_all_done')}</p>"
                 if not unbuilt
-                else f"<p>{_('interrupted_resume')}</p>" + retries
+                else f"<p>{_('interrupted_resume')}</p>{continue_all}{retries}"
             )
             return _render(
                 request, _("title_interrupted"),
@@ -721,6 +732,14 @@ def create_studio_app(
             failed = _failed_tasks(root)
             retry_block = ""
             if failed:
+                # Same one-click affordance as the interrupted page: continue
+                # the build and every failed module is re-attempted with its
+                # recorded failure as context, then auto-retried. Per-module
+                # buttons stay for surgical retries.
+                continue_all = (
+                    "<form method=post action=/build style='display:inline'>"
+                    f"<button>{_('btn_continue_build')}</button></form> "
+                )
                 rows = "".join(
                     f"<form method=post action=/retry style='display:inline'>"
                     f"<input type=hidden name=task_id value='{html.escape(failed_id)}'>"
@@ -730,7 +749,7 @@ def create_studio_app(
                 )
                 retry_block = (
                     f"<div class=card><b class=warn>{_('failed_modules')}"
-                    f"</b><p>{_('failed_modules_hint')}</p>{rows}</div>"
+                    f"</b><p>{_('failed_modules_hint')}</p>{continue_all}{rows}</div>"
                 )
             no_features = f"<p class=muted>{_('first_version')}</p>"
             # Cost AND the ceiling, in the founder's register, on the page
@@ -1231,10 +1250,17 @@ def create_studio_app(
         form = await request.form()
         task_id = str(form.get("task_id", ""))
         if task_id and not _build_running(root):
+            # Same rules as the build worker, which this path had quietly
+            # regressed on: the retry inherits the Studio's provider (a mock
+            # Studio used to spawn a retry that wanted a real key and died),
+            # and its output lands in .mas/build.log rather than DEVNULL — a
+            # worker that dies before the report must leave forensics.
+            (root / ".mas").mkdir(exist_ok=True)
+            log = (root / ".mas" / "build.log").open("ab")
             proc = subprocess.Popen(  # noqa: S603
                 [sys.executable, "-m", "ai_venture_studio.cli", "retry-task", task_id,
-                 "--repo-dir", str(root)],
-                cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                 "--repo-dir", str(root), "--provider", provider],
+                cwd=root, stdout=log, stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
             (root / ".mas" / "build.pid").write_text(str(proc.pid), encoding="utf-8")
