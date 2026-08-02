@@ -98,6 +98,15 @@ def init_workspace(
             ".mas/\n__pycache__/\n.venv/\nnode_modules/\n"
             # API keys stay in the founder's environment, never in git.
             ".env\n.env.*\n"
+            # WeChat DevTools per-machine artifacts. Opening a project writes
+            # project.private.config.json (per-developer by WeChat's own
+            # convention) and a project.config.json INSIDE miniprogramRoot
+            # carrying the logged-in account's REAL AppID — while the config
+            # this scaffold writes at the repo root deliberately uses
+            # touristappid, because a real AppID is somebody's identifier and
+            # not ours to commit. The inner file also shadows the root config
+            # for tools that look there first.
+            "project.private.config.json\nminiprogram/project.config.json\n"
         )
 
     _write_design_baseline(root, profile)

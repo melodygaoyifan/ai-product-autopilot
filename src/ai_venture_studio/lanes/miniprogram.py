@@ -116,6 +116,20 @@ def mp_privacy_check(
 DEVTOOLS_CLI_MACOS = "/Applications/wechatwebdevtools.app/Contents/MacOS/cli"
 DEVTOOLS_CLI_WINDOWS = r"C:\Program Files (x86)\Tencent\微信web开发者工具\cli.bat"
 _SERVICE_PORT_DISABLED = "service port disabled"
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _cli_reported_auto_ok(log_text: str) -> bool:
+    """Did `cli auto` print its success marker (`✔ auto`) yet?
+
+    Matched as a whole line with the decoration stripped, never as a bare
+    substring: this workspace's own path contains "auto", so a substring
+    test would call every failure a success.
+    """
+    for line in _ANSI.sub("", log_text).splitlines():
+        if line.strip().lstrip("✔✓-").strip() == "auto":
+            return True
+    return False
 
 
 class MpRuntimeReport(BaseModel):
@@ -439,15 +453,33 @@ def _start_automation(cli, project_root, *, shot_dir, wait_s: int = 300):
             break
         time.sleep(1)
     proc.terminate()
+    # Read the CLI's own words before naming a cause. Blaming the service
+    # port unconditionally sent one investigation chasing a toggle that was
+    # already on: the CLI had printed its success marker and the port came up
+    # AFTER the wait, because DevTools was compiling a project it had never
+    # opened before. Measured on the reference machine: first open of a new
+    # project exceeded 300s, the second took 27s.
+    try:
+        words = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        words = ""
+    if _cli_reported_auto_ok(words):
+        return None, port, (
+            f"DevTools did not expose the automation port within {wait_s}s, "
+            "but the CLI reported success — so this is almost certainly "
+            "first-open cost, not a misconfiguration: a project DevTools has "
+            "not opened before is compiled from scratch, which can take "
+            "several minutes. **Re-run and it will be fast** (the session is "
+            f"warm now). The CLI's own words: {log_path}."
+        )
     return None, port, (
         "DevTools never accepted the automation connection (the port stayed "
-        f"closed for {wait_s}s; the CLI's own words are in "
-        f"{shot_dir / 'cli-auto.log'}). Almost always the service port: open "
+        f"closed for {wait_s}s and the CLI never reported success; its own "
+        f"words are in {log_path}). Most often the service port: open "
         "DevTools → 设置 → 安全设置 → 服务端口 (Settings → Security → Service "
         "Port) and switch it on — a one-time toggle on your own machine that "
-        "the framework will not flip for you. A cold CLI boot can also hang "
-        "for minutes; starting the IDE first (open -a wechatwebdevtools) and "
-        "re-running is the other known remedy."
+        "the framework will not flip for you. If it is already on, start the "
+        "IDE first (open -a wechatwebdevtools), let it settle, and re-run."
     )
 
 

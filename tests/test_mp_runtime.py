@@ -273,6 +273,70 @@ def test_a_blank_page_fails_the_check_even_when_the_protocol_says_ok(
     assert "flat color" in report.findings[0].message
 
 
+def test_the_cli_success_marker_is_a_whole_line_never_a_substring():
+    """This workspace's own path contains "auto" — a substring test would
+    read every failure as a success and print the wrong diagnosis."""
+    assert mp._cli_reported_auto_ok("- preparing\n\x1b[32m✔\x1b[39m auto\n")
+    assert not mp._cli_reported_auto_ok("opening /Users/x/autoproduct-work/p\n")
+    assert not mp._cli_reported_auto_ok("[error] IDE service port disabled\n")
+    assert not mp._cli_reported_auto_ok("")
+
+
+def test_a_timeout_after_the_cli_succeeded_blames_first_open_not_the_port(
+    project, monkeypatch, tmp_path
+):
+    """Measured on the reference machine: a project DevTools had never opened
+    took >300s to compile while the CLI printed `✔ auto`, and the port came
+    up after the wait; the second run took 27s. Blaming the service port
+    there sends someone to re-check a toggle that is already on."""
+    monkeypatch.setattr(mp, "_port_open", lambda port: False)
+    monkeypatch.setattr(mp, "devtools_cli", lambda explicit=None: "/fake/cli")
+
+    class _Proc:
+        def poll(self): return None
+        def terminate(self): pass
+
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _Proc())
+    shot_dir = tmp_path / "shots"
+    shot_dir.mkdir()
+    (shot_dir / "cli-auto.log").write_text("- preparing\n✔ auto\n",
+                                           encoding="utf-8")
+
+    _proc, _port, detail = mp._start_automation(
+        "/fake/cli", project, shot_dir=shot_dir, wait_s=0
+    )
+
+    assert "first-open cost" in detail
+    assert "Re-run and it will be fast" in detail
+    assert "服务端口" not in detail, "do not blame a toggle that is already on"
+
+
+def test_a_timeout_with_no_cli_success_still_names_the_service_port(
+    project, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(mp, "_port_open", lambda port: False)
+
+    class _Proc:
+        def poll(self): return None
+        def terminate(self): pass
+
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _Proc())
+    shot_dir = tmp_path / "shots"
+    shot_dir.mkdir()
+    (shot_dir / "cli-auto.log").write_text("- initialize\n", encoding="utf-8")
+
+    _proc, _port, detail = mp._start_automation(
+        "/fake/cli", project, shot_dir=shot_dir, wait_s=0
+    )
+
+    assert "服务端口" in detail and "Service Port" in detail
+    assert "will not flip for you" in detail
+
+
 def test_api_keys_never_reach_the_node_driver(project, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-travel")
     assert "ANTHROPIC_API_KEY" not in mp._clean_env()

@@ -92,9 +92,18 @@ them ours.
   is still held, and cold-start before concluding the product broke.
   Corollary for anything you write on this protocol: **treat screenshots as
   best-effort**, never as a step that can abort the run.
-- **Pin `libVersion`.** `"latest"` in `project.config.json` makes
-  `Tool.getInfo.SDKVersion` come back undefined; pin a base library that is
-  actually on disk (e.g. `3.17.0`).
+- **First open of a new project is very slow, and it is not a
+  misconfiguration.** DevTools compiles a project it has never seen from
+  scratch: measured here, the first open exceeded 300s while `cli auto`
+  printed its success marker, and the port bound only after the wait — the
+  second run took **27s**. The skip message distinguishes the two cases by
+  reading the CLI's log, so a first-open timeout does not send you to
+  re-check a service-port toggle that is already on. Re-run.
+- **`libVersion: "latest"` is fine** — tested both ways on a cold IDE, with
+  identical results. It breaks `miniprogram-automator` (whose `checkVersion`
+  compares an undefined `SDKVersion`) but not the raw driver, which never
+  version-checks. Pinning is a workaround for a client this pipeline no
+  longer uses; do not cargo-cult it.
 - The service port is a security setting on someone's machine. The
   framework names it and stops; it does not flip it for you.
 
