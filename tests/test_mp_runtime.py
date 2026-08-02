@@ -301,8 +301,19 @@ def test_a_timeout_after_the_cli_succeeded_blames_first_open_not_the_port(
     monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _Proc())
     shot_dir = tmp_path / "shots"
     shot_dir.mkdir()
-    (shot_dir / "cli-auto.log").write_text("- preparing\n✔ auto\n",
-                                           encoding="utf-8")
+    log = shot_dir / "cli-auto.log"
+    log.write_text("- preparing\n", encoding="utf-8")
+
+    # The success marker must be written DURING the run, after the size
+    # snapshot — a marker already on disk belongs to an earlier run.
+    real_popen_stub = _Proc
+
+    class _WritesTheMarker(real_popen_stub):
+        def __init__(self, *a, **k):
+            with log.open("a", encoding="utf-8") as handle:
+                handle.write("✔ auto\n")
+
+    monkeypatch.setattr(subprocess, "Popen", _WritesTheMarker)
 
     _proc, _port, detail = mp._start_automation(
         "/fake/cli", project, shot_dir=shot_dir, wait_s=0
@@ -311,6 +322,36 @@ def test_a_timeout_after_the_cli_succeeded_blames_first_open_not_the_port(
     assert "first-open cost" in detail
     assert "Re-run and it will be fast" in detail
     assert "服务端口" not in detail, "do not blame a toggle that is already on"
+
+
+def test_a_success_marker_from_an_earlier_run_is_not_read_as_this_one(
+    project, monkeypatch, tmp_path
+):
+    """The log is append-only forensics across runs, so the diagnosis must
+    read only what THIS run wrote. Reading the whole file made a `✔ auto`
+    left by an earlier successful run look like this run's success — and
+    reported "first-open cost" for a session that had exited in 4s."""
+    monkeypatch.setattr(mp, "_port_open", lambda port: False)
+
+    class _Proc:
+        def poll(self): return None
+        def terminate(self): pass
+
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _Proc())
+    shot_dir = tmp_path / "shots"
+    shot_dir.mkdir()
+    (shot_dir / "cli-auto.log").write_text(
+        "- preparing\n✔ auto\n", encoding="utf-8"   # a PREVIOUS run's success
+    )
+
+    _proc, _port, detail = mp._start_automation(
+        "/fake/cli", project, shot_dir=shot_dir, wait_s=0
+    )
+
+    assert "first-open cost" not in detail, "that marker was not ours"
+    assert "服务端口" in detail
 
 
 def test_a_timeout_with_no_cli_success_still_names_the_service_port(

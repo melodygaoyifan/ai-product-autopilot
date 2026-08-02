@@ -433,53 +433,77 @@ def _start_automation(cli, project_root, *, shot_dir, wait_s: int = 300):
             "`pkill -f 'cli auto'` and re-run."
         )
     log_path = shot_dir / "cli-auto.log"
+    # The log is appended to across runs — it is forensics, and truncating it
+    # would throw away the history of a flaky handshake. So the diagnosis must
+    # read only what THIS run wrote: reading the whole file made a `✔ auto`
+    # left by an earlier successful run look like this run's success, and
+    # reported "first-open cost" for a session that had exited in 4 seconds.
+    start = log_path.stat().st_size if log_path.exists() else 0
+
+    def _this_run_said() -> str:
+        try:
+            with log_path.open("rb") as handle:
+                handle.seek(start)
+                return handle.read().decode("utf-8", "replace")
+        except OSError:
+            return ""
+
     log = log_path.open("ab")
     proc = subprocess.Popen(  # noqa: S603
         [cli, "auto", "--project", str(project_root), "--auto-port", str(port)],
         stdout=log, stderr=subprocess.STDOUT,
         env=_clean_env(), start_new_session=True,
     )
-    deadline = time.monotonic() + wait_s
+    began = time.monotonic()
+    deadline = began + wait_s
+    exited = False
     while time.monotonic() < deadline:
         if _port_open(port):
             return proc, port, None
-        try:
-            words = log_path.read_bytes()
-        except OSError:
-            words = b""
-        if b"[error]" in words or b"service port disabled" in words.lower():
+        said = _this_run_said()
+        if "[error]" in said or _SERVICE_PORT_DISABLED in said.lower():
             break  # the CLI has already said why — waiting longer is theater
         if proc.poll() is not None:
+            exited = True
             break
         time.sleep(1)
     proc.terminate()
-    # Read the CLI's own words before naming a cause. Blaming the service
-    # port unconditionally sent one investigation chasing a toggle that was
-    # already on: the CLI had printed its success marker and the port came up
-    # AFTER the wait, because DevTools was compiling a project it had never
-    # opened before. Measured on the reference machine: first open of a new
-    # project exceeded 300s, the second took 27s.
-    try:
-        words = log_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        words = ""
-    if _cli_reported_auto_ok(words):
+    waited = int(time.monotonic() - began)
+    # Name a cause from the CLI's own words, not from a guess. Blaming the
+    # service port unconditionally sent one investigation chasing a toggle
+    # that was already on: the CLI had printed its success marker and the port
+    # came up AFTER the wait, because DevTools was compiling a project it had
+    # never opened before (measured: first open >300s, second 27s).
+    said = _this_run_said()
+    how_long = (
+        f"the CLI exited after {waited}s" if exited
+        else f"the port stayed closed for {waited}s"
+    )
+    if _cli_reported_auto_ok(said):
         return None, port, (
-            f"DevTools did not expose the automation port within {wait_s}s, "
-            "but the CLI reported success — so this is almost certainly "
-            "first-open cost, not a misconfiguration: a project DevTools has "
-            "not opened before is compiled from scratch, which can take "
-            "several minutes. **Re-run and it will be fast** (the session is "
-            f"warm now). The CLI's own words: {log_path}."
+            f"DevTools did not expose the automation port ({how_long}), but "
+            "the CLI reported success — so this is almost certainly first-open "
+            "cost, not a misconfiguration: a project DevTools has not opened "
+            "before is compiled from scratch, which can take several minutes. "
+            "**Re-run and it will be fast** (the session is warm now). The "
+            f"CLI's own words: {log_path}."
+        )
+    if exited:
+        return None, port, (
+            f"`cli auto` exited after {waited}s without establishing "
+            f"automation and without reporting success — its own words are in "
+            f"{log_path}. A session already open on this project, or a stale "
+            "one from an earlier run, is the usual cause: "
+            "`pkill -f 'cli auto'`, quit DevTools, and re-run."
         )
     return None, port, (
-        "DevTools never accepted the automation connection (the port stayed "
-        f"closed for {wait_s}s and the CLI never reported success; its own "
-        f"words are in {log_path}). Most often the service port: open "
-        "DevTools → 设置 → 安全设置 → 服务端口 (Settings → Security → Service "
-        "Port) and switch it on — a one-time toggle on your own machine that "
-        "the framework will not flip for you. If it is already on, start the "
-        "IDE first (open -a wechatwebdevtools), let it settle, and re-run."
+        f"DevTools never accepted the automation connection ({how_long} and "
+        f"the CLI never reported success; its own words are in {log_path}). "
+        "Most often the service port: open DevTools → 设置 → 安全设置 → "
+        "服务端口 (Settings → Security → Service Port) and switch it on — a "
+        "one-time toggle on your own machine that the framework will not flip "
+        "for you. If it is already on, start the IDE first "
+        "(open -a wechatwebdevtools), let it settle, and re-run."
     )
 
 
