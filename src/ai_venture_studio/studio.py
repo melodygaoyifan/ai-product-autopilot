@@ -1080,10 +1080,21 @@ def create_studio_app(
         return not provider_key_present(provider)
 
     def _can_paste_key() -> bool:
-        """Whether pasting a key here could help at all. False for the mock
-        (nothing to pay) and for a provider we do not know the variable of —
-        a paste box that sets nothing is a dead button."""
-        return bool(_PROVIDER_KEY_VARS.get(provider))
+        """Whether pasting a key here could help at all.
+
+        False for the mock (nothing to pay) and for a provider we do not know
+        the variable of — a paste box that sets nothing is a dead button.
+
+        False as well whenever AVS_STUDIO_TOKEN gates this Studio, which is
+        the shared-machine deployment: the key would be set on ONE process
+        that everyone holding the token then spends through, while the form
+        says "this process only" — wording a reader hears as "my session
+        only". One person's card silently paying for everyone else's builds
+        is not a thing to let a founder do by accident, so a shared Studio
+        takes its key from the environment or a mounted file (the doors
+        panel) and the box is not offered at all.
+        """
+        return bool(_PROVIDER_KEY_VARS.get(provider)) and not studio_token
 
     def _key_form(*, heading: str) -> str:
         """The paste-a-key form. `type=password` so a shoulder or a
@@ -1126,7 +1137,14 @@ def create_studio_app(
         return _render(
             request, _("title_key_gate"),
             f"<p>{_('key_lead')}</p>"
-            + _key_form(heading=_("key_paste_head"))
+            + (
+                _key_form(heading=_("key_paste_head")) if _can_paste_key()
+                # A shared Studio says why the box is missing. Silence would
+                # read as a broken page on the one deployment where the
+                # answer ("set it in the environment") is the whole point.
+                else f"<div class=card><b>{_('key_shared_head')}</b>"
+                f"<p>{_('key_shared_note')}</p></div>" if studio_token else ""
+            )
             + (
                 f"<div class=card><b>{_('key_doors_head')}</b>"
                 f"<p class=muted>{_('key_doors_note')}</p>{doors}</div>"
@@ -1153,7 +1171,20 @@ def create_studio_app(
     @app.post("/key")
     async def set_key(request: Request):
         """Sets the provider key for THIS PROCESS ONLY (os.environ) — never
-        written to disk, never echoed back, never logged."""
+        written to disk, never echoed back, never logged.
+
+        Refused outright on a token-gated (shared) Studio: see
+        `_can_paste_key`. The form is not rendered there, so reaching this is
+        either a stale tab or someone posting by hand — and in both cases
+        accepting would charge one person for everybody.
+        """
+        if studio_token:
+            return _render(
+                request, _("title_key_gate"),
+                f"<div class=card><b class=warn>{_('key_shared_head')}</b>"
+                f"<p>{_('key_shared_note')}</p></div>"
+                f"<p><a href='/'>{_('link_back')}</a></p>",
+            )
         form = await request.form()
         name = set_provider_key(provider, str(form.get("key", "")))
         if name is None:

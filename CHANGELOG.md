@@ -4,6 +4,72 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.69.0 — the key, the paragraph, the product, and the decision
+
+The four proposals the Studio redesign deliberately left unbuilt, built —
+each one where a founder actually meets it.
+
+**The key gate.** The tool is free and the model is not, and that fact used
+to reach a founder as a stack trace on their first send. A keyless Studio on
+a paying provider now opens on whose-account-pays language, the doors that
+need no key typed here (`AVS_ANTHROPIC_MODE=bedrock|vertex|foundry`, a
+gateway bearer token, a mounted `*_API_KEY_FILE`), and `/demo` — the
+vendored recorded run, rendered through the same timeline the workspace's
+own reviews use, readable with no key at all. A pasted key is set for that
+process only and never written to disk; persisting it was refused, because a
+key in a workspace is a key in somebody's next `git add`. Detection is
+boolean through `env_or_file`, so the value is never returned, rendered or
+logged. A key that gets REFUSED carries the paste box on the page that names
+the problem instead of a trip back through settings. And a **token-gated
+(shared) Studio does not offer the box at all**: there the process is
+everyone's, so one person's key would pay for every build anybody on that
+token starts, while the form's own "this process only" reads as "my session
+only".
+
+**One paragraph, then only the gaps.** Six fixed questions asked in order
+was a form wearing a chat's clothes. Now: one open prompt, one extraction
+pass, SAID/GUESS rows, and questions only about what is genuinely missing.
+The charter rule (§13.26.7 — agents never author a user need) is enforced in
+Python, not in the prompt: a `said` value that is not a whitespace-normalised
+span of the founder's own paragraph is **demoted to a guess**, guesses are
+capped, and an unparseable response falls back to asking all six. A guess
+never reaches FDR.md until the founder confirms it — verified against a
+deliberately lying model, whose fabrication was demoted and kept out of the
+document. The paragraph itself is kept verbatim, because a span is not the
+framing.
+
+**Try it, beside its own acceptance list.** `/try` puts the criteria the
+product was supposed to meet next to it as rows the founder marks Fine or
+Wrong — and a complaint made from a row travels WITH that row, so the router
+knows which criterion failed instead of receiving a bare sentence. A tick is
+the founder's note, never a verdict, and the page says so. The Studio does
+not start the product for you: a server spawned by a page load is a process
+nobody owns on a port nobody chose, so the page names the real command and
+the detected entry point.
+
+**The decision, before the work.** A complaint is classified before it costs
+anything — SMALL FIX repaired in place, or NEW REQUIREMENT that gets its own
+plan — showing the founder's words, the feature, and what the implementer
+will be told, with Reword one click away and "nothing has been changed yet"
+on the page. One router, extracted and shared, not a second classifier. And
+the change log becomes the undo surface: each entry offers *go back to just
+before this change*, stating how many later changes and commits go with it,
+because the history is a straight line of checkpoint tags and pretending
+otherwise would promise an independence the model does not have.
+
+**Also:** the wire-up gate grew the half it was missing. It proved every
+button pointed at a real route and every route was pointed at by some page,
+but it rendered pages and never PRESSED anything — so two unvalidated path
+segments lived in that gap: `/feature/build`'s `slug` walked the build out
+of the workspace entirely, and `/retry`'s unknown `task_id` spawned a worker
+that died on arrival and left its pid file behind, so the Studio showed a
+build in progress that could never finish. Both now take the segment rule
+the review and incident ids already carried, well-formed-but-absent is
+answered out loud, and every POST route is pressed with the body its own
+forms send.
+
+1655 hermetic tests.
+
 ## v0.68.1 — the diagnosis stops lying, and the Studio reads like a product
 
 A patch release: no command, file format, or route changes. Everything below

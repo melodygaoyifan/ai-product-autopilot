@@ -1147,6 +1147,27 @@ STRINGS: dict[str, dict[str, str]] = {
               "disk. It is gone when you close the Studio; to keep it, set it "
               "in your own environment instead.",
     },
+    # The shared-machine deployment (AVS_STUDIO_TOKEN). "This process only"
+    # is true there and still misleading — the process is everyone's.
+    "key_shared_head": {
+        "zh": "这个 Studio 是共享的，密钥要从环境里来"
+              " / This Studio is shared — the key comes from its environment",
+        "en": "This Studio is shared — the key comes from its environment",
+    },
+    "key_shared_note": {
+        "zh": "这个 Studio 用访问令牌保护，也就是说不止你一个人在用它。"
+              "在这里粘贴的密钥会被整个进程共用，所有人的搭建都会花你的钱，"
+              "所以这里不提供输入框。请让启动 Studio 的人把密钥放进环境变量，"
+              "或者用下面任意一种通道。"
+              " / A key pasted here would be spent by everyone who can reach"
+              " this Studio, so the box is not offered.",
+        "en": "This Studio is protected by an access token, which means more "
+              "than one person can reach it. A key pasted here belongs to the "
+              "whole process, so every one of their builds would spend your "
+              "money — which is why the box is not offered. Ask whoever "
+              "started the Studio to set the key in its environment, or use "
+              "one of the doors below.",
+    },
     "key_doors_head": {
         "zh": "不需要在这里输入密钥的通道 / Doors that need no key typed here",
         "en": "Doors that need no key typed here",

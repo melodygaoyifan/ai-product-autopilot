@@ -332,3 +332,61 @@ def test_a_busy_provider_does_not_get_the_key_form(tmp_path):
 
     assert "did not finish" in page
     assert "action=/key" not in page
+
+
+# ── the shared Studio: "this process only" is true and still misleading ───
+
+
+def _shared_studio(tmp_path, name):
+    """A token-gated Studio — the shared-machine deployment. The token is
+    read once at app construction, so it must be set before create."""
+    with _env(ANTHROPIC_API_KEY=None, AVS_STUDIO_TOKEN="shared-secret"):
+        client, root = _studio(tmp_path, name)
+        client.cookies.set("studio_token", "shared-secret")
+        return client, root
+
+
+def test_a_shared_studio_does_not_offer_the_paste_box(tmp_path):
+    """AVS_STUDIO_TOKEN means more than one person can reach this process.
+    A key pasted into it is spent by all of them, while the form says "this
+    process only" — which a reader hears as "my session only"."""
+    with _env(AVS_STUDIO_TOKEN="shared-secret"):
+        client, _root = _studio(tmp_path, "shared")
+        client.cookies.set("studio_token", "shared-secret")
+        page = client.get("/").text
+
+    assert "action=/key" not in page, "a shared Studio offered the paste box"
+    # …and says why, because silence reads as a broken page on the one
+    # deployment where "set it in the environment" is the whole answer.
+    assert "shared" in page.lower()
+    assert "spend your money" in page or "environment" in page
+    # The keyless gate still stands — it just points at the other doors.
+    assert "AVS_ANTHROPIC_MODE=bedrock" in page
+
+
+def test_a_shared_studio_refuses_a_hand_posted_key(tmp_path):
+    """The form is absent, so reaching /key is a stale tab or a hand-rolled
+    POST. Accepting either would charge one person for everybody."""
+    with _env(AVS_STUDIO_TOKEN="shared-secret"):
+        client, root = _studio(tmp_path, "sharedpost")
+        client.cookies.set("studio_token", "shared-secret")
+        page = client.post("/key", data={"key": SECRET}).text
+
+        import os
+
+        assert os.environ.get("ANTHROPIC_API_KEY") != SECRET, (
+            "a token-gated Studio accepted a pasted key"
+        )
+    assert "shared" in page.lower()
+    assert SECRET not in page
+    # Nowhere on disk either.
+    for path in root.rglob("*"):
+        if path.is_file():
+            assert SECRET not in path.read_text(encoding="utf-8", errors="ignore")
+
+
+def test_a_localhost_studio_still_offers_it(tmp_path):
+    """The single-founder case is untouched: no token, box present."""
+    with _env():
+        client, _root = _studio(tmp_path, "solo")
+        assert "action=/key" in client.get("/").text
