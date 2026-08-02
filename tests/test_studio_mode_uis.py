@@ -64,14 +64,15 @@ def test_mode_strip_is_on_every_page_in_every_mode(tmp_path):
     root = _workspace(tmp_path)
     for mode in (None, "engineer", "enterprise"):
         page = _client(root, mode=mode).get("/").text
-        assert "View as:" in page
+        assert "class=modeswitch" in page  # the segmented switcher
         assert "/?mode=" in page  # the other modes stay one click away
 
 
 def test_current_mode_is_marked_not_linked(tmp_path):
     root = _workspace(tmp_path)
     page = _client(root, mode="engineer").get("/").text
-    assert "<b>Engineer</b>" in page  # current: bold, no link
+    # current: the active segment, styled and unlinked
+    assert "<span class='seg on'>Engineer</span>" in page
     assert "href='/?mode=founder'" in page
     assert "href='/?mode=engineer'" not in page
 

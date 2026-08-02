@@ -52,7 +52,7 @@ def test_home_says_it_is_working_instead_of_the_previous_page(in_flight):
     page = client.get("/").text
     assert "Working on it" in page
     # …and specifically NOT the describe state it would otherwise render
-    assert "<textarea name=fdr>" not in page
+    assert "<textarea name=fdr" not in page
 
 
 def test_the_working_page_reloads_itself_rather_than_bouncing_away(in_flight):

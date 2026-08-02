@@ -207,7 +207,7 @@ def test_the_form_still_works_and_links_to_the_conversation(client):
     """The conversation became the default, but the form is not removed —
     that would strand anyone who prefers to write the whole thing at once."""
     page = client.get("/?form=1").text
-    assert "<textarea name=fdr>" in page
+    assert "<textarea name=fdr" in page  # the whole-document form field
     assert "/chat" in page
 
 
@@ -322,7 +322,7 @@ def test_the_form_can_still_be_the_default(workspace):
     from ai_venture_studio.studio import create_studio_app
 
     app = create_studio_app(workspace, provider="mock", entry="form")
-    assert "<textarea name=fdr>" in TestClient(app).get("/").text
+    assert "<textarea name=fdr" in TestClient(app).get("/").text
 
 
 def test_an_unknown_entry_is_refused_loudly(workspace):

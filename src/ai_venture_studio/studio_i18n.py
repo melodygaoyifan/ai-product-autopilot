@@ -108,11 +108,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Please answer these first:",
     },
     "planning": {"zh": "正在做计划… / planning…", "en": "planning…"},
-    "updates_live": {
-        "zh": "个模块 — 实时更新 / updates live.",
-        "en": "modules built — updates live.",
-    },
-    "done_label": {"zh": "已完成", "en": "Done:"},
     "state_done": {"zh": "✅ 已完成", "en": "✅ done"},
     "state_pending_confirm": {"zh": "待确认", "en": "awaiting confirmation"},
     "first_version": {"zh": "(初版)", "en": "(first version)"},
@@ -644,7 +639,6 @@ STRINGS: dict[str, dict[str, str]] = {
               "instead of guessing from filenames.",
     },
     # --- mode strip + per-mode pages (v0.56) ----------------------------
-    "mode_strip_label": {"zh": "视角 / View as:", "en": "View as:"},
     "mode_founder": {"zh": "创始人 / Founder", "en": "Founder"},
     "mode_engineer": {"zh": "工程师 / Engineer", "en": "Engineer"},
     "mode_enterprise": {"zh": "企业 / Enterprise", "en": "Enterprise"},
@@ -950,6 +944,148 @@ STRINGS: dict[str, dict[str, str]] = {
     "chat_q_success": {
         "zh": "怎么算成功？一句能验证的话就行。",
         "en": "What does success look like? One sentence you could check.",
+    },
+    # ── The visual + IA redesign (v0.68) ─────────────────────────────────
+    # The stage rail: where am I in the flow, on every founder-flow page.
+    "rail_describe": {"zh": "描述 / Describe", "en": "Describe"},
+    "rail_plan": {"zh": "计划 / Plan", "en": "Plan"},
+    "rail_build": {"zh": "搭建 / Build", "en": "Build"},
+    "rail_product": {"zh": "你的产品 / Your product", "en": "Your product"},
+    # The mode switcher's add-only reassurance line.
+    "mode_addonly_note": {
+        "zh": "创始人能看到的一切都还在这个页面上 — 模式只增加可见性。"
+              "/ Everything the founder sees is still on this page.",
+        "en": "Everything the founder sees is still on this page — a mode "
+              "only adds visibility, it never hides a form or a required "
+              "action.",
+    },
+    "mode_back_founder": {
+        "zh": "回到创始人视图 / Back to Founder",
+        "en": "Back to Founder",
+    },
+    # The chat sidebar: the document being written, beside the conversation.
+    "chat_sidebar_head": {
+        "zh": "从你说的话里 / From what you said",
+        "en": "From what you said",
+    },
+    "chat_sidebar_note": {
+        "zh": "要搭建的就是这份文件 — 没有别的。"
+              "/ This file is what gets built — nothing else.",
+        "en": "This file is what gets built — nothing else.",
+    },
+    "chat_slot_who": {"zh": "给谁用 / Who it is for", "en": "Who it is for"},
+    "chat_slot_actions": {
+        "zh": "用户做什么 / What people do",
+        "en": "What people do",
+    },
+    "chat_slot_must": {"zh": "必须有 / Must have", "en": "Must have"},
+    "chat_slot_not_needed": {
+        "zh": "第一版不做 / Not in v1",
+        "en": "Not in v1",
+    },
+    "chat_slot_constraints": {
+        "zh": "限制 / Constraints",
+        "en": "Constraints",
+    },
+    "chat_slot_success": {
+        "zh": "怎么算成功 / What success looks like",
+        "en": "What success looks like",
+    },
+    "chat_read_file": {
+        "zh": "查看或直接编辑这份文件 / Read or edit the file itself",
+        "en": "Read or edit the file itself",
+    },
+    "chat_composer_note": {
+        "zh": "现在还什么都没搭建。任何东西写下之前，你都会先确认一份计划。"
+              "/ Nothing is built yet.",
+        "en": "Nothing is built yet. You confirm a plan before anything is "
+              "written.",
+    },
+    # Rendered markdown keeps the raw text one click away.
+    "md_original": {"zh": "原文 / original text", "en": "original text"},
+    "confirm_hint": {
+        "zh": "请认真读第一段。如果它描述的不是你想要的，现在改需求是免费的 — "
+              "按下按钮之后就不是了。/ Read the first paragraph carefully.",
+        "en": "Read the first paragraph carefully. If it describes something "
+              "you did not mean, editing the requirements now is free — "
+              "after this button it is not.",
+    },
+    "cost_provider_limits": {
+        "zh": "搭建会多次调用模型。花费上限在你的服务商账户里设置，不在这里。"
+              "/ Spending limits live in your provider account, not here.",
+        "en": "Building calls the model many times. Spending limits live in "
+              "your provider account, not here.",
+    },
+    # The building page: honest texture for the long wait.
+    "building_headline": {
+        "zh": "正在搭建 / Building — {done} / {total}",
+        "en": "Building — {done} of {total} modules done",
+    },
+    "building_note": {
+        "zh": "可以关掉这个页面。搭建会自己继续，回来时这里接着显示。"
+              "/ You can close this tab.",
+        "en": "You can close this tab. The build runs on its own and this "
+              "page picks it back up.",
+    },
+    "building_honesty": {
+        "zh": "故意不显示百分比和预计时间 — 系统不知道下一次尝试是不是最后"
+              "一次，编造的数字比诚实的步骤更糟。/ No percentage and no "
+              "estimate on purpose.",
+        "en": "No percentage and no estimate on purpose — the system does "
+              "not know whether the next attempt is the last one, and a "
+              "made-up number is worse than an honest step.",
+    },
+    "building_elapsed": {"zh": "已用时 / elapsed", "en": "elapsed"},
+    "building_spent_fmt": {
+        "zh": "已花 ${amount} / so far",
+        "en": "${amount} so far",
+    },
+    # Status chips. Small caps labels; the failed states keep their
+    # verbatim state name instead.
+    "chip_done": {"zh": "完成 / DONE", "en": "DONE"},
+    "chip_now": {"zh": "进行中 / NOW", "en": "NOW"},
+    "chip_queued": {"zh": "排队 / QUEUED", "en": "QUEUED"},
+    "chip_left": {"zh": "待做 / LEFT", "en": "LEFT"},
+    "chip_built": {"zh": "已建成 / BUILT", "en": "BUILT"},
+    "chip_partly": {
+        "zh": "部分建成 / PARTLY BUILT",
+        "en": "PARTLY BUILT",
+    },
+    # The verdict-first report page.
+    "rep_modules_fmt": {
+        "zh": "{done} / {total} 个模块 / modules",
+        "en": "{done} of {total} modules",
+    },
+    "rep_working": {"zh": "现在能用的 / Working now", "en": "Working now"},
+    "composer_head": {
+        "zh": "告诉我要改什么 / Tell me what to change",
+        "en": "Tell me what to change",
+    },
+    # Failure and interrupted cards: reassurance outranks the error.
+    "fail_chip": {"zh": "没有做完 / DID NOT FINISH", "en": "DID NOT FINISH"},
+    "btn_retry_step": {
+        "zh": "再试一次这一步 / Try that step again",
+        "en": "Try that step again",
+    },
+    "int_chip": {"zh": "提前停止 / STOPPED EARLY", "en": "STOPPED EARLY"},
+    "int_headline": {
+        "zh": "{done} / {total} 个模块已完成并保留。/ modules are finished "
+              "and kept.",
+        "en": "{done} of {total} modules are finished and kept.",
+    },
+    "int_why": {"zh": "为什么停了 / Why it stopped", "en": "Why it stopped"},
+    # Engineer panel chrome.
+    "eng_founder_link": {
+        "zh": "▸ 创始人页面 / The founder page",
+        "en": "▸ The founder page",
+    },
+    "eng_col_id": {"zh": "编号 / ID", "en": "ID"},
+    "eng_col_state": {"zh": "状态 / STATE", "en": "STATE"},
+    "eng_col_title": {"zh": "标题 / TITLE", "en": "TITLE"},
+    # Enterprise panel: the drill-downs, grouped.
+    "gov_evidence": {
+        "zh": "证据，想看就看 / The evidence, when you want it",
+        "en": "The evidence, when you want it",
     },
 }
 

@@ -266,17 +266,21 @@ def test_a_real_build_leaves_a_step_trail(tmp_path):
 
 
 def test_the_studio_renders_the_current_step_only_while_a_task_is_in_flight():
-    from ai_venture_studio.studio import _task_list_html
+    from ai_venture_studio.studio import _task_rows_html
+    from ai_venture_studio.studio_i18n import STRINGS
 
-    running = _task_list_html(
+    def _t(key):
+        return STRINGS[key]["en"]
+
+    running = _task_rows_html(
         [{"id": "t1", "title": "Item store", "state": "pending",
-          "step": "running your tests"}]
+          "step": "running your tests"}], _t
     )
     assert "running your tests" in running
 
     # On a finished task the step is stale narration of something already done.
-    finished = _task_list_html(
+    finished = _task_rows_html(
         [{"id": "t1", "title": "Item store", "state": "built",
-          "step": "running your tests"}]
+          "step": "running your tests"}], _t
     )
     assert "running your tests" not in finished

@@ -134,7 +134,10 @@ def test_building_page_shows_live_per_task_progress(studio):
     page = client.get("/").text
     assert "fetch('/status')" in page  # polls in place, no blind reload
     assert "task-t1" in page and "task-t2" in page
-    assert "✅ URL store" in page and "⏳ Shorten endpoint" in page
+    # built → DONE chip, pending → QUEUED chip: the redesigned equivalents
+    # of the old ✅/⏳ icons, pinned at the same strength (zh UI).
+    assert "完成 / DONE</span><span class=ttl>URL store" in page
+    assert "排队 / QUEUED</span><span class=ttl>Shorten endpoint" in page
 
     status = client.get("/status").json()
     assert status["running"] is True

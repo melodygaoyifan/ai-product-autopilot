@@ -227,7 +227,11 @@ def test_deploy_reviews_card_grey_and_populated(tmp_path):
     ))
     page = _deploy_reviews_html(root, _t)
     assert "HOLD" in page and "release/1.2" in page
-    assert "stays disarmed" in page
+    # The recommendations-never-executions note moved to the enterprise
+    # panel's footer, visible without opening any card.
+    from ai_venture_studio.studio_modes import enterprise_panel
+
+    assert "stays disarmed" in enterprise_panel(root, _t)
 
 
 # --- corp deployment: token gate, origin guard, bind refusal ------------------

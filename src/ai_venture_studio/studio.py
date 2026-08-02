@@ -39,27 +39,208 @@ from ai_venture_studio.studio_modes import (
     engineer_panel,
     enterprise_panel,
     mode_strip,
+    recent_reviews,
     resolve_mode,
     review_timeline_body,
 )
 
-_STYLE = """
-body{font-family:-apple-system,'PingFang SC',sans-serif;max-width:760px;
-margin:2rem auto;padding:0 1rem;line-height:1.6;color:#1a1a1a}
-textarea{width:100%;min-height:340px;font:14px/1.5 inherit;padding:.8rem;
-border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
-button{background:#07c160;color:#fff;border:0;border-radius:8px;
-padding:.7rem 1.6rem;font-size:1rem;cursor:pointer}
-button.secondary{background:#576b95}
-pre{white-space:pre-wrap;background:#f7f7f7;padding:1rem;border-radius:8px}
-.card{border:1px solid #e5e5e5;border-radius:10px;padding:1rem 1.2rem;
-margin:1rem 0}
-.muted{color:#888;font-size:.9rem}
-h1{font-size:1.4rem}
-.ok{color:#07c160}.warn{color:#c87d2f}.bad{color:#d23}
-table{border-collapse:collapse;width:100%}
-td{padding:.25rem .6rem;border-bottom:1px solid #eee;font-size:.9rem;
-text-align:left;vertical-align:top}
+# Design tokens: warm paper ground with a 4px dot grid, content on a white
+# card; ink #191813, hairlines #eae4d8; green #07c160 for accents and
+# #0d7a45 for the one primary action per page; amber for warnings and
+# partial builds; #6b6456 replaces the old #888 hint text (5.4:1, AA).
+# Faces are system stacks only — nothing is fetched: serif display via
+# Georgia with a 'Noto Serif SC' fallback, mono via ui-monospace, sans via
+# -apple-system/'PingFang SC'.
+_SANS = "-apple-system,'PingFang SC','Helvetica Neue',sans-serif"
+_SERIF = "Georgia,'Times New Roman','Noto Serif SC',serif"
+_MONO = "ui-monospace,SFMono-Regular,Menlo,monospace"
+
+_STYLE = f"""
+*{{box-sizing:border-box}}
+body{{margin:0;padding:28px 16px 72px;background:#eae6dc;
+background-image:radial-gradient(rgba(25,24,19,.045) 1px,transparent 1px);
+background-size:4px 4px;color:#454037;-webkit-font-smoothing:antialiased;
+font:15px/1.6 {_SANS}}}
+a{{color:#0d7a45}}a:hover{{color:#07c160}}
+h1{{font-family:{_SERIF};font-weight:500;font-size:27px;line-height:1.25;
+letter-spacing:-.01em;color:#191813;margin:0 0 10px}}
+h2{{font-family:{_SERIF};font-weight:500;font-size:20px;line-height:1.3;
+letter-spacing:-.01em;color:#191813;margin:1.6em 0 .5em}}
+h3{{font-family:{_SERIF};font-weight:500;font-size:17px;color:#191813;
+margin:1.4em 0 .4em}}
+h4{{font-size:15px;color:#191813;margin:1.2em 0 .3em}}
+.shell{{max-width:900px;margin:0 auto;background:#fff;
+border:1px solid #ded9cd;border-radius:12px;
+box-shadow:0 1px 2px rgba(25,24,19,.05),0 12px 32px -16px rgba(25,24,19,.18);
+overflow:hidden}}
+.hdr{{display:flex;align-items:center;gap:10px;padding:14px 24px;
+border-bottom:1px solid #eae4d8}}
+.brand{{display:flex;align-items:center;gap:8px}}
+.mark{{width:11px;height:11px;background:#07c160;transform:rotate(45deg);
+border-radius:2px}}
+.marklabel{{font:600 12px/1 {_MONO};letter-spacing:.1em;color:#6f6858}}
+.hdrdiv{{width:1px;height:16px;background:#e5dfd0}}
+.wsname{{font-weight:500;font-size:15px;color:#191813}}
+.pchip{{font:12px/1 {_MONO};color:#6b6456;background:#f1ede2;
+border-radius:4px;padding:4px 7px}}
+.modeswitch{{display:flex;border:1px solid #ddd6c5;border-radius:7px;
+overflow:hidden;margin-left:auto}}
+.modeswitch .seg{{font-size:12px;line-height:1;padding:7px 12px;
+text-decoration:none;color:#6b6456;border-left:1px solid #ddd6c5}}
+.modeswitch .seg:first-child{{border-left:0}}
+.modeswitch .seg.on{{font-weight:600;color:#191813;background:#f1ede2}}
+.modenote{{display:flex;justify-content:space-between;align-items:center;
+gap:16px;padding:10px 24px;border-bottom:1px solid #eae4d8;
+background:#faf7ef;font-size:13px;color:#6b6456}}
+.rail{{display:flex;align-items:center;gap:10px;padding:12px 24px;
+border-bottom:1px solid #eae4d8;font-size:13px}}
+.rline{{flex:1;height:1px;background:#e5dfd0}}.rline.on{{background:#07c160}}
+.rdone{{color:#6b6456}}.rtodo{{color:#7d7666}}
+.rcur{{display:flex;align-items:center;gap:7px;font-weight:600;
+color:#191813}}
+.pagebody{{padding:26px 28px}}
+button{{min-height:44px;background:#fff;color:#191813;
+border:1px solid #d3ccbb;border-radius:9px;padding:11px 18px;
+font:600 14px/1 {_SANS};cursor:pointer}}
+button.secondary{{background:#fff;color:#191813;border:1px solid #d3ccbb}}
+button.primary{{background:#0d7a45;color:#fff;border:0;
+box-shadow:0 1px 0 rgba(25,24,19,.06),0 6px 14px -8px rgba(13,122,69,.6);
+padding:12px 22px;font-size:15px}}
+button.linkish{{border:0;background:none;color:#6b6456;font-weight:400;
+min-height:0;padding:0;box-shadow:none}}
+button.linkish:hover{{color:#07c160}}
+textarea{{width:100%;min-height:96px;font:15px/1.6 {_SANS};
+padding:12px 14px;border:1px solid #d3ccbb;border-radius:9px;
+color:#191813;resize:vertical;display:block}}
+textarea.fdrbox{{min-height:340px;font-size:14px}}
+pre{{white-space:pre-wrap;background:#faf7ef;border:1px solid #eae4d8;
+padding:12px 14px;border-radius:8px;font:12px/1.7 {_MONO};color:#454037}}
+code{{font:12px/1.5 {_MONO};color:#191813}}
+.card{{border:1px solid #ded9cd;border-radius:11px;padding:14px 18px;
+margin:14px 0}}
+.callout{{background:#fcf6e9;border:1px solid #eddec4;border-radius:9px;
+padding:12px 16px;margin:14px 0}}
+.muted{{color:#6b6456;font-size:13px}}
+.ok{{color:#0d7a45}}.warn{{color:#8a5a12}}.bad{{color:#b5352c}}
+.lbl{{font:600 12px/1 {_MONO};letter-spacing:.09em;text-transform:uppercase;
+color:#6f6858;margin:18px 0 8px}}
+table{{border-collapse:collapse;width:100%}}
+td,th{{padding:.45rem .6rem;border-bottom:1px solid #efe9dd;font-size:13px;
+text-align:left;vertical-align:top;overflow-wrap:anywhere}}
+/* A git identity or a paste-me command is one unbreakable token, and its
+   min-content width is what pushed the preflight table over its column and
+   into the trust table beside it. Value cells and inline code wrap
+   anywhere; the label column keeps whole words, or auto table layout
+   shrinks it to one character per line and reads as "governan/ce". */
+td:first-child{{overflow-wrap:normal}}
+code{{overflow-wrap:anywhere}}
+th{{font:600 11px/1 {_MONO};letter-spacing:.06em;text-transform:uppercase;
+color:#6f6858;background:#faf7ef}}
+tr.arow td{{background:#fcf6e9}}
+summary{{cursor:pointer}}
+.chip{{display:inline-block;font:600 11px/1 {_SANS};letter-spacing:.05em;
+text-transform:uppercase;border-radius:4px;padding:5px 8px}}
+.chip.g{{color:#0d7a45;background:#e2f4ea}}
+.chip.a{{color:#8a5a12;background:#fbecd3}}
+.chip.q{{color:#6f6858;background:#f1ede2}}
+.dot7{{width:7px;height:7px;border-radius:50%;background:#07c160;
+display:inline-block;flex-shrink:0}}
+.sdot{{width:9px;height:9px;border-radius:50%;display:inline-block;
+flex-shrink:0}}
+.sdot.red{{background:#b5352c}}.sdot.amber{{background:#c08a1a}}
+.sdot.grey{{background:#a49d8b}}.sdot.green{{background:#07c160}}
+.stateline{{display:flex;align-items:center;gap:9px;margin-bottom:10px}}
+.slabel{{font-weight:600;font-size:11px;letter-spacing:.06em;
+text-transform:uppercase}}
+.footbar{{display:flex;align-items:center;justify-content:space-between;
+gap:20px;background:#faf7ef;border-top:1px solid #eae4d8;padding:16px 28px;
+margin:26px -28px -26px}}
+.footbar .actions{{display:flex;align-items:center;gap:12px;flex-shrink:0}}
+.twocol{{display:flex;gap:16px;align-items:flex-start;margin:14px 0}}
+.twocol>*{{flex:1;min-width:0}}
+.colcard{{border:1px solid #eae4d8;border-radius:9px;padding:16px 18px}}
+.colcard.amber{{border-color:#eddec4;background:#fcf6e9}}
+.collab{{font-weight:600;font-size:13px;letter-spacing:.05em;
+text-transform:uppercase;margin-bottom:10px}}
+.chiprow{{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}}
+.achip{{display:inline-flex;align-items:center;min-height:44px;
+padding:0 16px;border:1px solid #d3ccbb;border-radius:8px;color:#191813;
+text-decoration:none;font-size:14px}}
+.trow{{display:flex;gap:14px;align-items:flex-start;padding:12px 0;
+border-bottom:1px solid #efe9dd}}
+/* min-width, not width: DONE/NOW/QUEUED align on a 72px column, but a
+   longer real state (test_failed, truncated) grows its chip instead of
+   overflowing it into the title beside it. */
+.trow .chip{{min-width:72px;text-align:center;flex-shrink:0}}
+.trow .ttl{{flex:1}}
+.tstep{{display:block;font-size:14px;color:#575145;font-weight:400}}
+.bhead{{display:flex;align-items:flex-start;justify-content:space-between;
+gap:24px}}
+.bclock{{text-align:right;flex-shrink:0}}
+.bclock b{{font:600 22px/1.2 {_MONO};color:#191813}}
+.vhead{{display:flex;align-items:center;gap:10px;margin-bottom:8px}}
+.chatwrap{{display:flex;align-items:stretch;margin:-26px -28px}}
+.chatmain{{flex:1;min-width:0;padding:24px 24px 18px;display:flex;
+flex-direction:column;gap:18px}}
+.chatside{{width:300px;flex-shrink:0;background:#faf7ef;
+border-left:1px solid #eae4d8;display:flex;flex-direction:column}}
+.sidehead{{padding:20px 20px 12px;border-bottom:1px solid #eae4d8}}
+.sidebody{{flex:1;padding:16px 20px;display:flex;flex-direction:column;
+gap:14px}}
+.sidefoot{{border-top:1px solid #eae4d8;padding:14px 20px 16px;
+display:flex;flex-direction:column;gap:8px;text-align:center}}
+.slot .slothead{{display:flex;align-items:center;gap:7px;font-size:13px;
+font-weight:600;color:#191813}}
+.slot.empty .slothead{{color:#575145;font-weight:600}}
+.slot .val{{font-size:13px;color:#575145;padding-left:16px}}
+.msg-a{{display:flex;gap:12px}}
+.msg-a .dot7{{margin-top:9px}}
+.msg-a p{{margin:0;font-family:{_SERIF};font-size:17px;line-height:1.6;
+color:#191813;max-width:520px}}
+.msg-u{{align-self:flex-end;max-width:440px;background:#f1ede2;
+border-radius:14px 14px 4px 14px;padding:12px 16px}}
+.msg-u p{{margin:0;font-size:16px;color:#191813}}
+.composer{{border:1px solid #d3ccbb;border-radius:12px;
+padding:12px 14px 10px;box-shadow:0 1px 2px rgba(0,0,0,.03)}}
+.composer textarea{{border:0;padding:0;min-height:56px;outline:none;
+background:none;border-radius:0}}
+.comprow{{display:flex;align-items:center;justify-content:space-between;
+gap:12px;margin-top:8px}}
+.composerbox{{border:1px solid #d3ccbb;border-radius:10px;overflow:hidden;
+margin:12px 0}}
+.tabs{{display:flex;border-bottom:1px solid #eae4d8;background:#faf7ef}}
+.tab{{min-height:0;border:0;border-radius:0;
+border-right:1px solid #eae4d8;background:none;color:#6b6456;
+padding:13px 18px;font-weight:400;font-size:14px;box-shadow:none}}
+.tab.on{{background:#fff;color:#191813;font-weight:600;
+border-bottom:2px solid #07c160}}
+.composerbox textarea{{border:0;border-radius:0}}
+.composerbox .comprow{{border-top:1px solid #eae4d8;background:#faf7ef;
+padding:12px 16px;margin:0}}
+.shot{{max-width:100%;border:1px solid #e5dfd0;border-radius:8px;
+margin:.4rem 0}}
+.estrip{{display:flex;align-items:center;justify-content:space-between;
+gap:16px;background:#faf7ef;border-bottom:1px solid #eae4d8;
+padding:12px 24px;font-size:14px;margin:-26px -28px 22px}}
+.cliblock{{background:#faf7ef;border:1px solid #eae4d8;border-radius:9px;
+padding:14px 16px;margin:18px 0}}
+.cliblock .lbl{{margin-top:0}}
+.cliblock pre{{border:0;background:none;padding:0;margin:0}}
+.engpanel,.govpanel{{padding-bottom:22px;margin-bottom:22px;
+border-bottom:1px solid #eae4d8}}
+.posture{{display:flex;border:1px solid #ded9cd;border-radius:10px;
+overflow:hidden;margin:14px 0}}
+.pcell{{flex:1;padding:14px 16px;border-left:1px solid #efe9dd;
+font-size:14px}}
+.pcell:first-child{{border-left:0}}
+.pcell .stateline{{margin-bottom:7px}}
+.evd{{border:1px solid #eae4d8;border-radius:9px;margin:10px 0;
+padding:0 14px}}
+.evd summary{{padding:12px 0;font-size:14px;color:#191813}}
+.evd .card{{border:0;margin:0;padding:0 0 12px}}
+.panelfoot{{background:#faf7ef;border:1px solid #eae4d8;border-radius:9px;
+padding:12px 16px;margin:18px 0;font-size:13px;color:#6b6456}}
+.mdoc p{{margin:.5em 0 1em}}
 """
 
 
@@ -145,6 +326,94 @@ def _md(path: Path) -> str:
     return html.escape(path.read_text(encoding="utf-8")) if path.exists() else ""
 
 
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_HEAD = re.compile(r"(#{1,3})\s+(.*)")
+#: Section headings that mean "deliberately out of scope" — the cheapest
+#: place to catch a misunderstanding, so they get the amber callout.
+_MD_NOT_BUILDING = re.compile(r"not\s+build|non[- ]?goal|不做|非目标", re.I)
+
+
+def _render_markdown(text: str) -> str:
+    """The escaped-first markdown renderer for CONFIRMATION.md / REPORT.md.
+
+    The plan and the report are the most important text in the product and
+    both used to render as one grey <pre> blob. The markdown already has
+    structure, so render it — but ONLY after escaping everything: this is
+    model output headed for a browser. Deliberately tiny: #/##/### become
+    h2/h3/h4, "- " runs become lists, **bold** becomes <b>, blank lines
+    split paragraphs, and nothing else is interpreted. A section whose
+    heading says it will NOT be built is wrapped in the amber callout.
+    """
+    def _inline(escaped: str) -> str:
+        return _MD_BOLD.sub(r"<b>\1</b>", escaped)
+
+    sections: list[tuple[str, list[str]]] = [("", [])]
+    para: list[str] = []
+    items: list[str] = []
+
+    def _flush() -> None:
+        blocks = sections[-1][1]
+        if para:
+            blocks.append("<p>" + _inline("<br>".join(para)) + "</p>")
+            para.clear()
+        if items:
+            blocks.append(
+                "<ul>"
+                + "".join(f"<li>{_inline(item)}</li>" for item in items)
+                + "</ul>"
+            )
+            items.clear()
+
+    for line in html.escape(text).splitlines():
+        stripped = line.strip()
+        heading = _MD_HEAD.match(stripped)
+        if heading:
+            _flush()
+            level = len(heading.group(1)) + 1  # → h2/h3/h4
+            sections.append((
+                heading.group(2),
+                [f"<h{level}>{_inline(heading.group(2))}</h{level}>"],
+            ))
+            continue
+        if stripped.startswith("- "):
+            if para:
+                _flush()
+            items.append(stripped[2:])
+            continue
+        if not stripped:
+            _flush()
+            continue
+        if items:
+            _flush()
+        para.append(stripped)
+    _flush()
+
+    out = []
+    for head, blocks in sections:
+        chunk = "".join(blocks)
+        if head and _MD_NOT_BUILDING.search(head):
+            chunk = f"<div class=callout>{chunk}</div>"
+        out.append(chunk)
+    return f"<div class=mdoc>{''.join(out)}</div>"
+
+
+def _elapsed_hms(root: Path) -> str:
+    """Wall-clock since the build worker was spawned, from the pid marker's
+    own mtime — a fact already on disk, read-only. Empty when unknowable:
+    an omitted clock is honest, an invented one is not."""
+    import time as _time
+
+    try:
+        seconds = int(_time.time() - (root / ".mas" / "build.pid").stat().st_mtime)
+    except OSError:
+        return ""
+    if seconds < 0:
+        return ""
+    minutes, secs = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
+
+
 # Inline SVG favicon: kills the /favicon.ico 404 in every console (the
 # first thing a browser-driven evaluation sees) without adding a route or
 # an asset file.
@@ -156,10 +425,15 @@ _FAVICON = (
 
 
 def _page(title: str, body: str) -> HTMLResponse:
+    """The document wrapper. `body` is the full page including chrome —
+    the header, rail and card are assembled per request in `_render`,
+    which knows the workspace and the mode; this knows neither."""
     return HTMLResponse(
-        f"<!doctype html><meta charset='utf-8'><title>{html.escape(title)}</title>"
+        f"<!doctype html><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        f"<title>{html.escape(title)}</title>"
         f"<link rel='icon' href=\"{_FAVICON}\">"
-        f"<style>{_STYLE}</style><body><h1>{html.escape(title)}</h1>{body}"
+        f"<style>{_STYLE}</style><body>{body}"
     )
 
 
@@ -199,10 +473,45 @@ def _build_running(root: Path) -> bool:
 #: ambush someone who comes back after a successful build.
 _FAILURE_TTL_S = 120.0
 
-_STATE_ICON = {"built": "✅", "pending": "⏳"}
 # Same shape the server's review routes enforce — a review id is a path
 # segment, so anything else is a traversal attempt, not a typo.
 _REVIEW_ID = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
+
+#: The four founder-flow stages, in order, keyed to their i18n labels.
+_STAGES = (
+    ("describe", "rail_describe"), ("plan", "rail_plan"),
+    ("build", "rail_build"), ("product", "rail_product"),
+)
+
+
+def _task_chip(task: dict, t_) -> tuple[str, str, str]:
+    """(chip label, chip css class, step narration) for one task row —
+    the same mapping the building page's poll JS applies client-side."""
+    state = task["state"]
+    if state == "built":
+        return t_("chip_done"), "g", ""
+    if state == "pending" and task.get("step"):
+        return t_("chip_now"), "a", task["step"]
+    if state == "pending":
+        return t_("chip_queued"), "q", ""
+    # A failed state keeps its verbatim name, amber — never a euphemism.
+    return state, "a", ""
+
+
+def _task_rows_html(tasks: list[dict], t_) -> str:
+    rows = []
+    for task in tasks:
+        chip, css, step = _task_chip(task, t_)
+        step_html = (
+            f"<span class=tstep>{html.escape(step)}</span>" if step else ""
+        )
+        rows.append(
+            f"<div class=trow id='task-{html.escape(task['id'])}'>"
+            f"<span class='chip {css}'>{html.escape(chip)}</span>"
+            f"<span class=ttl>{html.escape(task['title'])}{step_html}</span>"
+            "</div>"
+        )
+    return "".join(rows)
 
 
 def _task_states(root: Path) -> list[dict]:
@@ -268,21 +577,6 @@ def _progress(root: Path) -> dict:
     }
 
 
-def _task_list_html(tasks: list[dict]) -> str:
-    return "".join(
-        f"<li id='task-{html.escape(t['id'])}'>"
-        f"{_STATE_ICON.get(t['state'], '❌')} {html.escape(t['title'])}"
-        f"{'' if t['state'] in _STATE_ICON else ' <span class=bad>(' + html.escape(t['state']) + ')</span>'}"
-        # The step only means anything while the task is still in flight; on a
-        # built task it is stale narration of something already finished.
-        + (
-            f" <span class=muted>— {html.escape(t['step'])}</span>"
-            if t.get("step") and t["state"] == "pending"
-            else ""
-        )
-        + "</li>"
-        for t in tasks
-    )
 
 
 def create_studio_app(
@@ -381,44 +675,129 @@ def create_studio_app(
         return exc if isinstance(exc, Exception) else None
 
     def _failure_page(
-        request: Request, exc: Exception, *, record: bool = True
+        request: Request, exc: Exception, *, record: bool = True,
+        retry_action: str | None = None,
     ) -> HTMLResponse:
         """A founder should never meet a stack trace, and should never be
-        told nothing either: plain language first, the real error one click
-        away, and the workspace left where they can retry.
+        told nothing either: reassurance outranks the error — plain
+        language first, the real error one click away, and the workspace
+        left where they can retry.
 
         The cause line is derived from the exception, never assumed. It used
         to be one hardcoded sentence naming a missing API key, which is how a
         transient provider overload — on a valid, funded key — sent someone
         looking for a key problem that did not exist.
+
+        `retry_action` puts the retry ON the page that names the failure —
+        but only where a bodyless re-POST is safe; everything else keeps
+        the plain link home.
         """
         if record:
             record_failure(root, exc)
             _stash_failure(exc)
+        if retry_action:
+            retry = (
+                f"<form method=post action={retry_action}>"
+                f"<button class=primary>{_('btn_retry_step')}</button></form>"
+            )
+        else:
+            retry = f"<p><a href='/'>{_('link_back')}</a></p>"
         return _render(
             request, _("title_failed"),
-            f"<div class=card><b class=bad>{_('failed_lead')}</b>"
+            "<div class=stateline><span class='sdot red'></span>"
+            f"<span class='slabel bad'>{_('fail_chip')}</span></div>"
+            f"<h1>{_('failed_lead')}</h1>"
             f"<p>{_('failed_safe')}</p>"
             f"<p>{_('failed_cause_' + failure_cause(exc))}</p>"
+            f"{retry}"
             f"<details><summary class=muted>{_('failed_detail')}</summary>"
             f"<pre>{html.escape(f'{type(exc).__name__}: {exc}')}</pre>"
-            "</details></div>"
-            f"<p><a href='/'>{_('link_back')}</a></p>",
+            "</details>",
+            h1="",
         )
 
-    def _render(request: Request, title: str, body: str) -> HTMLResponse:
-        """Every page: the visible mode strip, the page body, then the
-        mode's read-only cards. Founder mode appends no cards, so the
-        founder flow stays exactly the pre-mode UI plus the switcher.
-        Panels are built per request — they reflect the workspace files as
-        of this page load, never a cached copy."""
+    def _header(req_mode: str) -> str:
+        """The top bar every page shares: the AVS mark, the workspace name,
+        the profile chip, and the mode switcher — the answer to "where am
+        I, as whom" before any content."""
+        try:
+            profile = _profile(root)
+        except Exception:  # noqa: BLE001 — chrome must never take a page down
+            profile = ""
+        chip = f"<span class=pchip>{html.escape(profile)}</span>" if profile else ""
+        return (
+            "<header class=hdr>"
+            "<span class=brand><span class=mark></span>"
+            "<span class=marklabel>AVS</span></span>"
+            "<span class=hdrdiv></span>"
+            f"<span class=wsname>{html.escape(root.name)}</span>{chip}"
+            + mode_strip(req_mode, _)
+            + "</header>"
+        )
+
+    def _stage_rail(current: str) -> str:
+        """Describe → Plan → Build → Your product: four spans and three
+        hairlines that answer "did my click do anything?" on every
+        founder-flow page. ✓ on what is behind you, a green dot on where
+        you are."""
+        index = [key for key, _label in _STAGES].index(current)
+        parts = []
+        for position, (_key, label_key) in enumerate(_STAGES):
+            label = _(label_key)
+            if position:
+                on = " on" if position == index else ""
+                parts.append(f"<span class='rline{on}'></span>")
+            if position < index:
+                parts.append(f"<span class=rdone>✓ {label}</span>")
+            elif position == index:
+                parts.append(
+                    f"<span class=rcur><span class=dot7></span>{label}</span>"
+                )
+            else:
+                parts.append(f"<span class=rtodo>{label}</span>")
+        return f"<div class=rail>{''.join(parts)}</div>"
+
+    def _render(
+        request: Request, title: str, body: str, *,
+        rail: str | None = None, h1: str | None = None,
+    ) -> HTMLResponse:
+        """Every page: shared chrome (header, optional stage rail), then
+        the mode's read-only panel, then the founder body — the panel goes
+        FIRST because the person who switched modes switched for it, and
+        the founder content stays one in-page anchor away. Founder mode
+        adds no panel, so the founder flow stays the plain flow plus the
+        switcher. Panels are built per request — they reflect the workspace
+        files as of this page load, never a cached copy.
+
+        `rail` names the current founder-flow stage; failure pages and
+        non-flow pages pass none. `h1` overrides the page heading ("" for
+        states that compose their own)."""
         req_mode = _req_mode(request)
-        body = mode_strip(req_mode, _) + body
+        chrome = [_header(req_mode)]
+        if req_mode != "founder":
+            chrome.append(
+                f"<div class=modenote><span>{_('mode_addonly_note')}</span>"
+                f"<a href='/?mode=founder'>{_('mode_back_founder')}</a></div>"
+            )
+        if rail:
+            chrome.append(_stage_rail(rail))
+        panel = ""
         if req_mode == "engineer":
-            body += engineer_panel(root, _, _task_states(root))
+            panel = engineer_panel(
+                root, _, _task_states(root),
+                spend_detail=_engineer_spend_detail(),
+            )
         elif req_mode == "enterprise":
-            body += enterprise_panel(root, _)
-        response = _page(title, body)
+            panel = enterprise_panel(root, _)
+        heading = f"<h1>{html.escape(title)}</h1>" if h1 is None else (
+            f"<h1>{h1}</h1>" if h1 else ""
+        )
+        document = (
+            "<main class=shell>" + "".join(chrome)
+            + f"<div class=pagebody>{panel}"
+            f"<div id=founder>{heading}{body}</div></div></main>"
+        )
+        response = _page(title, document)
         if request.query_params.get("mode"):
             # An explicit switch persists across the POST→redirect cycle.
             response.set_cookie("studio_mode", req_mode)
@@ -512,22 +891,20 @@ def create_studio_app(
         )
         return data["profile"]
 
-    def _spend_card(mode: str) -> str:
+    def _spend_lines() -> str:
         """What the workspace has spent, where money is decided — a
         statement, never a gate.
 
-        On the confirm page (before the first dollar) and the report page.
-        The founder signal asked to SEE the number ("how much will a typical
-        month of builds cost me?"), and a figure you must go looking for
-        does not answer it. Deliberately no cap and no ceiling form: every
-        call is billed to the founder's own key or subscription, so spending
-        limits belong to the provider account that does the billing
-        (ADR-032) — a framework-side dollar cap would duplicate the
-        provider's job and mislead subscription users whose tokens do not
-        map to marginal dollars.
-
-        Mode-adaptable, add-only: engineer gains the per-model table and the
-        CLI equivalents. The founder card is complete on its own.
+        Rendered inside the footer bar of the confirm page (before the
+        first dollar) and the report page. The founder signal asked to SEE
+        the number ("how much will a typical month of builds cost me?"),
+        and a figure you must go looking for does not answer it.
+        Deliberately no cap and no ceiling form: every call is billed to
+        the founder's own key or subscription, so spending limits belong to
+        the provider account that does the billing (ADR-032) — a
+        framework-side dollar cap would duplicate the provider's job and
+        mislead subscription users whose tokens do not map to marginal
+        dollars. The per-model table lives on the engineer panel.
         """
         from ai_venture_studio import spend
 
@@ -541,14 +918,26 @@ def create_studio_app(
             ) + f" ({report.month}: {prefix}${report.spent_usd:.2f})"
         else:
             line = _("cost_no_spend")
-        parts = [f"<div class=card><b>{_('h_cost')}</b>", f"<p>{line}</p>"]
+        parts = [f"<div><b>{_('h_cost')}</b> — {line}</div>"]
         if report.is_floor:
-            parts.append(f"<p class=muted>{_('cost_floor_note')}</p>")
-        parts.append(f"<p class=muted>{_('cost_own_key')}</p>")
-        if mode == "engineer":
-            parts.append(_engineer_spend_detail())
-        parts.append("</div>")
-        return "".join(parts)
+            parts.append(f"<div class=muted>{_('cost_floor_note')}</div>")
+        parts.append(
+            f"<div class=muted>{_('cost_own_key')} "
+            f"{_('cost_provider_limits')}</div>"
+        )
+        return f"<div>{''.join(parts)}</div>"
+
+    def _spend_month_fragment() -> str:
+        """Just the month's dollar figure ("$3.87"), for muted meta lines —
+        empty when nothing was spent, because an omitted figure is honest
+        and a made-up zero is not (some calls are unpriced)."""
+        from ai_venture_studio import spend
+
+        report = spend.month_report(root)
+        if not report.calls:
+            return ""
+        prefix = "≥" if report.is_floor else ""
+        return f"{prefix}${report.spent_usd:.2f}"
 
     def _engineer_spend_detail() -> str:
         """The per-model breakdown `avs cost` prints, plus the CLI spelling —
@@ -605,8 +994,7 @@ def create_studio_app(
             done = sum(1 for t in tasks if t["state"] == "built") or progress["built"]
             total = progress["total"] or "?"
             checklist = (
-                f"<ul id=tasks style='list-style:none;padding-left:0'>"
-                f"{_task_list_html(tasks)}</ul>"
+                f"<div id=tasks>{_task_rows_html(tasks, _)}</div>"
                 if tasks
                 else f"<p class=muted id=tasks>{_('planning')}</p>"
             )
@@ -615,16 +1003,46 @@ def create_studio_app(
                 if progress.get("step")
                 else "<p id=step></p>"
             )
+            headline = _("building_headline").format(
+                done=f"<b id=done>{done}</b>", total=f"<b id=total>{total}</b>"
+            )
+            # Elapsed and spend: both already on disk (the pid marker's
+            # mtime, the spend ledger). Known, honest texture for the wait —
+            # still no percentage and no ETA, which stays deliberate.
+            clock = _elapsed_hms(root)
+            spent = _spend_month_fragment()
+            meta_bits = [_("building_elapsed")] if clock else []
+            if spent:
+                meta_bits.append(
+                    _("building_spent_fmt").format(amount=spent.lstrip("≥$"))
+                )
+            clock_html = ""
+            if clock or spent:
+                big = f"<b>{html.escape(clock)}</b>" if clock else ""
+                meta = " · ".join(meta_bits)
+                clock_html = (
+                    f"<div class=bclock>{big}"
+                    f"<div class=muted>{html.escape(meta)}</div></div>"
+                )
             # Live per-task progress (signal s3: "it looks frozen while it
             # works") — poll /status, update in place, one full reload when
-            # the worker exits so the report page takes over.
+            # the worker exits so the report page takes over. The chip
+            # mapping mirrors _task_chip exactly.
+            chips_js = (
+                "const CHIP={built:['%s','g'],now:['%s','a'],queued:['%s','q']};"
+                % (_("chip_done"), _("chip_now"), _("chip_queued"))
+            )
             return _render(
                 request, _("title_building"),
-                f"<div class=card><p>{_('done_label')} <b id=done>{done}</b> / "
-                f"<b id=total>{total}</b> {_('updates_live')}</p>"
-                f"{step_line}{checklist}</div>"
+                f"<div class=bhead><div><h1>{headline}</h1>"
+                f"<p class=muted>{_('building_note')}</p></div>"
+                f"{clock_html}</div>"
+                f"{step_line}{checklist}"
+                f"<div class=footbar><span class=muted>{_('building_honesty')}"
+                "</span></div>"
                 "<script>\n"
-                "const ICONS={built:'✅',pending:'⏳'};\n"
+                f"{chips_js}\n"
+                "const esc=x=>String(x).replace(/[<&]/g,'');\n"
                 "async function poll(){try{\n"
                 "  const s=await (await fetch('/status')).json();\n"
                 "  if(!s.running){location.reload();return}\n"
@@ -632,17 +1050,24 @@ def create_studio_app(
                 "  document.getElementById('done').textContent=built||s.built;\n"
                 "  if(s.total)document.getElementById('total').textContent=s.total;\n"
                 "  const st=document.getElementById('step');\n"
-                "  if(st)st.innerHTML=s.step?'<b>'+s.step.replace(/[<&]/g,'')+'</b>':'';\n"
+                "  if(st)st.innerHTML=s.step?'<b>'+esc(s.step)+'</b>':'';\n"
                 "  for(const t of s.tasks){\n"
                 "    const li=document.getElementById('task-'+t.id);\n"
-                "    if(li)li.textContent=(ICONS[t.state]||'❌')+' '+t.title\n"
-                "      +(ICONS[t.state]?'':' ('+t.state+')')\n"
-                "      +((t.step&&t.state==='pending')?' — '+t.step:'');\n"
+                "    if(!li)continue;\n"
+                "    let c,cls,step='';\n"
+                "    if(t.state==='built'){c=CHIP.built[0];cls='g'}\n"
+                "    else if(t.state==='pending'&&t.step){c=CHIP.now[0];cls='a';step=t.step}\n"
+                "    else if(t.state==='pending'){c=CHIP.queued[0];cls='q'}\n"
+                "    else{c=t.state;cls='a'}\n"
+                "    li.innerHTML='<span class=\"chip '+cls+'\">'+esc(c)+'</span>'\n"
+                "      +'<span class=ttl>'+esc(t.title)\n"
+                "      +(step?'<span class=tstep>'+esc(step)+'</span>':'')+'</span>';\n"
                 "  }\n"
                 "}catch(e){}setTimeout(poll,5000)}\n"
                 "poll();\n"
                 "setTimeout(()=>location.reload(),120000)\n"
                 "</script>",
+                rail="build", h1="",
             )
         interrupted = (
             (root / ".mas" / "build.pid").exists()
@@ -652,6 +1077,22 @@ def create_studio_app(
         if interrupted:
             tasks = progress["tasks"]
             unbuilt = [t for t in tasks if t["state"] != "built"]
+            built_ids = [t["id"] for t in tasks if t["state"] == "built"]
+            headline = _("int_headline").format(
+                done=len(built_ids), total=len(tasks)
+            )
+            id_rows = ""
+            for chip, css, ids in (
+                (_("chip_done"), "g", built_ids),
+                (_("chip_left"), "q", [t["id"] for t in unbuilt]),
+            ):
+                if ids:
+                    id_rows += (
+                        "<div class=trow>"
+                        f"<span class='chip {css}'>{html.escape(chip)}</span>"
+                        f"<span class=ttl><code>"
+                        f"{html.escape(' · '.join(ids))}</code></span></div>"
+                    )
             # One click, not one per module. The interrupted page used to
             # offer only per-module resume buttons — N mechanical clicks for
             # something the resume machinery does whole: re-running the build
@@ -661,7 +1102,8 @@ def create_studio_app(
             # for the founder who wants exactly one module back.
             continue_all = (
                 "<form method=post action=/build style='display:inline'>"
-                f"<button>{_('btn_continue_build')}</button></form> "
+                f"<button class=primary>{_('btn_continue_build')}"
+                "</button></form> "
             )
             retries = "".join(
                 f"<form method=post action=/retry style='display:inline'>"
@@ -673,17 +1115,21 @@ def create_studio_app(
             done_note = (
                 f"<p class=ok>{_('interrupted_all_done')}</p>"
                 if not unbuilt
-                else f"<p>{_('interrupted_resume')}</p>{continue_all}{retries}"
+                else f"<p>{_('interrupted_resume')}</p>"
+                f"<p>{continue_all}{retries}</p>"
             )
             return _render(
                 request, _("title_interrupted"),
-                f"<div class=card><b class=warn>{_('interrupted_lead')}"
-                f"</b><ul style='list-style:none;padding-left:0'>"
-                f"{_task_list_html(tasks)}</ul>{done_note}"
-                f"{_worker_error_block()}</div>"
+                "<div class=stateline><span class='sdot amber'></span>"
+                f"<span class='slabel warn'>{_('int_chip')}</span></div>"
+                f"<h1>{headline}</h1>"
+                f"<p class=muted>{_('interrupted_lead')}</p>"
+                f"{id_rows}{done_note}"
+                f"{_worker_error_block()}"
                 "<form method=post action=/reset style='margin-top:1rem'>"
                 f"<button class=secondary>{_('btn_edit_and_restart')}"
                 "</button></form>",
+                h1="",
             )
         if report.exists():
             features_dir = root / "product" / "features"
@@ -698,111 +1144,239 @@ def create_studio_app(
                     feature_cards += f"<div class=card>{html.escape(d.name)} — {state}</div>"
             pending = _pending_feature(root)
             if pending:
+                raw_confirmation = (pending / "CONFIRMATION.md").read_text(
+                    encoding="utf-8"
+                )
                 return _render(
                     request, _("title_confirm_feature"),
-                    f"<pre>{_md(pending / 'CONFIRMATION.md')}</pre>"
+                    _render_markdown(raw_confirmation)
+                    + f"<details><summary class=muted>{_('md_original')}"
+                    f"</summary><pre>{html.escape(raw_confirmation)}</pre>"
+                    "</details>"
                     f"<form method=post action=/feature/build>"
                     f"<input type=hidden name=slug value='{html.escape(pending.name)}'>"
-                    f"<button>{_('btn_build_feature')}</button></form>",
+                    f"<button class=primary>{_('btn_build_feature')}"
+                    "</button></form>",
                 )
-            shots_dir = root / "product" / "screenshots"
-            gallery = ""
-            if shots_dir.is_dir():
-                images = "".join(
-                    f"<img src='/shots/{p.name}' style='max-width:100%;"
-                    f"border:1px solid #ddd;border-radius:8px;margin:.4rem 0'>"
-                    for p in sorted(shots_dir.glob("*.png"))
-                )
-                if images:
-                    gallery = f"<h2>{_('h_screenshots')}</h2>{images}"
-            acceptance = (
-                f"<p><a href='/acceptance'>{_('link_acceptance')}</a></p>"
-                if (root / "product" / "ACCEPTANCE.md").exists()
-                else ""
+
+            # ── Verdict first. On a partly-built product the failed
+            # modules are the only thing that needs the founder; they used
+            # to sit under a screenshot gallery.
+            tasks = _task_states(root)
+            failed = _failed_tasks(root)
+            failed_status: dict[str, str] = {}
+            outcomes_path = root / "product" / "outcomes.yaml"
+            if outcomes_path.exists():
+                for o in yaml.safe_load(
+                    outcomes_path.read_text(encoding="utf-8")
+                ) or []:
+                    if o.get("status") != "built" and o.get("task_id"):
+                        failed_status[o["task_id"]] = str(
+                            o.get("status", "failed")
+                        )
+            verdict_chip = (
+                f"<span class='chip a'>{_('chip_partly')}</span>" if failed
+                else f"<span class='chip g'>{_('chip_built')}</span>"
             )
+            meta_bits = []
+            if tasks:
+                built_count = sum(1 for t in tasks if t["state"] == "built")
+                meta_bits.append(_("rep_modules_fmt").format(
+                    done=built_count, total=len(tasks)
+                ))
+            spent = _spend_month_fragment()
+            if spent:
+                meta_bits.append(spent)
+            meta = (
+                f"<span class=muted>{html.escape(' · '.join(meta_bits))}</span>"
+                if meta_bits else ""
+            )
+            vhead = f"<div class=vhead>{verdict_chip}{meta}</div>"
+
+            summary = _render_markdown(
+                report.read_text(encoding="utf-8")
+            )
+
+            # ── Working now / Did not build, side by side. The primary
+            # action — continue the build, which re-attempts every failed
+            # module with its recorded failure as context — lives in the
+            # amber column and only exists when failures do.
+            columns = ""
+            built_titles = [
+                t["title"] for t in tasks if t["state"] == "built"
+            ]
+            if built_titles or failed:
+                left = ""
+                if built_titles:
+                    left = (
+                        f"<div class=colcard><div class='collab ok'>"
+                        f"{_('rep_working')}</div>"
+                        + "".join(
+                            f"<div>{html.escape(title)}</div>"
+                            for title in built_titles
+                        )
+                        + "</div>"
+                    )
+                right = ""
+                if failed:
+                    titles = {t["id"]: t["title"] for t in tasks}
+                    failed_list = "".join(
+                        f"<div><b>{html.escape(titles.get(fid, fid))}</b> "
+                        f"<span class=warn>"
+                        f"{html.escape(failed_status.get(fid, ''))}</span></div>"
+                        for fid in failed
+                    )
+                    continue_all = (
+                        "<form method=post action=/build style='display:inline'>"
+                        f"<button class=primary>{_('btn_continue_build')}"
+                        "</button></form> "
+                    )
+                    retries = "".join(
+                        f"<form method=post action=/retry style='display:inline'>"
+                        f"<input type=hidden name=task_id value='{html.escape(fid)}'>"
+                        f"<button class=secondary>{_('btn_retry')} "
+                        f"{html.escape(fid)}</button></form> "
+                        for fid in failed
+                    )
+                    right = (
+                        f"<div class='colcard amber'><div class='collab warn'>"
+                        f"{_('failed_modules')}</div>{failed_list}"
+                        f"<p class=muted>{_('failed_modules_hint')}</p>"
+                        f"<p>{continue_all}{retries}</p></div>"
+                    )
+                columns = f"<div class=twocol>{left}{right}</div>"
+
+            # ── The action chips: only routes that really exist right now.
+            chips = [f"<a class=achip href='/live'>🚀 {_('link_live')}</a>"]
+            if (root / "product" / "ACCEPTANCE.md").exists():
+                chips.append(
+                    f"<a class=achip href='/acceptance'>{_('link_acceptance')}</a>"
+                )
             # The probes are the founder's own requirements, run against
             # what was built — the one artifact that answers "does it
             # actually work?" without asking them to judge code. It was
             # written to disk and never linked; a verification nobody can
             # see persuades nobody.
             if (root / "product" / "VERIFICATION.md").exists():
-                acceptance += (
-                    f"<p><a href='/verification'>{_('link_verification')}</a></p>"
+                chips.append(
+                    f"<a class=achip href='/verification'>"
+                    f"{_('link_verification')}</a>"
                 )
-            failed = _failed_tasks(root)
-            retry_block = ""
-            if failed:
-                # Same one-click affordance as the interrupted page: continue
-                # the build and every failed module is re-attempted with its
-                # recorded failure as context, then auto-retried. Per-module
-                # buttons stay for surgical retries.
-                continue_all = (
-                    "<form method=post action=/build style='display:inline'>"
-                    f"<button>{_('btn_continue_build')}</button></form> "
+            reviews = recent_reviews(root, limit=1)
+            if reviews:
+                review_id = html.escape(reviews[0]["review_id"])
+                chips.append(
+                    f"<a class=achip href='/review/{review_id}'>"
+                    f"{_('title_review')}</a>"
                 )
-                rows = "".join(
-                    f"<form method=post action=/retry style='display:inline'>"
-                    f"<input type=hidden name=task_id value='{html.escape(failed_id)}'>"
-                    f"<button class=secondary>{_('btn_retry')} "
-                    f"{html.escape(failed_id)}</button></form> "
-                    for failed_id in failed
+            chiprow = f"<div class=chiprow>{''.join(chips)}</div>"
+
+            shots_dir = root / "product" / "screenshots"
+            gallery = ""
+            if shots_dir.is_dir():
+                images = "".join(
+                    f"<img class=shot src='/shots/{p.name}'>"
+                    for p in sorted(shots_dir.glob("*.png"))
                 )
-                retry_block = (
-                    f"<div class=card><b class=warn>{_('failed_modules')}"
-                    f"</b><p>{_('failed_modules_hint')}</p>{continue_all}{rows}</div>"
-                )
+                if images:
+                    gallery = f"<h2>{_('h_screenshots')}</h2>{images}"
+
             no_features = f"<p class=muted>{_('first_version')}</p>"
-            # Cost AND the ceiling, in the founder's register, on the page
-            # they land on — read from the same files `avs cost` and
-            # `avs prices` own; the Studio stays a veneer.
-            cost_card = _spend_card(_req_mode(request))
+
+            # ── ONE composer, three intents. "Something wrong?" and "Is it
+            # broken?" both feed /correct — the router already classifies —
+            # and "Add a feature" is its own small build via /feature. Two
+            # real forms, so both actions are in the HTML for the wireup
+            # gate and for anyone without JavaScript; the tabs only toggle
+            # visibility, they never hide a form from no-JS users.
+            correction_log = (
+                f"<details><summary class=muted>{_('correction_log')}"
+                f"</summary><pre>"
+                f"{_md(root / 'product' / 'CORRECTION-LOG.md')}"
+                "</pre></details>"
+                if (root / "product" / "CORRECTION-LOG.md").exists()
+                else ""
+            )
+            composer = (
+                f"<h2>{_('composer_head')}</h2>"
+                f"<p class=muted>{_('correction_hint')}</p>"
+                f"{correction_log}"
+                "<div class=composerbox><div class=tabs id=fixtabs>"
+                f"<button type=button class='tab on' data-form=form-correct>"
+                f"{_('h_something_wrong')}</button>"
+                f"<button type=button class=tab data-form=form-correct>"
+                f"{_('h_broken')}</button>"
+                f"<button type=button class=tab data-form=form-feature>"
+                f"{_('h_add_feature')}</button>"
+                "</div>"
+                "<form method=post action=/correct id=form-correct>"
+                "<textarea name=complaint "
+                f"placeholder='{_('correction_placeholder')}'></textarea>"
+                "<div class=comprow><span class=muted></span>"
+                f"<button class=primary>{_('btn_correct')}</button></div></form>"
+                "<form method=post action=/feature id=form-feature>"
+                f"<div style='padding:12px 16px 0'><b>{_('h_add_feature')}</b>"
+                f"<p class=muted>{_('feature_hint')}</p></div>"
+                f"<textarea name=fdr placeholder='{_('feature_placeholder')}'>"
+                "</textarea>"
+                "<div class=comprow><span class=muted></span>"
+                f"<button class=primary>{_('btn_check_feature')}</button>"
+                "</div></form></div>"
+                "<script>\n"
+                "(function(){\n"
+                "const tabs=document.querySelectorAll('#fixtabs .tab');\n"
+                "function pick(tab){\n"
+                "  tabs.forEach(b=>b.classList.toggle('on',b===tab));\n"
+                "  ['form-correct','form-feature'].forEach(id=>{\n"
+                "    document.getElementById(id).style.display=\n"
+                "      id===tab.dataset.form?'':'none';\n"
+                "  });\n"
+                "}\n"
+                "tabs.forEach(b=>b.addEventListener('click',()=>pick(b)));\n"
+                "pick(tabs[0]);\n"
+                "})();\n"
+                "</script>"
+            )
+
+            footer = (
+                f"<div class=footbar>{_spend_lines()}"
+                "<form method=post action=/undo class=actions>"
+                f"<button class=linkish>{_('btn_undo')}</button></form></div>"
+            )
             return _render(
                 request, _("title_product"),
-                f"<pre>{_md(report)}</pre>{acceptance}"
-                f"<p><a href='/live'>🚀 {_('link_live')}</a></p>"
-                f"{cost_card}{gallery}{retry_block}"
-                f"<h2>{_('h_features')}</h2>"
-                f"{feature_cards or no_features}"
-                f"<h2>{_('h_broken')}</h2>"
-                f"<p class=muted>{_('inc_hint')}</p>"
-                "<form method=post action=/incident>"
-                "<textarea name=description style='min-height:80px' "
-                f"placeholder='{_('inc_placeholder')}'></textarea>"
-                f"<p><button>{_('btn_incident')}</button></p></form>"
-                f"<h2>{_('h_something_wrong')}</h2>"
-                f"<p class=muted>{_('correction_hint')}</p>"
-                + (
-                    f"<details><summary class=muted>{_('correction_log')}"
-                    f"</summary><pre>"
-                    f"{_md(root / 'product' / 'CORRECTION-LOG.md')}"
-                    "</pre></details>"
-                    if (root / "product" / "CORRECTION-LOG.md").exists()
-                    else ""
-                ) +
-                "<form method=post action=/correct>"
-                "<textarea name=complaint style='min-height:80px' "
-                f"placeholder='{_('correction_placeholder')}'></textarea>"
-                f"<p><button>{_('btn_correct')}</button></p></form>"
-                f"<h2>{_('h_add_feature')}</h2>"
-                f"<p class=muted>{_('feature_hint')}</p>"
-                "<form method=post action=/feature>"
-                f"<textarea name=fdr placeholder='{_('feature_placeholder')}'></textarea>"
-                f"<p><button>{_('btn_check_feature')}</button></p></form>"
-                "<form method=post action=/undo style='margin-top:1.5rem'>"
-                f"<button class=secondary>{_('btn_undo')}</button></form>",
+                vhead + f"<h1>{_('title_product')}</h1>" + summary + columns
+                + chiprow + gallery
+                + f"<h2>{_('h_features')}</h2>"
+                + (feature_cards or no_features)
+                + composer + footer,
+                rail="product", h1="",
             )
         if confirmation.exists():
             # The confirm page is where the founder decides to spend money —
-            # the ceiling belongs next to the button that starts the spend,
-            # not on a report page they see after the bill exists.
+            # the running total and the ceiling's true home sit in the same
+            # footer bar as the button that starts the spend. The
+            # confirmation markdown is rendered, not dumped: the NOT-building
+            # section gets the amber callout because this page is the
+            # cheapest place to catch a misunderstanding.
+            raw_confirmation = confirmation.read_text(encoding="utf-8")
+            footer = (
+                f"<div class=footbar>{_spend_lines()}"
+                "<div class=actions>"
+                "<form method=post action=/reset>"
+                f"<button class=secondary>{_('btn_edit_fdr')}</button></form>"
+                "<form method=post action=/build>"
+                f"<button class=primary>{_('btn_start_building')}</button>"
+                "</form></div></div>"
+            )
             return _render(
                 request, _("title_confirm_plan"),
-                f"<pre>{_md(confirmation)}</pre>"
-                + _spend_card(_req_mode(request))
-                + f"<form method=post action=/build><button>{_('btn_start_building')}"
-                "</button></form>"
-                "<form method=post action=/reset style='margin-top:.5rem'>"
-                f"<button class=secondary>{_('btn_edit_fdr')}</button></form>",
+                f"<p class=muted>{_('confirm_hint')}</p>"
+                + _render_markdown(raw_confirmation)
+                + f"<details><summary class=muted>{_('md_original')}"
+                f"</summary><pre>{html.escape(raw_confirmation)}</pre></details>"
+                + footer,
+                rail="plan",
             )
         # The describe state, and only this state, honours `entry`: the
         # build/report/confirmation pages above are the same in both doors.
@@ -810,7 +1384,7 @@ def create_studio_app(
             return _chat_page(request)
         guide = _md(root / "FDR-GUIDE.md")
         question_block = (
-            f"<div class=card><b class=warn>{_('answer_first')}"
+            f"<div class=callout><b class=warn>{_('answer_first')}"
             f"</b><pre>{_md(questions)}</pre></div>"
             if questions.exists()
             else ""
@@ -825,12 +1399,13 @@ def create_studio_app(
             f"{question_block}"
             f"<form method=post action=/fdr>"
             f"<input type=hidden name=base value='{_fdr_fingerprint(current)}'>"
-            f"<textarea name=fdr>{html.escape(current)}</textarea>"
-            f"<p><button>{_('btn_check_and_plan')}</button></p>"
+            f"<textarea name=fdr class=fdrbox>{html.escape(current)}</textarea>"
+            f"<p><button class=primary>{_('btn_check_and_plan')}</button></p>"
             f"</form>"
             f"<p><a href='/chat'>{_('chat_switch_to_chat')}</a></p>"
             f"<details><summary class=muted>{_('guide_summary')}"
             f"</summary><pre>{guide}</pre></details>",
+            rail="describe",
         )
 
     def _conflict_page(
@@ -940,8 +1515,70 @@ def create_studio_app(
         return (
             f"<p class=bad>{html.escape(headline[:300])}</p>" if headline else ""
         ) + (
-            f"<details><summary class=muted>{_('failed_detail')}</summary>"
+            f"<details><summary class=muted>{_('int_why')}</summary>"
             f"<pre>{html.escape(tail)}</pre></details>"
+        )
+
+    def _sidebar_values(turns) -> dict[str, str]:
+        """What the draft FDR already holds, per intake slot — parsed from
+        the SAME document `_compose` writes at handoff, so the sidebar can
+        never show something the file would not contain. Read-only: nothing
+        here is a second source of truth."""
+        composed = _compose(turns)
+        values: dict[str, str] = {}
+        current: str | None = None
+        headings = {
+            heads[slot].strip(): slot
+            for heads in studio_chat._HEADINGS.values()
+            for slot in studio_chat.INTAKE_SLOTS
+        }
+        for line in composed.splitlines():
+            stripped = line.strip()
+            if stripped in headings:
+                current = headings[stripped]
+                continue
+            if stripped.startswith("#"):
+                current = None
+                continue
+            if (
+                current and stripped
+                and "not answered" not in stripped and "未回答" not in stripped
+            ):
+                values.setdefault(current, stripped)
+        return values
+
+    def _chat_sidebar(turns) -> str:
+        """The document being written, beside the conversation: the six
+        intake sections with a filled/empty dot each, the escape hatch to
+        the plan, and the door to the raw file."""
+        values = _sidebar_values(turns)
+        slots = ""
+        for slot in studio_chat.INTAKE_SLOTS:
+            value = values.get(slot, "")
+            if value:
+                slots += (
+                    "<div class=slot><div class=slothead>"
+                    f"<span class=ok>●</span>"
+                    f"<span>{_(f'chat_slot_{slot}')}</span></div>"
+                    f"<div class=val>{html.escape(value)}</div></div>"
+                )
+            else:
+                slots += (
+                    "<div class='slot empty'><div class=slothead>"
+                    f"<span class=muted>○</span>"
+                    f"<span>{_(f'chat_slot_{slot}')}</span></div></div>"
+                )
+        return (
+            "<aside class=chatside>"
+            "<div class=sidehead>"
+            f"<div class=lbl style='margin:0 0 6px'>{_('chat_sidebar_head')}</div>"
+            f"<div class=muted>{_('chat_sidebar_note')}</div></div>"
+            f"<div class=sidebody>{slots}</div>"
+            "<div class=sidefoot>"
+            "<form method=post action=/chat/enough>"
+            f"<button style='width:100%'>{_('btn_chat_enough')}</button></form>"
+            f"<a class=muted href='/?form=1'>{_('chat_read_file')}</a>"
+            "</div></aside>"
         )
 
     def _chat_page(request: Request, note: str = "") -> HTMLResponse:
@@ -982,15 +1619,17 @@ def create_studio_app(
                 "<form method=post action=/fdr style='display:inline'>"
                 f"<input type=hidden name=base value='{_fdr_fingerprint(existing)}'>"
                 f"<input type=hidden name=fdr value='{html.escape(existing)}'>"
-                f"<button>{_('btn_check_and_plan')}</button></form> "
+                f"<button class=primary>{_('btn_check_and_plan')}</button></form> "
                 f"<a href='/?form=1'><button type=button class=secondary>"
                 f"{_('btn_edit_fdr')}</button></a>"
                 f"<p><a href='/chat?start=1'>{_('chat_start_over')}</a></p>",
+                rail="describe",
             )
         thread = "".join(
-            f"<p class=muted style='margin:.2rem 0'>{html.escape(turn.text)}</p>"
+            "<div class=msg-a><span class=dot7></span>"
+            f"<p>{html.escape(turn.text)}</p></div>"
             if turn.role == "assistant"
-            else f"<p style='margin:.2rem 0 1rem'><b>{html.escape(turn.text)}</b></p>"
+            else f"<div class=msg-u><p>{html.escape(turn.text)}</p></div>"
             for turn in turns
         )
         question = studio_chat.open_question(turns)
@@ -1003,8 +1642,8 @@ def create_studio_app(
                 root, "assistant", _(f"chat_q_{slot}"), slot=slot
             )
             thread += (
-                f"<p class=muted style='margin:.2rem 0'>"
-                f"{html.escape(question.text)}</p>"
+                "<div class=msg-a><span class=dot7></span>"
+                f"<p>{html.escape(question.text)}</p></div>"
             )
         answered = len(studio_chat.pairs(turns))
         total = len(studio_chat.INTAKE_SLOTS)
@@ -1013,23 +1652,31 @@ def create_studio_app(
             if question.slot in studio_chat.INTAKE_SLOTS
             else _("chat_clarify_lead")
         )
+        main = (
+            "<div class=chatmain>"
+            f"<p class=muted style='margin:0'>{_('chat_intro')}</p>"
+            + (f"<div class=callout><b class=warn>{html.escape(note)}</b></div>"
+               if note else "")
+            + thread
+            + f"<form method=post action=/chat>"
+            f"<p class=muted style='margin:0'>{counter}</p>"
+            "<div class=composer>"
+            "<textarea name=answer autofocus></textarea>"
+            "<div class=comprow>"
+            f"<span class=muted>{_('chat_composer_note')}</span>"
+            f"<span style='flex-shrink:0'>"
+            f"<button class=secondary name=skip value=1>{_('btn_chat_skip')}"
+            "</button> "
+            f"<button class=primary>{_('btn_chat_send')}</button></span>"
+            "</div></div></form>"
+            "<form method=post action=/chat/restart style='text-align:center'>"
+            f"<button class=linkish>{_('btn_chat_restart')}</button></form>"
+            "</div>"
+        )
         return _render(
             request, _("title_chat"),
-            f"<p class=muted>{_('chat_intro')}</p>"
-            + (f"<div class=card><b class=warn>{html.escape(note)}</b></div>"
-               if note else "")
-            + f"<div class=card>{thread}"
-            f"<form method=post action=/chat>"
-            f"<p class=muted>{counter}</p>"
-            f"<textarea name=answer style='min-height:110px' autofocus></textarea>"
-            f"<p><button>{_('btn_chat_send')}</button> "
-            f"<button class=secondary name=skip value=1>{_('btn_chat_skip')}"
-            "</button></p></form></div>"
-            "<form method=post action=/chat/enough style='display:inline'>"
-            f"<button class=secondary>{_('btn_chat_enough')}</button></form> "
-            "<form method=post action=/chat/restart style='display:inline'>"
-            f"<button class=secondary>{_('btn_chat_restart')}</button></form>"
-            f"<p><a href='/?form=1'>{_('chat_switch_to_form')}</a></p>",
+            f"<div class=chatwrap>{main}{_chat_sidebar(turns)}</div>",
+            rail="describe", h1="",
         )
 
     @app.get("/chat", response_class=HTMLResponse)
@@ -1124,8 +1771,9 @@ def create_studio_app(
             + f"<div class=card><pre>{html.escape((root / 'FDR.md').read_text(encoding='utf-8'))}</pre></div>"
             f"<form method=post action=/fdr>"
             f"<input type=hidden name=fdr value='{html.escape((root / 'FDR.md').read_text(encoding='utf-8'))}'>"
-            f"<button>{_('btn_check_and_plan')}</button></form>"
+            f"<button class=primary>{_('btn_check_and_plan')}</button></form>"
             f"<p><a href='/chat'>{_('btn_chat_restart')}</a></p>",
+            rail="describe",
         )
 
     @app.post("/chat/enough")
@@ -1345,7 +1993,9 @@ def create_studio_app(
         try:
             await run_in_threadpool(run_housekeeping, root)
         except Exception as exc:  # noqa: BLE001 — a page, never a 500
-            return _failure_page(request, exc)
+            # A bodyless POST is safe to re-issue, so the retry button
+            # belongs on the page that names the failure.
+            return _failure_page(request, exc, retry_action="/live/sweep")
         return RedirectResponse("/live", status_code=303)
 
     @app.post("/review/{review_id}/evidence")

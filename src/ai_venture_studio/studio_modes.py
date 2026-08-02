@@ -52,19 +52,18 @@ class StudioModeError(ValueError):
 
 
 def mode_strip(current: str, t_: Callable[[str], str]) -> str:
-    """The always-visible mode switcher. Two redundant cues for the active
-    mode (bold + no link) so the current state is never ambiguous, and the
-    other modes stay discoverable from every page."""
+    """The always-visible mode switcher, as a segmented control in the
+    header. Two redundant cues for the active segment (weight + beige fill,
+    and no link) so the current state is never ambiguous, and the other
+    modes stay discoverable from every page. Same ?mode= URLs, same cookie."""
     parts = []
     for mode in MODES:
         label = t_(f"mode_{mode}")
         if mode == current:
-            parts.append(f"<b>{label}</b>")
+            parts.append(f"<span class='seg on'>{label}</span>")
         else:
-            parts.append(f"<a href='/?mode={mode}'>{label}</a>")
-    return (
-        f"<p class=muted>{t_('mode_strip_label')} " + " · ".join(parts) + "</p>"
-    )
+            parts.append(f"<a class=seg href='/?mode={mode}'>{label}</a>")
+    return f"<nav class=modeswitch>{''.join(parts)}</nav>"
 
 
 def resolve_mode(root: Path, explicit: str | None = None) -> str:
@@ -166,7 +165,10 @@ def review_timeline_body(root: Path, review_id: str,
 
 
 def engineer_panel(root: Path, t_: Callable[[str], str],
-                   tasks: list[dict]) -> str:
+                   tasks: list[dict], spend_detail: str = "") -> str:
+    """Everything an engineer wants, reordered summary-first. Every datum
+    the pre-redesign panel showed is still here; nothing founder-facing is
+    removed (add-only, invariant 14.21 read UI-side)."""
     profile = ""
     project = root / ".mas" / "project.yaml"
     if project.exists():
@@ -175,25 +177,53 @@ def engineer_panel(root: Path, t_: Callable[[str], str],
             profile = str(data.get("profile", ""))
         except yaml.YAMLError:
             profile = ""
+
+    # Top summary strip: verdict chip + counts + a jump to the founder page.
+    built = sum(1 for task in tasks if task["state"] == "built")
+    failed = [t for t in tasks if t["state"] not in ("built", "pending")]
+    chip = ""
     if tasks:
-        rows = "".join(
-            f"<tr><td><code>{html.escape(task['id'])}</code></td>"
-            f"<td>{html.escape(task['state'])}</td>"
-            f"<td>{html.escape(task['title'])}</td></tr>"
-            for task in tasks
-        )
-        table = f"<table>{rows}</table>"
-    else:
-        table = f"<p class=muted>{t_('eng_no_plan')}</p>"
-    profile_line = (
-        f"<p class=muted>{t_('eng_profile')}: <code>{html.escape(profile)}"
-        "</code></p>"
+        if failed:
+            chip = f"<span class='chip a'>{t_('chip_partly')}</span>"
+        elif built == len(tasks):
+            chip = f"<span class='chip g'>{t_('chip_built')}</span>"
+    counts = t_("rep_modules_fmt").format(done=built, total=len(tasks))
+    profile_frag = (
+        f" · {t_('eng_profile')}: <code>{html.escape(profile)}</code>"
         if profile else ""
     )
-    hints = (
-        f"<details><summary class=muted>{t_('eng_cli')}</summary>"
-        f"<pre>{html.escape(t_('eng_cli_body'))}</pre></details>"
+    strip = (
+        "<div class=estrip><span>"
+        f"{chip} <span>{counts}{profile_frag}</span></span>"
+        f"<a href='#founder'>{t_('eng_founder_link')}</a></div>"
     )
+
+    if tasks:
+        rows = ""
+        for task in tasks:
+            is_failed = task["state"] not in ("built", "pending")
+            retry = (
+                "<form method=post action=/retry style='display:inline'>"
+                f"<input type=hidden name=task_id value='{html.escape(task['id'])}'>"
+                f"<button>{t_('btn_retry')}</button></form>"
+                if is_failed else ""
+            )
+            state_css = " class=warn" if is_failed else ""
+            rows += (
+                f"<tr{' class=arow' if is_failed else ''}>"
+                f"<td><code>{html.escape(task['id'])}</code></td>"
+                f"<td{state_css}>{html.escape(task['state'])}</td>"
+                f"<td>{html.escape(task['title'])}</td>"
+                f"<td>{retry}</td></tr>"
+            )
+        table = (
+            f"<table><tr><th>{t_('eng_col_id')}</th>"
+            f"<th>{t_('eng_col_state')}</th>"
+            f"<th>{t_('eng_col_title')}</th><th></th></tr>{rows}</table>"
+        )
+    else:
+        table = f"<p class=muted>{t_('eng_no_plan')}</p>"
+
     reviews = recent_reviews(root)
     if reviews:
         review_rows = "".join(
@@ -203,12 +233,13 @@ def engineer_panel(root: Path, t_: Callable[[str], str],
             for r in reviews
         )
         reviews_block = (
-            f"<p><b>{t_('eng_reviews')}</b></p><table>{review_rows}</table>"
+            f"<div><div class=lbl>{t_('eng_reviews')}</div>"
+            f"<table>{review_rows}</table></div>"
         )
     else:
         reviews_block = (
-            f"<p><b>{t_('eng_reviews')}</b> "
-            f"<span class=muted>{t_('eng_reviews_none')}</span></p>"
+            f"<div><div class=lbl>{t_('eng_reviews')}</div>"
+            f"<p class=muted>{t_('eng_reviews_none')}</p></div>"
         )
     voters = voter_health(root)
     if voters:
@@ -219,16 +250,23 @@ def engineer_panel(root: Path, t_: Callable[[str], str],
             for v in voters
         )
         voters_block = (
-            f"<p><b>{t_('eng_voter_health')}</b> "
-            f"<span class=muted>{t_('eng_voter_cols')}</span></p>"
-            f"<table>{voter_rows}</table>"
+            f"<div><div class=lbl>{t_('eng_voter_health')}</div>"
+            f"<p class=muted>{t_('eng_voter_cols')}</p>"
+            f"<table>{voter_rows}</table></div>"
         )
     else:
-        voters_block = ""
+        voters_block = "<div></div>"
+    hints = (
+        f"<div class=cliblock><div class=lbl>{t_('eng_cli')}</div>"
+        f"<pre>{html.escape(t_('eng_cli_body'))}</pre></div>"
+    )
     return (
-        f"<div class=card><b>{t_('h_engineer')}</b>"
+        f"<section class=engpanel>{strip}"
+        f"<h1>{t_('h_engineer')}</h1>"
         f"<p class=muted>{t_('mode_note_engineer')}</p>"
-        f"{profile_line}{table}{reviews_block}{voters_block}{hints}</div>"
+        f"{table}"
+        f"<div class=twocol>{reviews_block}{voters_block}</div>"
+        f"{spend_detail}{hints}</section>"
     )
 
 
@@ -238,19 +276,43 @@ def enterprise_panel(root: Path, t_: Callable[[str], str]) -> str:
     automation arming state worth seeing.
 
     Order follows the enterprise-dashboard convention (posture verdict →
-    trust/procurement facts → what-we-found → drill-down): the one-line
-    answer first, the security reviewer's questions second, the evidence
-    below."""
+    readiness + trust/procurement facts → the evidence as drill-downs): the
+    one-line answer first, the security reviewer's questions second, the
+    evidence below — a card that needs attention arrives already open.
+    Every pre-redesign card is still present; only the order and the
+    default-open state changed (add-only, never remove)."""
+    posture = governance_posture(root)
+    attention = set(posture["attention"])
+
+    def _evidence(label: str, spokes: tuple[str, ...],
+                  card_html: str) -> str:
+        opened = " open" if attention.intersection(spokes) else ""
+        return (
+            f"<details class=evd{opened}><summary>{label}</summary>"
+            f"{card_html}</details>"
+        )
+
+    evidence = (
+        f"<div class=lbl>{t_('gov_evidence')}</div>"
+        + _evidence(t_("code_head"), (), _codebase_html(root, t_))
+        + _evidence(t_("h_governance"), ("edition", "attestation"),
+                    _edition_card(root, t_))
+        + _evidence(t_("gov_deploys"), (), _deploy_reviews_html(root, t_))
+        + _evidence(t_("gov_dwell"), ("gate dwell",), _dwell_html(root, t_))
+        + _evidence(t_("gov_stages"), ("substrate",),
+                    _stage_grid_html(root, t_))
+        + _evidence(t_("gov_automation"), ("automation policies",),
+                    _automation_html(root, t_))
+    )
+    footer = (
+        f"<div class=panelfoot>{t_('gov_deploys_note')}</div>"
+    )
     return (
-        _preflight_html(root, t_)
-        + _posture_html(root, t_)
-        + _trust_html(root, t_)
-        + _codebase_html(root, t_)
-        + _edition_card(root, t_)
-        + _stage_grid_html(root, t_)
-        + _deploy_reviews_html(root, t_)
-        + _dwell_html(root, t_)
-        + _automation_html(root, t_)
+        "<section class=govpanel>"
+        + _posture_html(root, t_, posture)
+        + f"<div class=twocol>{_preflight_html(root, t_)}"
+        + f"{_trust_html(root, t_)}</div>"
+        + evidence + footer + "</section>"
     )
 
 
@@ -287,10 +349,9 @@ def _deploy_reviews_html(root: Path, t_: Callable[[str], str]) -> str:
             f"<td>{html.escape(verdict)}</td>"
             f"<td class=muted>{html.escape(branch)}</td></tr>"
         )
-    return (
-        f"<div class=card>{head}<table>{rows}</table>"
-        f"<p class=muted>{t_('gov_deploys_note')}</p></div>"
-    )
+    # The recommendations-never-executions note moved to the panel footer,
+    # where it is visible without opening this card.
+    return f"<div class=card>{head}<table>{rows}</table></div>"
 
 
 def build_preflight(root: Path) -> list[dict]:
@@ -488,29 +549,30 @@ def governance_posture(root: Path) -> dict[str, list[str]]:
     return posture
 
 
-def _posture_html(root: Path, t_: Callable[[str], str]) -> str:
-    posture = governance_posture(root)
-    parts = []
-    if posture["attention"]:
-        parts.append(
-            f"<span class=bad>{t_('gov_posture_attention')} "
-            f"{html.escape(', '.join(posture['attention']))}</span>"
+def _posture_html(root: Path, t_: Callable[[str], str],
+                  posture: dict[str, list[str]] | None = None) -> str:
+    """The one-line answer, first, as a three-cell strip. Unconfigured is
+    grey — its own dot color, never green (not enabled is not healthy)."""
+    posture = posture or governance_posture(root)
+    cells = ""
+    for state, dot, css, label_key in (
+        ("attention", "red", "bad", "gov_posture_attention"),
+        ("measured", "green", "ok", "gov_posture_measured"),
+        ("unconfigured", "grey", "muted", "gov_posture_unmeasured"),
+    ):
+        items = posture[state]
+        cells += (
+            "<div class=pcell>"
+            f"<div class=stateline><span class='sdot {dot}'></span>"
+            f"<span class='slabel {css}'>{t_(label_key)} "
+            f"{len(items)}</span></div>"
+            f"<div>{html.escape(', '.join(items)) or '—'}</div>"
+            "</div>"
         )
-    if posture["measured"]:
-        parts.append(
-            f"<span class=ok>{t_('gov_posture_measured')} "
-            f"{html.escape(', '.join(posture['measured']))}</span>"
-        )
-    if posture["unconfigured"]:
-        parts.append(
-            f"<span class=muted>{t_('gov_posture_unmeasured')} "
-            f"{html.escape(', '.join(posture['unconfigured']))}</span>"
-        )
-    line = " · ".join(parts)
     return (
-        f"<div class=card><b>{t_('gov_posture')}</b>"
-        f"<p>{line}</p>"
-        f"<p class=muted>{t_('gov_posture_note')}</p></div>"
+        f"<h1>{t_('gov_posture')}</h1>"
+        f"<div class=posture>{cells}</div>"
+        f"<p class=muted>{t_('gov_posture_note')}</p>"
     )
 
 
