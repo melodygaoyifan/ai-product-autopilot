@@ -83,6 +83,15 @@ them ours.
   compile and bind its port. Start the IDE first (`open -a wechatwebdevtools`)
   and wait for `Default/.ide` to appear under the IDE's per-account support
   directory.
+- **The IDE degrades over a long automation session.** After many
+  open/relaunch cycles, `App.captureScreenshot` starts timing out and app
+  calls begin failing with bare `Uncaught [object Object]` — on a project
+  that passes cleanly after a full quit and relaunch. If a run that used to
+  be green starts failing in the driver rather than in the assertions, quit
+  the IDE completely (`pkill -f wechatwebdevtools`), confirm no `94xx` port
+  is still held, and cold-start before concluding the product broke.
+  Corollary for anything you write on this protocol: **treat screenshots as
+  best-effort**, never as a step that can abort the run.
 - **Pin `libVersion`.** `"latest"` in `project.config.json` makes
   `Tool.getInfo.SDKVersion` come back undefined; pin a base library that is
   actually on disk (e.g. `3.17.0`).
