@@ -1031,19 +1031,25 @@ def preview(
             "Open this directory in WeChat DevTools (import project) to preview."
         )
         return
-    from ai_venture_studio.upstream.provisioning import preview_env
+    from ai_venture_studio.upstream.provisioning import (
+        PREVIEW_ENTRIES,
+        preview_entry,
+        preview_env,
+    )
 
-    for entry in ("app/main.py", "main.py", "app.py"):
-        candidate = root / entry
-        if candidate.exists():
-            console.print(f"starting {entry} — http://127.0.0.1:{port}  (Ctrl-C stops)")
-            subprocess.run(
-                [sys.executable, str(candidate)],
-                cwd=root,
-                env={**__import__("os").environ, "PORT": str(port), **preview_env(root)},
-            )
-            return
-    console.print("[yellow]no runnable entry found (looked for app/main.py, main.py, app.py)[/yellow]")
+    entry = preview_entry(root)
+    if entry:
+        console.print(f"starting {entry} — http://127.0.0.1:{port}  (Ctrl-C stops)")
+        subprocess.run(
+            [sys.executable, str(root / entry)],
+            cwd=root,
+            env={**__import__("os").environ, "PORT": str(port), **preview_env(root)},
+        )
+        return
+    console.print(
+        "[yellow]no runnable entry found (looked for "
+        f"{', '.join(PREVIEW_ENTRIES)})[/yellow]"
+    )
     raise typer.Exit(code=1)
 
 

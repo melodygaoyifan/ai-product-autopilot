@@ -864,14 +864,19 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Use mine (overwrites)",
     },
     # ── The conversational intake (studio_chat) ──────────────────────────
+    # v0.69: the page opens with one open prompt, not with question 1 of 6.
+    # The old title ("One question at a time") described the loop that came
+    # after; it read as a form with extra steps, which is what it was.
     "title_chat": {
-        "zh": "一句一句说 / One question at a time",
-        "en": "One question at a time",
+        "zh": "说说你想做什么 / Tell me what you want to build",
+        "en": "Tell me what you want to build",
     },
     "chat_intro": {
-        "zh": "我问一句，你答一句，需求文档我来写。随时可以停下来直接生成计划。",
-        "en": "I ask one question, you answer it, and I write the requirements "
-              "document. You can stop and go straight to the plan at any point.",
+        "zh": "用你自己的话写一段就行。我读完会先把取到的内容摆出来给你看，"
+              "然后只问缺的那几项。随时可以停下来直接生成计划。",
+        "en": "Write one paragraph in your own words. I read it, show you "
+              "what I took from it, and then ask only about what is still "
+              "missing. You can stop and go straight to the plan at any point.",
     },
     "chat_have_fdr": {
         "zh": "你已经写过需求文档了。",
@@ -1106,6 +1111,376 @@ STRINGS: dict[str, dict[str, str]] = {
     "gov_evidence": {
         "zh": "证据，想看就看 / The evidence, when you want it",
         "en": "The evidence, when you want it",
+    },
+    # ── The key gate (v0.69) ─────────────────────────────────────────────
+    # The tool is free, the model is not. Before this, that fact reached a
+    # founder as a stack trace on their first send.
+    "title_key_gate": {
+        "zh": "先连上模型 / Connect the model first",
+        "en": "Connect the model first",
+    },
+    "key_lead": {
+        "zh": "这个工具是免费的，模型不是。搭建时的每一次模型调用都记在你自己的"
+              "服务商账户上 — 我们不转售、不代付，也看不到你的账单。"
+              " / The tool is free; the model is not.",
+        "en": "This tool is free. The model is not. Every call a build makes "
+              "is billed to your own provider account — we do not resell it, "
+              "we do not pay for it, and we never see your bill.",
+    },
+    "key_paste_head": {
+        "zh": "把你的密钥贴在这里 / Paste your key here",
+        "en": "Paste your key here",
+    },
+    "key_paste_hint_fmt": {
+        "zh": "读取自 {name}。/ Read from {name}.",
+        "en": "This is the {name} the provider adapter reads.",
+    },
+    "btn_key_save": {
+        "zh": "用这个密钥继续 / Use this key",
+        "en": "Use this key",
+    },
+    "key_process_only": {
+        "zh": "这个密钥只在当前进程里使用，绝不会写到硬盘上。关掉 Studio 就没了；"
+              "要长期保存，请写进你自己的环境变量。"
+              " / Used by this process only, never written to disk.",
+        "en": "This key is used by this process only and is never written to "
+              "disk. It is gone when you close the Studio; to keep it, set it "
+              "in your own environment instead.",
+    },
+    "key_doors_head": {
+        "zh": "不需要在这里输入密钥的通道 / Doors that need no key typed here",
+        "en": "Doors that need no key typed here",
+    },
+    "key_doors_note": {
+        "zh": "如果你的公司已经有下面任何一种通道，就用它启动 Studio，"
+              "这一页不会再出现。/ Start the Studio with any of these instead.",
+        "en": "If your company already has one of these, start the Studio "
+              "with it and this page never appears again.",
+    },
+    "key_cost_head": {"zh": "大概要花多少 / What it costs", "en": "What it costs"},
+    "key_cost_no_figure": {
+        "zh": "钱花在搭建上：计划、写代码、评审，每一步都是模型调用。"
+              "这个工作区还没有花过钱，所以这里没有数字可给 — 真实数字在你的"
+              "服务商后台。/ No figure here: nothing has been spent yet.",
+        "en": "Building is where the money goes — the plan, the code, the "
+              "review are all model calls. This workspace has not spent "
+              "anything yet, so there is no figure to show here; the real "
+              "number lives in your provider's dashboard.",
+    },
+    "key_cost_spent_fmt": {
+        "zh": "这个工作区本月已经花了 {amount}（按记录的用量估算）。"
+              " / {amount} spent this month.",
+        "en": "This workspace has spent {amount} this month, by its own "
+              "recorded usage.",
+    },
+    "key_strip_set": {
+        "zh": "密钥已就绪（仅本进程）。/ A key is set for this process.",
+        "en": "A key is set for this process — nothing was written to disk.",
+    },
+    "key_fail_head": {
+        "zh": "如果是密钥的问题，在这里换一个 / Paste a working key here",
+        "en": "If the key is the problem, paste a working one here",
+    },
+    "key_demo_head": {
+        "zh": "先看一次真实的运行记录 / See a real run first",
+        "en": "See a real run first",
+    },
+    "key_demo_note": {
+        "zh": "不需要密钥：这是这个仓库自己代码的一次真实评审记录（已脱敏），"
+              "每一步都是流水线当时写下的。/ No key needed.",
+        "en": "No key needed. This is a real, redacted review of this "
+              "repository's own code — every step below was written by the "
+              "pipeline while it ran.",
+    },
+    "link_demo": {
+        "zh": "▶ 看这次记录 / Open the recorded run",
+        "en": "▶ Open the recorded run",
+    },
+    "title_demo": {
+        "zh": "记录回放 / A recorded run",
+        "en": "A recorded run",
+    },
+    "demo_note": {
+        "zh": "这是随包附带的演示评审，等同于命令行的 avs replay --demo。"
+              " / The vendored demo review — the same as avs replay --demo.",
+        "en": "The vendored demo review — the same audit trail "
+              "avs replay --demo prints, rendered here.",
+    },
+    "title_no_demo": {
+        "zh": "没有演示记录 / No recorded run",
+        "en": "No recorded run",
+    },
+    "title_no_demo_missing": {
+        "zh": "这个安装里没有附带 {name} 演示评审。"
+              " / This installation ships no {name} review.",
+        "en": "This installation ships no {name} review bundle.",
+    },
+    "key_refused": {
+        "zh": "没有收到可用的密钥 — 什么都没有改动。"
+              " / No usable key was given; nothing changed.",
+        "en": "That was not a usable key — nothing was changed.",
+    },
+    # ── Open-prompt-first intake (v0.69) ─────────────────────────────────
+    # One open prompt, one extraction pass, then questions only about the
+    # gaps. Asking the six in a fixed order was a form wearing a chat's
+    # clothes.
+    "chat_q_open": {
+        "zh": "说说你想做什么 — 用你自己的话写一段就够了，不用分点。"
+              " / Tell me what you want to build.",
+        "en": "Tell me what you want to build — one paragraph in your own "
+              "words is plenty.",
+    },
+    "chat_open_lead": {
+        "zh": "用你自己的话 / In your own words",
+        "en": "In your own words",
+    },
+    "chat_reading": {
+        "zh": "正在读你写的东西… / Reading what you wrote…",
+        "en": "Reading what you wrote…",
+    },
+    "chat_extract_head": {
+        "zh": "从你写的里面取到的 / Taken from what you wrote",
+        "en": "Taken from what you wrote",
+    },
+    "chat_chip_said": {"zh": "你说的 / SAID", "en": "SAID"},
+    "chat_chip_guess": {"zh": "猜的 / GUESS", "en": "GUESS"},
+    "chat_guess_head": {
+        "zh": "这一条是我猜的，对吗？/ This one is a guess — is it right?",
+        "en": "This one is a guess — is it right?",
+    },
+    "chat_guess_note": {
+        "zh": "你确认之前，它不会写进需求文件。文件里只放你自己说过的话。"
+              " / Not written down until you confirm it.",
+        "en": "It is not written into the requirements until you confirm it. "
+              "The document holds your words, not ours.",
+    },
+    "chat_guess_fix": {
+        "zh": "不对的话，用你自己的话写：/ Not right? Say it in your own words:",
+        "en": "Not right? Say it in your own words:",
+    },
+    "btn_guess_yes": {
+        "zh": "对，就是这样 / Yes, that is right",
+        "en": "Yes, that is right",
+    },
+    "btn_guess_mine": {
+        "zh": "用我写的 / Use my words instead",
+        "en": "Use my words instead",
+    },
+    # ── Try it, beside its own acceptance list (v0.69) ───────────────────
+    "title_try": {"zh": "试一试 / Try it", "en": "Try it"},
+    "link_try": {"zh": "▶ 试一试 / Try it", "en": "Try it"},
+    "try_lead": {
+        "zh": "左边是怎么把产品跑起来，右边是当初说好的验收条件。一条一条看，"
+              "对就打勾，不对就说哪里不对。/ Run it on the left, check the "
+              "criteria on the right.",
+        "en": "How to run it on the left; the criteria it was supposed to "
+              "meet on the right. Go down the list: mark what is fine, and "
+              "say what is wrong.",
+    },
+    "try_left_head": {"zh": "产品本体 / The product", "en": "The product"},
+    "try_right_head": {
+        "zh": "验收条件 / What it was supposed to do",
+        "en": "What it was supposed to do",
+    },
+    "try_run_hint": {
+        "zh": "在终端运行这一条，产品就跑起来了 — Studio 不会替你启动它，"
+              "因为一个由网页启动、没人管生命周期的服务进程比手动一条命令更糟。"
+              " / Run this in a terminal:",
+        "en": "Run this in a terminal and the product starts. The Studio "
+              "does not start it for you: a server spawned by a page load "
+              "is a process nobody owns, on a port nobody chose.",
+    },
+    "try_run_entry_fmt": {
+        "zh": "入口文件：{entry} / entry point: {entry}",
+        "en": "Entry point: {entry}",
+    },
+    "try_run_miniprogram": {
+        "zh": "小程序预览：用微信开发者工具打开这个目录（工具 → 导入项目）。"
+              " / Open this folder in WeChat DevTools.",
+        "en": "Open this folder in WeChat DevTools (import project) to see "
+              "it running.",
+    },
+    "try_run_none": {
+        "zh": "没有找到可以直接运行的入口文件（找过 app/main.py、main.py、"
+              "app.py）。/ No runnable entry point was found.",
+        "en": "No runnable entry point was found — app/main.py, main.py and "
+              "app.py are the three this looks for.",
+    },
+    "try_no_shots": {
+        "zh": "这次搭建没有留下截图。/ This build left no screenshots.",
+        "en": "This build left no screenshots.",
+    },
+    "try_not_a_verdict": {
+        "zh": "打勾只是你自己的记录，不是对产品的判决 — 在你按下修正按钮之前，"
+              "产品不会有任何变化。/ Ticking changes nothing on its own.",
+        "en": "A tick is your own note, not a verdict about the product. "
+              "Nothing changes until you press the fix button.",
+    },
+    "try_ticks_fmt": {
+        "zh": "你已经看过 {done} / {total} 条。/ {done} of {total} checked.",
+        "en": "{done} of {total} checked by you.",
+    },
+    "try_no_rows": {
+        "zh": "还没有验收条件可看 — 先搭建，验收清单会在那之后生成。"
+              " / No criteria yet.",
+        "en": "No criteria yet — the acceptance walkthrough is written "
+              "after a build.",
+    },
+    "try_chip_fine": {"zh": "没问题 / FINE", "en": "FINE"},
+    "try_chip_open": {"zh": "待看 / TO CHECK", "en": "TO CHECK"},
+    "try_mark_auto": {
+        "zh": "自动检查的结果 / what the automatic check found",
+        "en": "what the automatic check found",
+    },
+    "btn_try_fine": {"zh": "✓ 没问题 / Fine", "en": "✓ Fine"},
+    "btn_try_untick": {"zh": "取消这个勾 / undo this tick", "en": "undo this tick"},
+    "btn_try_wrong": {"zh": "✗ 这里不对 / Wrong", "en": "✗ Wrong"},
+    "btn_try_send_wrong": {
+        "zh": "把这条报上去 / Send this one",
+        "en": "Send this one",
+    },
+    "try_wrong_placeholder": {
+        "zh": "这一条哪里不对？用你自己的话说。",
+        "en": "What is wrong with this one? Say it in your own words.",
+    },
+    "title_no_row": {
+        "zh": "找不到这一条 / Row not found",
+        "en": "Row not found",
+    },
+    # ── Classification preview (v0.69) ───────────────────────────────────
+    # The correction used to run on submit, so a founder learned that their
+    # bug report had been read as a scope change — their own SCR, approved
+    # in their name — afterwards, from a log line.
+    "title_classify": {
+        "zh": "先看清楚要做什么 / What this will do",
+        "en": "What this will do",
+    },
+    "cls_fix_chip": {"zh": "小修 / SMALL FIX", "en": "SMALL FIX"},
+    "cls_scope_chip": {
+        "zh": "新需求 / NEW REQUIREMENT",
+        "en": "NEW REQUIREMENT",
+    },
+    "cls_fix_head": {
+        "zh": "这是一个小修，直接改好 / A small fix — repaired directly",
+        "en": "A small fix — repaired directly",
+    },
+    "cls_scope_head": {
+        "zh": "这是一个新需求，要单独做一次 / A new requirement — its own "
+              "small build",
+        "en": "A new requirement — its own small build",
+    },
+    "cls_fix_what": {
+        "zh": "产品没有做到它自己承诺的事。会直接去改，改完跑测试；测试过不了"
+              "就撤销，不会留下半截。/ The product is not doing what it "
+              "already promised.",
+        "en": "The product is not doing what it already promised, so it is "
+              "repaired in place and the tests must pass afterwards. If they "
+              "do not, the change is rolled back rather than left half done.",
+    },
+    "cls_scope_what": {
+        "zh": "你要的是当初没答应过的东西 — 这会改需求本身，并按正式变更记录"
+              "下来（你说的话就是授权，会原样存档）。/ This changes the "
+              "requirement itself and is recorded as a formal change.",
+        "en": "You are asking for something the criteria never promised. "
+              "That changes the requirement itself: it is recorded as a "
+              "formal change with your own words as the authorization, and "
+              "the feature is rebuilt from the new requirement.",
+    },
+    "cls_your_words": {"zh": "你说的 / Your words", "en": "Your words"},
+    "cls_criterion": {
+        "zh": "对应的验收条件 / The criterion this came from",
+        "en": "The criterion this came from",
+    },
+    "cls_feature": {"zh": "对应的功能 / The feature", "en": "The feature"},
+    "cls_instruction": {
+        "zh": "会交给实现者的一句话 / What the implementer will be told",
+        "en": "What the implementer will be told",
+    },
+    "cls_reword": {
+        "zh": "说得不对？改一改再看一次 / Not right? Reword it",
+        "en": "Not what you meant? Reword it and see again",
+    },
+    "cls_nothing_yet": {
+        "zh": "到这里为止还什么都没有改。/ Nothing has changed yet.",
+        "en": "Nothing has been changed yet — this page is the decision, "
+              "not the work.",
+    },
+    "cls_cannot_route": {
+        "zh": "没法把这条意见对应到某个功能上 / This could not be matched to "
+              "a feature",
+        "en": "This could not be matched to a feature",
+    },
+    "btn_cls_confirm_fix": {
+        "zh": "对，去修 / Yes, fix it",
+        "en": "Yes, fix it",
+    },
+    "btn_cls_confirm_scope": {
+        "zh": "对，按新需求做 / Yes, build it as a new requirement",
+        "en": "Yes, build it as a new requirement",
+    },
+    "btn_cls_reword": {
+        "zh": "换个说法再看 / Reword and check again",
+        "en": "Reword and check again",
+    },
+    "title_no_spec": {"zh": "找不到该功能 / Feature not found",
+                      "en": "Feature not found"},
+    "title_no_spec_missing": {
+        "zh": "这个工作区里没有叫 {name} 的功能。"
+              " / This workspace has no feature called {name}.",
+        "en": "This workspace has no feature called {name}.",
+    },
+    # ── The change list, as the undo surface (v0.69) ─────────────────────
+    "h_changes": {
+        "zh": "改动记录，最新在上 / Changes, newest first",
+        "en": "Changes, newest first",
+    },
+    "changes_linear_note": {
+        "zh": "版本是一条直线，所以只能回到某一次改动之前 — 那之后的改动会"
+              "一起没有。每次回退都会先存一个 rescue 分支，所以回退本身也是可以"
+              "撤销的。/ A straight line: going back past one change undoes "
+              "the later ones too.",
+        "en": "The history is a straight line, so you can go back to a point "
+              "in it — you cannot lift one change out of the middle and "
+              "leave the rest. Every button below says how much it takes "
+              "with it, and a rescue branch is saved first, so going back is "
+              "itself reversible.",
+    },
+    "btn_undo_to": {
+        "zh": "↩ 回到这次改动之前 / Go back to just before this change",
+        "en": "↩ Go back to just before this change",
+    },
+    "undo_to_note_fmt": {
+        "zh": "这样会连它后面的 {later} 次改动一起撤销（一共 {commits} 个提交）。"
+              " / also undoes the {later} later change(s).",
+        "en": "This also undoes the {later} later change(s) — {commits} "
+              "commits in total.",
+    },
+    "undo_to_note_last_fmt": {
+        "zh": "它后面没有别的改动记录了；会撤销 {commits} 个提交（这次改动，"
+              "以及之后提交的任何东西）。/ undoes {commits} commit(s).",
+        "en": "Nothing later has been recorded as a change; this undoes "
+              "{commits} commit(s) — this change and anything committed "
+              "after it.",
+    },
+    "undo_to_first": {
+        "zh": "这是第一个版本，前面没有可以回到的地方。"
+              " / The first version — nothing earlier to return to.",
+        "en": "The first version — there is nothing earlier to return to.",
+    },
+    "title_no_checkpoint": {
+        "zh": "找不到这个版本 / No such checkpoint",
+        "en": "No such checkpoint",
+    },
+    "title_no_checkpoint_missing": {
+        "zh": "这个工作区里没有叫 {name} 的版本记录。"
+              " / This workspace has no checkpoint called {name}.",
+        "en": "This workspace has no checkpoint called {name}.",
+    },
+    "title_no_row_missing": {
+        "zh": "验收清单里已经没有编号 {name} 的这一条了 — 可能是重新生成过。"
+              " / No row {name} is in the current list.",
+        "en": "No row called {name} is in the current list — the acceptance "
+              "walkthrough may have been rewritten since this page loaded.",
     },
 }
 

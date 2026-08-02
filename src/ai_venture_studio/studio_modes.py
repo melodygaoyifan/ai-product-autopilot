@@ -140,12 +140,20 @@ def voter_health(root: Path) -> list[dict]:
 
 
 def review_timeline_body(root: Path, review_id: str,
-                         t_: Callable[[str], str]) -> str:
+                         t_: Callable[[str], str], *,
+                         reviews_dir: Path | None = None,
+                         evidence: bool = True) -> str:
     """One review's mirror as a step table — `avs replay` in the browser,
-    reading the same NN-<node>.yaml files."""
+    reading the same NN-<node>.yaml files.
+
+    `reviews_dir` overrides where the mirror is read from, which is how the
+    vendored demo bundle (`avs replay --demo`) renders here with no
+    workspace and no key. `evidence` drops the export form for a review
+    this workspace did not run — there is nothing of its own to attest.
+    """
     from ai_venture_studio.replay import load_replay, summarize_step
 
-    replay = load_replay(root / ".mas" / "reviews", review_id)
+    replay = load_replay(reviews_dir or (root / ".mas" / "reviews"), review_id)
     rows = "".join(
         f"<tr><td>{step.step}</td><td><code>{html.escape(step.node)}</code></td>"
         f"<td>{html.escape(summarize_step(step))}</td></tr>"
@@ -153,13 +161,17 @@ def review_timeline_body(root: Path, review_id: str,
     )
     verdict = replay.verdict or "—"
     duration = f"{replay.duration_s:.1f}s" if replay.duration_s else "—"
+    export = (
+        f"<form method=post action='/review/{html.escape(review_id)}/evidence'>"
+        f"<button class=secondary>{t_('btn_evidence')}</button></form>"
+        f"<p class=muted>{t_('evidence_note')}</p>"
+        if evidence else ""
+    )
     return (
         f"<p>{t_('review_verdict')}: <b>{html.escape(str(verdict))}</b> · "
         f"{t_('review_duration')}: {html.escape(duration)}</p>"
         f"<table>{rows}</table>"
-        f"<form method=post action='/review/{html.escape(review_id)}/evidence'>"
-        f"<button class=secondary>{t_('btn_evidence')}</button></form>"
-        f"<p class=muted>{t_('evidence_note')}</p>"
+        f"{export}"
         f"<p><a href='/'>{t_('link_back')}</a></p>"
     )
 

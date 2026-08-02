@@ -178,6 +178,22 @@ def auto_provision_cloud(repo_dir: str | Path, profile: str) -> dict:
             "finish the connection string password in .mas/secrets.yaml"}
 
 
+#: Where a built product's entry point is looked for, in order. One list,
+#: because "how do I run this thing" was being answered from three separate
+#: inline copies (`avs preview`, the Take-it-live card, the Try-it page) and
+#: a product whose entry moved would have been described correctly by
+#: whichever of them was edited last.
+PREVIEW_ENTRIES: tuple[str, ...] = ("app/main.py", "main.py", "app.py")
+
+
+def preview_entry(repo_dir: str | Path) -> str:
+    """The product's entry point, or "" when it has none."""
+    root = Path(repo_dir)
+    return next(
+        (entry for entry in PREVIEW_ENTRIES if (root / entry).exists()), ""
+    )
+
+
 def preview_env(repo_dir: str | Path) -> dict[str, str]:
     """Env injected when running the product: local paths + any secrets."""
     root = Path(repo_dir).resolve()

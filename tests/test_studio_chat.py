@@ -129,9 +129,14 @@ def test_an_unknown_role_is_refused(workspace):
 
 # ── the flow, through the real app ───────────────────────────────────────
 
-def test_the_conversation_asks_one_question_at_a_time(client):
+def test_the_conversation_opens_with_one_open_prompt(client):
+    """v0.69: the first thing asked is not question 1 of 6 — it is "tell me
+    what you want to build". The six-question march was a form wearing a
+    chat's clothes; a founder already knows what they want and should not
+    have to deliver it in six instalments."""
     page = client.get("/chat").text
-    assert "1 / 6" in page
+    assert "is plenty" in page  # the open prompt, not question 1 of 6
+    assert "1 / 6" not in page
     assert page.count("<textarea") == 1
 
 
@@ -139,26 +144,50 @@ def test_answering_advances_and_records_both_sides(client, workspace):
     client.get("/chat")
     client.post("/chat", data={"answer": "small studios"}, follow_redirects=True)
     turns = load_thread(workspace)
-    assert turns[0].role == "assistant" and turns[0].slot == "who"
+    assert turns[0].role == "assistant" and turns[0].slot == studio_chat.OPEN
     assert turns[1].role == "user" and turns[1].text == "small studios"
+
+
+def test_a_skipped_open_prompt_falls_back_to_the_six(client, workspace):
+    """Nothing to extract from, so the conversation is exactly what it was
+    before: question one, one at a time."""
+    client.get("/chat")
+    client.post("/chat", data={"answer": "", "skip": "1"}, follow_redirects=True)
+    turns = load_thread(workspace)
+    assert pairs(turns)  # the prompt counts as answered
+    assert next_intake_slot(turns) == INTAKE_SLOTS[0]
+    assert "1 / 6" in client.get("/chat").text
 
 
 def test_a_skipped_question_is_recorded_and_does_not_block(client, workspace):
     client.get("/chat")
     client.post("/chat", data={"answer": "", "skip": "1"}, follow_redirects=True)
+    client.get("/chat")  # asks question one
+    client.post("/chat", data={"answer": "", "skip": "1"}, follow_redirects=True)
     turns = load_thread(workspace)
-    assert pairs(turns)  # the question counts as answered
     assert next_intake_slot(turns) == INTAKE_SLOTS[1]
 
 
 def test_walking_the_whole_conversation_writes_a_real_fdr(client, workspace):
-    for slot in INTAKE_SLOTS:
-        client.get("/chat")
+    """The gaps, one at a time, after the paragraph and the guess — every
+    answer still lands in the document verbatim."""
+    client.get("/chat")
+    client.post("/chat", data={"answer": "a shared task list for the two of us"},
+                follow_redirects=True)
+    client.get("/chat")
+    client.post("/chat/guess", data={"accept": "1"}, follow_redirects=True)
+    for _round in range(len(INTAKE_SLOTS)):
+        page = client.get("/chat")
+        slot = next_intake_slot(load_thread(workspace))
+        if slot is None:
+            break
         client.post("/chat", data={"answer": f"about {slot}"},
                     follow_redirects=True)
+        assert page.status_code == 200
     fdr = (workspace / "FDR.md").read_text(encoding="utf-8")
-    for slot in INTAKE_SLOTS:
-        assert f"about {slot}" in fdr
+    assert "a shared task list for the two of us" in fdr
+    for slot in ("not_needed", "constraints"):
+        assert f"about {slot}" in fdr, f"the answer to {slot} was lost"
 
 
 def test_the_founder_can_always_leave_the_loop(client, workspace):
@@ -168,7 +197,11 @@ def test_the_founder_can_always_leave_the_loop(client, workspace):
     client.post("/chat", data={"answer": "founders"}, follow_redirects=True)
     page = client.post("/chat/enough", follow_redirects=True).text
     assert "founders" in page
-    assert (workspace / "FDR.md").read_text(encoding="utf-8").count("founders") == 1
+    fdr = (workspace / "FDR.md").read_text(encoding="utf-8")
+    # Twice, and both are theirs: the paragraph verbatim under §0, and the
+    # span the extraction lifted out of it into "Who is this for?".
+    assert fdr.count("founders") == 2
+    assert "## 0. In your own words" in fdr
 
 
 def test_the_clarify_loop_is_bounded(workspace):
@@ -314,7 +347,7 @@ def test_chat_is_the_default_door(workspace):
     from ai_venture_studio.studio import create_studio_app
 
     page = TestClient(create_studio_app(workspace, provider="mock")).get("/").text
-    assert "One question at a time" in page
+    assert "Tell me what you want to build" in page
     assert "/?form=1" in page  # the form is one click away
 
 

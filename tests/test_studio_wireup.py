@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+from contextlib import contextmanager
 
 import pytest
 import yaml
@@ -69,6 +70,33 @@ def studio(tmp_path):
     return client, root
 
 
+#: Everything that could authenticate a real provider, cleared so the gate
+#: renders on a developer machine that has a key in its environment.
+_KEY_ENV = (
+    "ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_FILE", "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_AUTH_TOKEN_FILE", "AVS_ANTHROPIC_MODE",
+)
+
+
+@contextmanager
+def keyless_studio(root):
+    """A Studio on a paying provider with no key anywhere — the first state
+    a founder who has never held an API key actually sees. Everything else
+    in the environment stays (git needs its PATH)."""
+    from unittest import mock
+
+    environ = {k: v for k, v in os.environ.items() if k not in _KEY_ENV}
+    with mock.patch.dict(os.environ, environ, clear=True):
+        yield TestClient(
+            create_studio_app(root, spawn=lambda r: 4242, provider="anthropic")
+        )
+
+
+def _keyless_page(root) -> str:
+    with keyless_studio(root) as client:
+        return client.get("/").text
+
+
 def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
     """Render every Studio state and collect (method, path) references."""
     pages: list[str] = []
@@ -80,9 +108,26 @@ def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
     snap()
 
     # 1b. Both doors onto the describe state: the conversation (now the
-    # default) and the form behind ?form=1.
+    # default) and the form behind ?form=1. Answering the open prompt runs
+    # the extraction pass, whose SAID/GUESS rows are a state of their own —
+    # the guess carries the confirm/correct forms.
     pages.append(client.get("/chat").text)
+    pages.append(
+        client.post(
+            "/chat",
+            data={"answer": "a shared task list for the two of us"},
+            follow_redirects=True,
+        ).text
+    )
     pages.append(client.get("/?form=1").text)
+
+    # 1c. The key gate (v0.69) — a describe-state door too, and the first
+    # page a founder without an API key sees. The fixture Studio runs on
+    # `mock`, which bills nobody and therefore never gates, so this state
+    # comes from a second Studio on a paying provider with the key
+    # variables removed. It must be rendered here, while the workspace is
+    # still in the describe state.
+    pages.append(_keyless_page(root))
 
     # 2. Plan-confirmation state.
     (root / "product").mkdir(exist_ok=True)
@@ -107,10 +152,36 @@ def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
     (root / ".mas" / "build.pid").write_text(str(_dead_pid()))
     snap()
 
+    # 4b. Real history: the report page's change list is built from the
+    # checkpoint tags, and each row carries its own go-back form.
+    if not (root / ".git").exists():
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    from ai_venture_studio.upstream.autopilot import tag_checkpoint
+
+    for number, message in enumerate(("first build", "second build"), start=1):
+        (root / f"change{number}.txt").write_text(message, encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+             "commit", "-qm", f"feat({number}): {message}"],
+            cwd=root, check=True,
+        )
+        tag_checkpoint(root)
+
     # 5. Feature awaiting confirmation (renders before the report page).
     (root / "product" / "BUILD-REPORT.md").write_text("# done", encoding="utf-8")
-    (root / "product" / "ACCEPTANCE.md").write_text("check", encoding="utf-8")
-    (root / "product" / "VERIFICATION.md").write_text("- [x] ok", encoding="utf-8")
+    # Real artifact shapes: the walkthrough's checkboxes and the
+    # verification report's marks are what the Try-it page derives its
+    # checkable rows from.
+    (root / "product" / "ACCEPTANCE.md").write_text(
+        "# Acceptance walkthrough\n\n- [ ] Open the app and add one task\n"
+        "- [ ] Mark it done and see it move\n",
+        encoding="utf-8",
+    )
+    (root / "product" / "VERIFICATION.md").write_text(
+        "# Automated verification\n\n- ✅ root-responds\n- ❌ items-listed\n",
+        encoding="utf-8",
+    )
     shots = root / "product" / "screenshots"
     shots.mkdir(parents=True, exist_ok=True)
     (shots / "home.png").write_bytes(b"\x89PNG\r\n")
@@ -127,8 +198,25 @@ def _walk_all_states(client, root) -> dict[str, list[tuple[str, str]]]:
     (pending / "REPORT.md").write_text("built", encoding="utf-8")
     snap()
 
-    # 7. Acceptance walkthrough page.
+    # 7. Acceptance walkthrough page, and the Try-it page beside it — the
+    # rows there carry the tick form and the per-row complaint form.
     pages.append(client.get("/acceptance").text)
+    pages.append(client.get("/try").text)
+
+    # 7b. The classification preview: /correct no longer acts on submit, it
+    # shows what the router decided and offers Confirm / Reword. Both forms
+    # live on that page, so it is a state of its own. It needs a built spec
+    # for the router to route to.
+    spec_one = root / "specs" / "one" / "spec.yaml"
+    spec_one.write_text(yaml.safe_dump({
+        "slug": "one", "title": "one", "request": "one (task:t1)", "built": True,
+        "criteria": ["The system shall list items newest first."],
+    }), encoding="utf-8")
+    pages.append(
+        client.post("/correct", data={
+            "complaint": "the button on the task form should say Add task",
+        }).text
+    )
 
     # 8. Engineer and enterprise modes (v0.56) — the mode cards render
     # references of their own (review links), so they are states too.
@@ -213,12 +301,31 @@ def test_every_backend_route_is_reachable_from_some_rendered_state(studio):
 #: coverage assertion below fails until you do.
 _POST_BODIES: dict[str, list[dict[str, str]]] = {
     "/chat": [{"answer": "the two of us"}, {"skip": "1"}],
+    # Confirm and correct, plus the press with no proposal pending.
+    "/chat/guess": [{"accept": "1"}, {"answer": "weekly, not daily"}, {}],
     "/chat/enough": [{}],
     "/chat/restart": [{}],
     "/fdr": [{"fdr": "## 1. Who is this for?\nus\n"}],
-    "/correct": [{"complaint": "the button should say Add task"}],
+    "/correct": [
+        {"complaint": "the button should say Add task"},
+        # …and the same complaint arriving from a Try-it row, carrying the
+        # criterion that failed.
+        {"complaint": "it never moved", "criterion": "Mark it done and see it move"},
+    ],
+    # A tick, an untick, and a row id that is not in the current list.
+    "/try/tick": [{"row": "deadbeef0000"}, {"row": "deadbeef0000", "off": "1"}],
+    # Confirming a classification EXECUTES it, so the row presses a slug
+    # that is well-formed and absent — the answered-out-loud branch. The
+    # real confirm→execute path is pinned in tests/test_studio_correction.py.
+    "/correct/confirm": [
+        {"complaint": "say Add task", "spec_slug": "no-such-spec", "kind": "fix"},
+        {"complaint": "say Add task", "spec_slug": "one", "kind": "carrier-pigeon"},
+    ],
     "/retry": [{"task_id": "t2"}],
     "/undo": [{}],
+    # Same: a well-formed checkpoint name this workspace does not have, so
+    # the gate presses the button without resetting the fixture's history.
+    "/undo/to": [{"tag": "ap-checkpoint-404"}],
     "/feature": [{"fdr": "let us cancel an order"}],
     "/feature/build": [{"slug": "f2-cancel-orders"}],
     "/build": [{}],
@@ -229,6 +336,13 @@ _POST_BODIES: dict[str, list[dict[str, str]]] = {
     "/incident/fix": [{"incident_id": "nope"}],
     "/review/{review_id}/evidence": [{}],
     "/reset": [{}],
+    # On the fixture's `mock` provider there is no variable to set, so this
+    # is the no-key-to-set branch. The real paste path (a variable set for
+    # this process only, never written to disk) is pinned in
+    # tests/test_studio_key_gate.py, which is also where the secret-handling
+    # assertions live — pressing it here must not put a key in this
+    # process's environment.
+    "/key": [{"key": "not-a-real-key"}, {"key": ""}],
 }
 
 #: Values that are an attempt rather than a typo. Each must be refused

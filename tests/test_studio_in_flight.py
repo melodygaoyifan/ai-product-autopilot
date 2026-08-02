@@ -80,7 +80,7 @@ def test_the_page_returns_to_normal_once_the_step_lands(tmp_path):
     client = TestClient(create_studio_app(root, spawn=lambda r: 1, provider="mock"))
     page = client.get("/").text
     assert "Working on it" not in page
-    assert "One question at a time" in page
+    assert "Tell me what you want to build" in page
 
 
 def test_a_failure_reaches_the_page_that_is_actually_watching(tmp_path):

@@ -239,6 +239,69 @@ def test_every_string_exists_in_both_languages():
             assert text.strip(), f"{key}/{lang} is empty"
 
 
+def test_no_english_string_carries_chinese_and_no_chinese_one_is_english_only():
+    """The table's own contract, checked at the source rather than only
+    through whichever pages a test happens to render: `en` is English only,
+    and `zh` is the bilingual original."""
+    import re
+
+    from ai_venture_studio.studio_i18n import STRINGS
+
+    for key, values in STRINGS.items():
+        assert not re.search(r"[一-鿿]", values["en"]), f"{key}/en has CJK"
+
+
+def test_every_page_the_studio_can_render_is_english_only(tmp_path):
+    """The v0.53 rule, over every state — including the ones added since.
+    A single page that leaks CJK makes the flag a half-promise."""
+    import re
+    import subprocess as sp
+
+    import yaml as _yaml
+
+    root = init_workspace(tmp_path / "allpages", "allpages", "web")
+    product = root / "product"
+    product.mkdir(exist_ok=True)
+    (product / "BUILD-REPORT.md").write_text("# done\nIt works.\n", encoding="utf-8")
+    (product / "ACCEPTANCE.md").write_text(
+        "- [ ] Add a task and see it listed\n", encoding="utf-8"
+    )
+    (product / "VERIFICATION.md").write_text("- ✅ root-responds\n", encoding="utf-8")
+    spec = root / "specs" / "tasks"
+    spec.mkdir(parents=True, exist_ok=True)
+    (spec / "spec.yaml").write_text(_yaml.safe_dump({
+        "slug": "tasks", "title": "Task list", "built": True,
+        "criteria": ["The system shall list items."],
+    }), encoding="utf-8")
+    sp.run(["git", "init", "-q"], cwd=root, check=True)
+    sp.run(["git", "add", "-A"], cwd=root, check=True)
+    sp.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+            "commit", "-qm", "feat(tasks): one"], cwd=root, check=True)
+    from ai_venture_studio.upstream.autopilot import tag_checkpoint
+
+    tag_checkpoint(root)
+
+    client = TestClient(
+        create_studio_app(root, spawn=lambda r: 1, provider="mock")
+    )
+    pages = {
+        "report": client.get("/").text,
+        "try": client.get("/try").text,
+        "acceptance": client.get("/acceptance").text,
+        "verification": client.get("/verification").text,
+        "demo": client.get("/demo").text,
+        "live": client.get("/live").text,
+        "classify": client.post(
+            "/correct", data={"complaint": "the button should say Add task"},
+            follow_redirects=True,
+        ).text,
+        "no_row": client.post("/try/tick", data={"row": "abc123abc123"}).text,
+    }
+    for name, page in pages.items():
+        found = re.findall(r"[一-鿿]", page)
+        assert not found, f"the English {name} page leaks CJK: {''.join(found)}"
+
+
 def test_the_english_readme_demo_shows_the_english_screenshot():
     """The README's founder demo and the shipped image must agree — a demo
     claiming English while showing a Chinese UI is the bug this closes."""

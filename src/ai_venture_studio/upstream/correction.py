@@ -50,6 +50,72 @@ class CorrectionResult(BaseModel):
     commit: str | None = None
 
 
+class CorrectionRoute(BaseModel):
+    """What the router decided, before anything acts on it.
+
+    Split out so a UI can SHOW the decision and let the founder confirm or
+    reword it — "small fix, repaired directly" and "new requirement, its
+    own small build" are very different promises and the founder is the
+    only one who knows which they meant. There is exactly one router; this
+    is it, and `run_correction` takes the same object back rather than
+    classifying a second time (a second call could decide differently, and
+    then what was confirmed is not what ran).
+    """
+
+    spec_slug: str
+    kind: str          # fix | scope_change
+    instruction: str
+
+
+class CorrectionRouteError(RuntimeError):
+    """The complaint could not be routed — nothing is built yet, the model
+    did not answer in the envelope, or it named a spec that does not
+    exist. Raised rather than returned so a caller cannot mistake it for a
+    decision."""
+
+
+def route_complaint(
+    repo_dir: str | Path,
+    complaint: str,
+    *,
+    provider: str = "anthropic",
+    model: str = "claude-opus-4-8",
+    criterion: str = "",
+) -> CorrectionRoute:
+    """Map one plain-language complaint to one built spec and a kind.
+
+    `criterion` is the acceptance row the founder pressed "Wrong" on, when
+    the complaint came from the Try-it page. It is passed as context, never
+    merged into the complaint: the founder's words stay theirs, verbatim,
+    all the way to the SCR that records them.
+    """
+    root = Path(repo_dir).resolve()
+    specs = _built_specs(root)
+    if not specs:
+        raise CorrectionRouteError("nothing built yet")
+
+    raw = get_provider(provider).complete(
+        model=model,
+        system=_ROUTER_SYSTEM,
+        user=yaml.safe_dump(specs, sort_keys=False, allow_unicode=True)
+        + (f"\n<failed_criterion>\n{criterion}\n</failed_criterion>" if criterion else "")
+        + f"\n<complaint>\n{complaint}\n</complaint>",
+        max_tokens=512,
+    )
+    try:
+        route = extract_mapping(raw, ("spec_slug",))
+    except ValueError as exc:
+        raise CorrectionRouteError(str(exc)) from exc
+    slug = str(route.get("spec_slug", ""))
+    if slug not in {s["slug"] for s in specs}:
+        raise CorrectionRouteError(f"router chose unknown spec {slug!r}")
+    return CorrectionRoute(
+        spec_slug=slug,
+        kind=str(route.get("kind", "fix")),
+        instruction=str(route.get("instruction", complaint)),
+    )
+
+
 def _built_specs(root: Path) -> list[dict]:
     specs = []
     for spec_file in sorted(root.glob("specs/*/spec.yaml")):
@@ -68,28 +134,31 @@ def run_correction(
     *,
     provider: str = "anthropic",
     model: str = "claude-opus-4-8",
+    criterion: str = "",
+    route: CorrectionRoute | None = None,
 ) -> CorrectionResult:
-    root = Path(repo_dir).resolve()
-    specs = _built_specs(root)
-    if not specs:
-        return CorrectionResult(status="error", detail="nothing built yet")
+    """Route the complaint (unless the caller already did) and act on it.
 
-    raw = get_provider(provider).complete(
-        model=model,
-        system=_ROUTER_SYSTEM,
-        user=yaml.safe_dump(specs, sort_keys=False, allow_unicode=True)
-        + f"\n<complaint>\n{complaint}\n</complaint>",
-        max_tokens=512,
-    )
-    try:
-        route = extract_mapping(raw, ("spec_slug",))
-    except ValueError as exc:
-        return CorrectionResult(status="error", detail=str(exc))
-    slug = str(route.get("spec_slug", ""))
-    kind = str(route.get("kind", "fix"))
-    instruction = str(route.get("instruction", complaint))
-    if slug not in {s["slug"] for s in specs}:
-        return CorrectionResult(status="error", detail=f"router chose unknown spec {slug!r}")
+    `route` is how a confirmed classification executes: what the founder
+    saw and agreed to is what runs, rather than a second router call that
+    might land somewhere else.
+    """
+    root = Path(repo_dir).resolve()
+    if route is None:
+        try:
+            route = route_complaint(
+                root, complaint, provider=provider, model=model,
+                criterion=criterion,
+            )
+        except CorrectionRouteError as exc:
+            return CorrectionResult(status="error", detail=str(exc))
+    slug = route.spec_slug
+    kind = route.kind
+    instruction = route.instruction
+    if slug not in {s["slug"] for s in _built_specs(root)}:
+        return CorrectionResult(
+            status="error", detail=f"router chose unknown spec {slug!r}"
+        )
 
     if kind == "scope_change":
         # The complaint is the human decision — recorded verbatim on the SCR.
@@ -112,7 +181,9 @@ def run_correction(
     related = _related_sources(root, spec)
     base_user = (
         f"<complaint>\n{complaint}\n</complaint>\n\n"
-        f"<instruction>\n{instruction}\n</instruction>\n\n"
+        + (f"<failed_criterion>\n{criterion}\n</failed_criterion>\n\n"
+           if criterion else "")
+        + f"<instruction>\n{instruction}\n</instruction>\n\n"
         f"<spec>\n{yaml.safe_dump(spec.model_dump(include={'title', 'design', 'criteria'}), sort_keys=False, allow_unicode=True)}</spec>\n\n"
         + related
     )

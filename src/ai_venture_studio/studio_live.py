@@ -92,10 +92,9 @@ def live_body(root: Path, t_: Callable[[str], str], profile: str) -> str:
 
     # 1 · run it: the boot contract, verbatim — the same command every
     # verification harness used, so it is known to work.
-    entry = next(
-        (e for e in ("app/main.py", "main.py", "app.py") if (root / e).exists()),
-        "app/main.py",
-    )
+    from ai_venture_studio.upstream.provisioning import preview_entry
+
+    entry = preview_entry(root) or "app/main.py"
     env = preview_env(root)
     env_line = " ".join(f"{k}=…" for k in sorted(env)) if env else ""
     run_card = (

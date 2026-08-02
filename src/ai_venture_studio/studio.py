@@ -22,6 +22,7 @@ may only ADD visibility — never remove a form or a required action.
 from __future__ import annotations
 
 import html
+import os
 import re
 import subprocess
 import sys
@@ -173,6 +174,12 @@ border-bottom:1px solid #efe9dd}}
    overflowing it into the title beside it. */
 .trow .chip{{min-width:72px;text-align:center;flex-shrink:0}}
 .trow .ttl{{flex:1}}
+/* Per-row actions on their own line. Inline forms sat flush against the
+   last word of the criterion, so a row read "…who it is for✓ Fine". */
+.tryacts{{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;
+margin-top:6px}}
+.tryacts form{{display:inline}}
+.tryacts details{{width:100%}}
 .tstep{{display:block;font-size:14px;color:#575145;font-weight:400}}
 .bhead{{display:flex;align-items:flex-start;justify-content:space-between;
 gap:24px}}
@@ -273,6 +280,90 @@ def failure_cause(exc: BaseException) -> str:
     if any(signal in text for signal in _BUSY_SIGNALS):
         return "busy"
     return "unknown"
+
+
+#: Which environment variable each provider authenticates with — the same
+#: names providers/ already resolves through `secrets.env_or_file`. Listed
+#: here so the Studio can ASK for one without ever reading a value: every
+#: function below answers "is there a key?" and never "which key".
+_PROVIDER_KEY_VARS: dict[str, tuple[str, ...]] = {
+    "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+    "openai": ("OPENAI_API_KEY",),
+    "xai": ("XAI_API_KEY",),
+    "google": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "mock": (),  # the recorded provider bills nobody
+}
+
+#: The doors an enterprise already has, per provider: nothing is typed into
+#: the Studio for any of them. Rendered as names only — a door is named, an
+#: existing configuration is never read back onto the page.
+_PROVIDER_DOORS: dict[str, tuple[str, ...]] = {
+    "anthropic": (
+        "AVS_ANTHROPIC_MODE=bedrock",
+        "AVS_ANTHROPIC_MODE=vertex",
+        "AVS_ANTHROPIC_MODE=foundry",
+        "ANTHROPIC_AUTH_TOKEN (gateway bearer token)",
+        "ANTHROPIC_API_KEY_FILE=/run/secrets/… (mounted secret)",
+    ),
+    "openai": (
+        "OPENAI_BASE_URL=https://your-gateway/v1",
+        "OPENAI_API_KEY_FILE=/run/secrets/… (mounted secret)",
+    ),
+    "xai": (
+        "XAI_BASE_URL=https://your-gateway/v1",
+        "XAI_API_KEY_FILE=/run/secrets/… (mounted secret)",
+    ),
+    "google": (
+        "GEMINI_BASE_URL=https://your-gateway",
+        "GEMINI_API_KEY_FILE=/run/secrets/… (mounted secret)",
+    ),
+}
+
+
+def provider_key_present(provider: str) -> bool:
+    """Can this provider authenticate at all?
+
+    Read-only, and deliberately boolean: the resolved value is never
+    returned, rendered or logged anywhere in this module. `mock` bills
+    nobody, an unknown provider is not ours to gate, and the gateway modes
+    (bedrock / vertex / foundry) authenticate through the cloud's own
+    credentials with no key to type here.
+    """
+    from ai_venture_studio.secrets import SecretError, env_or_file
+
+    if provider == "mock":
+        return True
+    if provider == "anthropic":
+        mode = os.environ.get("AVS_ANTHROPIC_MODE", "direct").strip().lower()
+        if mode and mode != "direct":
+            return True
+    names = _PROVIDER_KEY_VARS.get(provider)
+    if not names:
+        return True
+    try:
+        return any(env_or_file(name) for name in names)
+    except SecretError:
+        # A configured *_FILE mount that cannot be read is a loud failure at
+        # the provider, with its own message. Standing in front of it with a
+        # paste box would hide the real problem.
+        return True
+
+
+def set_provider_key(provider: str, value: str) -> str | None:
+    """Set the provider's key FOR THIS PROCESS ONLY. Returns the variable
+    name that was set (never the value), or None when there was nothing
+    usable to set.
+
+    Deliberately not persisted: writing it into .mas/ would make the Studio
+    a second home for a secret the operator's environment already owns, and
+    a key on disk in a workspace is a key in somebody's next `git add`.
+    """
+    names = _PROVIDER_KEY_VARS.get(provider) or ()
+    value = value.strip()
+    if not names or not value or any(char.isspace() for char in value):
+        return None
+    os.environ[names[0]] = value
+    return names[0]
 
 
 def record_failure(root: Path, exc: BaseException) -> None:
@@ -702,13 +793,19 @@ def create_studio_app(
             )
         else:
             retry = f"<p><a href='/'>{_('link_back')}</a></p>"
+        # A refused key is the one cause whose fix is a single field. Put it
+        # HERE, where the problem is named, instead of sending someone back
+        # through the flow to find a settings page that does not exist.
+        cause = failure_cause(exc)
+        if cause == "key" and _can_paste_key():
+            retry += _key_form(heading=_("key_fail_head"))
         return _render(
             request, _("title_failed"),
             "<div class=stateline><span class='sdot red'></span>"
             f"<span class='slabel bad'>{_('fail_chip')}</span></div>"
             f"<h1>{_('failed_lead')}</h1>"
             f"<p>{_('failed_safe')}</p>"
-            f"<p>{_('failed_cause_' + failure_cause(exc))}</p>"
+            f"<p>{_('failed_cause_' + cause)}</p>"
             f"{retry}"
             f"<details><summary class=muted>{_('failed_detail')}</summary>"
             f"<pre>{html.escape(f'{type(exc).__name__}: {exc}')}</pre>"
@@ -969,6 +1066,174 @@ def create_studio_app(
             f"{rows}</table>"
             "<pre>avs cost\navs prices --import</pre></details>"
         )
+
+    # ── The key gate ─────────────────────────────────────────────────────
+    # A founder who has never held an API key used to meet that fact as a
+    # traceback on their first send. It is asked for here instead, in
+    # whose-account-pays language, once, before the describe state.
+
+    #: Set once a key was pasted into THIS process. Only ever a boolean —
+    #: the value lives in os.environ and is never copied here.
+    key_pasted: dict[str, bool] = {}
+
+    def _needs_key() -> bool:
+        return not provider_key_present(provider)
+
+    def _can_paste_key() -> bool:
+        """Whether pasting a key here could help at all. False for the mock
+        (nothing to pay) and for a provider we do not know the variable of —
+        a paste box that sets nothing is a dead button."""
+        return bool(_PROVIDER_KEY_VARS.get(provider))
+
+    def _key_form(*, heading: str) -> str:
+        """The paste-a-key form. `type=password` so a shoulder or a
+        screenshot does not carry the key, `autocomplete=off` so the browser
+        does not keep it, and no value attribute EVER — the field renders
+        empty even when a key is set, because the page must not be able to
+        show one back."""
+        name = (_PROVIDER_KEY_VARS.get(provider) or ("",))[0]
+        return (
+            f"<div class=card><b>{heading}</b>"
+            "<form method=post action=/key>"
+            "<p><input type=password name=key required autocomplete=off "
+            "spellcheck=false style='width:100%;min-height:44px;padding:11px "
+            "14px;border:1px solid #d3ccbb;border-radius:9px' "
+            f"placeholder='{html.escape(name)}'></p>"
+            f"<p><button class=primary>{_('btn_key_save')}</button></p></form>"
+            f"<p class=muted>{_('key_paste_hint_fmt').format(name=html.escape(name))}</p>"
+            f"<p class=muted>{_('key_process_only')}</p></div>"
+        )
+
+    def _key_cost_line() -> str:
+        """What it typically costs — the workspace's own ledger or no figure
+        at all. An invented number on the page that asks for a payment
+        method is the worst place in the product to guess."""
+        spent = _spend_month_fragment()
+        line = (
+            _("key_cost_spent_fmt").format(amount=html.escape(spent))
+            if spent else _("key_cost_no_figure")
+        )
+        return (
+            f"<div class=panelfoot><b>{_('key_cost_head')}</b> — {line} "
+            f"{_('cost_provider_limits')}</div>"
+        )
+
+    def _key_gate_page(request: Request) -> HTMLResponse:
+        doors = "".join(
+            f"<div><code>{html.escape(door)}</code></div>"
+            for door in _PROVIDER_DOORS.get(provider, ())
+        )
+        return _render(
+            request, _("title_key_gate"),
+            f"<p>{_('key_lead')}</p>"
+            + _key_form(heading=_("key_paste_head"))
+            + (
+                f"<div class=card><b>{_('key_doors_head')}</b>"
+                f"<p class=muted>{_('key_doors_note')}</p>{doors}</div>"
+                if doors else ""
+            )
+            # Nothing to type at all: the vendored demo review is a real
+            # recorded run of this repo's own code, and it renders through
+            # the same timeline the workspace's own reviews use.
+            + f"<div class=card><b>{_('key_demo_head')}</b>"
+            f"<p class=muted>{_('key_demo_note')}</p>"
+            f"<p><a class=achip href='/demo'>{_('link_demo')}</a></p></div>"
+            + _key_cost_line(),
+            rail="describe",
+        )
+
+    def _key_strip() -> str:
+        """One line, on the page that was already coming. State B adds no
+        click and no page: a key that was already there says nothing at
+        all, and a key pasted here says so once, in place."""
+        if not key_pasted:
+            return ""
+        return f"<p class='muted ok'>{_('key_strip_set')}</p>"
+
+    @app.post("/key")
+    async def set_key(request: Request):
+        """Sets the provider key for THIS PROCESS ONLY (os.environ) — never
+        written to disk, never echoed back, never logged."""
+        form = await request.form()
+        name = set_provider_key(provider, str(form.get("key", "")))
+        if name is None:
+            # Nothing usable arrived (empty, whitespace, or a provider with
+            # no key to set). Say so rather than redirecting into the same
+            # page with no explanation.
+            return _render(
+                request, _("title_key_gate"),
+                f"<div class=card><b class=warn>{_('key_refused')}</b></div>"
+                + (_key_form(heading=_("key_paste_head")) if _can_paste_key() else "")
+                + f"<p><a href='/'>{_('link_back')}</a></p>",
+            )
+        key_pasted["set"] = True
+        return RedirectResponse("/", status_code=303)
+
+    def _change_list() -> str:
+        """The log, as the undo surface — with the truth about what going
+        back costs.
+
+        The history model is a straight line of checkpoint tags: going back
+        means resetting to one, so everything after it goes too. Reverting
+        one middle change on its own would be `git revert` plus a conflict
+        resolution nobody should hand a founder. So each row offers "go back
+        to just before THIS change" and states, on the button's own line,
+        how many later changes that also undoes. A rescue branch is made
+        first, every time.
+        """
+        from ai_venture_studio.upstream.autopilot import checkpoint_log
+
+        try:
+            entries = checkpoint_log(root)
+        except Exception:  # noqa: BLE001 — a workspace without git still renders
+            entries = []
+        if not entries:
+            return ""
+        rows = ""
+        for entry in entries:
+            if entry["previous"]:
+                later = entry["later_changes"]
+                note = (
+                    _("undo_to_note_fmt") if later
+                    else _("undo_to_note_last_fmt")
+                ).format(later=later, commits=entry["undoes_commits"])
+                action = (
+                    "<form method=post action=/undo/to>"
+                    f"<input type=hidden name=tag value='{html.escape(entry['tag'])}'>"
+                    f"<button class=linkish>{_('btn_undo_to')}</button></form>"
+                    f"<span class=tstep>{note}</span>"
+                )
+            else:
+                action = f"<span class=tstep>{_('undo_to_first')}</span>"
+            rows += (
+                "<div class=trow><span class='chip q'>"
+                f"{html.escape(entry['tag'].removeprefix('ap-checkpoint-'))}"
+                "</span><span class=ttl>"
+                f"<b>{html.escape(entry['subject'] or entry['tag'])}</b>"
+                f"<span class=tstep>{html.escape(entry['when'])}</span>"
+                f"{action}</span></div>"
+            )
+        return (
+            f"<h2>{_('h_changes')}</h2>"
+            f"<p class=muted>{_('changes_linear_note')}</p>{rows}"
+        )
+
+    @app.post("/undo/to")
+    async def undo_to(request: Request):
+        """Go back to just before one recorded change — and, with it,
+        everything that came after. The page said so before this ran."""
+        from ai_venture_studio.upstream.autopilot import checkpoints, undo_to_before
+
+        form = await request.form()
+        tag = str(form.get("tag", ""))
+        # A tag reaches an argv, so the same segment rule as every other
+        # identifier arriving from a form, then existence.
+        if not _REVIEW_ID.match(tag):
+            return RedirectResponse("/", status_code=303)
+        if tag not in checkpoints(root):
+            return _no_such_page(request, "title_no_checkpoint", tag)
+        undo_to_before(root, tag)
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
@@ -1247,7 +1512,12 @@ def create_studio_app(
                 columns = f"<div class=twocol>{left}{right}</div>"
 
             # ── The action chips: only routes that really exist right now.
-            chips = [f"<a class=achip href='/live'>🚀 {_('link_live')}</a>"]
+            # "Try it" leads, because using the thing is the only way a
+            # founder can answer the question they actually have.
+            chips = [
+                f"<a class=achip href='/try'>▶ {_('link_try')}</a>",
+                f"<a class=achip href='/live'>🚀 {_('link_live')}</a>",
+            ]
             if (root / "product" / "ACCEPTANCE.md").exists():
                 chips.append(
                     f"<a class=achip href='/acceptance'>{_('link_acceptance')}</a>"
@@ -1289,7 +1559,9 @@ def create_studio_app(
             # real forms, so both actions are in the HTML for the wireup
             # gate and for anyone without JavaScript; the tabs only toggle
             # visibility, they never hide a form from no-JS users.
-            correction_log = (
+            # The change list and the correction log are HISTORY: they sit
+            # after the composer, not between its heading and its box.
+            history = _change_list() + (
                 f"<details><summary class=muted>{_('correction_log')}"
                 f"</summary><pre>"
                 f"{_md(root / 'product' / 'CORRECTION-LOG.md')}"
@@ -1300,7 +1572,6 @@ def create_studio_app(
             composer = (
                 f"<h2>{_('composer_head')}</h2>"
                 f"<p class=muted>{_('correction_hint')}</p>"
-                f"{correction_log}"
                 "<div class=composerbox><div class=tabs id=fixtabs>"
                 f"<button type=button class='tab on' data-form=form-correct>"
                 f"{_('h_something_wrong')}</button>"
@@ -1349,7 +1620,7 @@ def create_studio_app(
                 + chiprow + gallery
                 + f"<h2>{_('h_features')}</h2>"
                 + (feature_cards or no_features)
-                + composer + footer,
+                + composer + history + footer,
                 rail="product", h1="",
             )
         if confirmation.exists():
@@ -1378,6 +1649,12 @@ def create_studio_app(
                 + footer,
                 rail="plan",
             )
+        # Nothing above this line spends a token: a running build, a report,
+        # a plan to confirm are all reads of the workspace. The describe
+        # state is the first thing that will call the model, so it is where
+        # "whose account pays" belongs.
+        if _needs_key():
+            return _key_gate_page(request)
         # The describe state, and only this state, honours `entry`: the
         # build/report/confirmation pages above are the same in both doors.
         if entry == "chat" and not request.query_params.get("form"):
@@ -1396,7 +1673,7 @@ def create_studio_app(
         )
         return _render(
             request, _("title_describe"),
-            f"{question_block}"
+            f"{_key_strip()}{question_block}"
             f"<form method=post action=/fdr>"
             f"<input type=hidden name=base value='{_fdr_fingerprint(current)}'>"
             f"<textarea name=fdr class=fdrbox>{html.escape(current)}</textarea>"
@@ -1581,6 +1858,90 @@ def create_studio_app(
             "</div></aside>"
         )
 
+    def _thread_html(turns) -> str:
+        """The conversation as it happened — plus, where the extraction pass
+        ran, what was TAKEN from the founder's paragraph.
+
+        The synthetic question a SAID pair carries is bookkeeping, not
+        dialogue: rendering it as an assistant bubble would show the founder
+        a conversation that never took place. So the pairs render as rows
+        instead — SAID for their own words, GUESS for a proposal — and the
+        two are visibly different things on the page, because they are
+        different things in the document.
+        """
+        out: list[str] = []
+        rows: list[str] = []
+
+        def flush() -> None:
+            if rows:
+                out.append(
+                    f"<div class=card><div class=lbl style='margin-top:0'>"
+                    f"{_('chat_extract_head')}</div>" + "".join(rows) + "</div>"
+                )
+                rows.clear()
+
+        for turn in turns:
+            label = (
+                _(f"chat_slot_{turn.slot}")
+                if turn.slot in studio_chat.INTAKE_SLOTS else turn.slot
+            )
+            if turn.kind == studio_chat.SAID:
+                if turn.role == "assistant":
+                    continue  # the synthetic question is not a thing anyone said
+                rows.append(
+                    "<div class=trow><span class='chip g'>"
+                    f"{_('chat_chip_said')}</span><span class=ttl>"
+                    f"<b>{label}</b> — {html.escape(turn.text)}</span></div>"
+                )
+                continue
+            if turn.kind == studio_chat.GUESS:
+                why = (
+                    f"<span class=tstep>{html.escape(turn.text)}</span>"
+                    if turn.text and turn.text != turn.value else ""
+                )
+                rows.append(
+                    "<div class=trow><span class='chip a'>"
+                    f"{_('chat_chip_guess')}</span><span class=ttl>"
+                    f"<b>{label}</b> — {html.escape(turn.value)}{why}"
+                    "</span></div>"
+                )
+                continue
+            flush()
+            out.append(
+                "<div class=msg-a><span class=dot7></span>"
+                f"<p>{html.escape(turn.text)}</p></div>"
+                if turn.role == "assistant"
+                else f"<div class=msg-u><p>{html.escape(turn.text)}</p></div>"
+            )
+        flush()
+        return "".join(out)
+
+    def _guess_composer(guess) -> str:
+        """A guess is settled by confirming or correcting it — two plain
+        forms, no JavaScript. Confirming is the ONLY thing that lets
+        proposed words into FDR.md; correcting replaces them with the
+        founder's own."""
+        label = (
+            _(f"chat_slot_{guess.slot}")
+            if guess.slot in studio_chat.INTAKE_SLOTS else guess.slot
+        )
+        return (
+            "<div class=card>"
+            f"<b>{_('chat_guess_head')}</b>"
+            f"<p><span class='chip a'>{_('chat_chip_guess')}</span> "
+            f"<b>{html.escape(label)}</b> — {html.escape(guess.value)}</p>"
+            f"<p class=muted>{_('chat_guess_note')}</p>"
+            "<form method=post action=/chat/guess style='display:inline'>"
+            f"<button class=primary name=accept value=1>"
+            f"{_('btn_guess_yes')}</button></form>"
+            "<form method=post action=/chat/guess>"
+            f"<p class=muted style='margin:12px 0 4px'>{_('chat_guess_fix')}</p>"
+            "<div class=composer><textarea name=answer></textarea>"
+            "<div class=comprow><span class=muted></span>"
+            f"<button class=secondary>{_('btn_guess_mine')}</button>"
+            "</div></div></form></div>"
+        )
+
     def _chat_page(request: Request, note: str = "") -> HTMLResponse:
         turns = studio_chat.load_thread(root)
         existing = _written_fdr()
@@ -1625,17 +1986,13 @@ def create_studio_app(
                 f"<p><a href='/chat?start=1'>{_('chat_start_over')}</a></p>",
                 rail="describe",
             )
-        thread = "".join(
-            "<div class=msg-a><span class=dot7></span>"
-            f"<p>{html.escape(turn.text)}</p></div>"
-            if turn.role == "assistant"
-            else f"<div class=msg-u><p>{html.escape(turn.text)}</p></div>"
-            for turn in turns
-        )
+        thread = _thread_html(turns)
         question = studio_chat.open_question(turns)
-        if question is None:
-            # Nothing pending: ask the next intake question, or hand over.
-            slot = studio_chat.next_intake_slot(turns)
+        guess = studio_chat.pending_guess(turns) if question is None else None
+        if question is None and guess is None:
+            # Nothing pending: the open prompt on a fresh thread, then only
+            # the slots the extraction did not fill — or hand over.
+            slot = studio_chat.next_question_slot(turns)
             if slot is None:
                 return _chat_assess(request)
             question = studio_chat.append_turn(
@@ -1645,31 +2002,42 @@ def create_studio_app(
                 "<div class=msg-a><span class=dot7></span>"
                 f"<p>{html.escape(question.text)}</p></div>"
             )
-        answered = len(studio_chat.pairs(turns))
-        total = len(studio_chat.INTAKE_SLOTS)
-        counter = (
-            f"{min(answered + 1, total)} / {total}"
-            if question.slot in studio_chat.INTAKE_SLOTS
-            else _("chat_clarify_lead")
-        )
+        if guess is not None:
+            composer = _guess_composer(guess)
+        else:
+            answered = len({
+                q.slot for q, _a in studio_chat.pairs(turns)
+                if q.slot in studio_chat.INTAKE_SLOTS
+            })
+            total = len(studio_chat.INTAKE_SLOTS)
+            if question.slot == studio_chat.OPEN:
+                counter = _("chat_open_lead")
+            elif question.slot in studio_chat.INTAKE_SLOTS:
+                counter = f"{min(answered + 1, total)} / {total}"
+            else:
+                counter = _("chat_clarify_lead")
+            composer = (
+                f"<form method=post action=/chat>"
+                f"<p class=muted style='margin:0'>{counter}</p>"
+                "<div class=composer>"
+                "<textarea name=answer autofocus></textarea>"
+                "<div class=comprow>"
+                f"<span class=muted>{_('chat_composer_note')}</span>"
+                f"<span style='flex-shrink:0'>"
+                f"<button class=secondary name=skip value=1>{_('btn_chat_skip')}"
+                "</button> "
+                f"<button class=primary>{_('btn_chat_send')}</button></span>"
+                "</div></div></form>"
+            )
         main = (
             "<div class=chatmain>"
+            f"{_key_strip()}"
             f"<p class=muted style='margin:0'>{_('chat_intro')}</p>"
             + (f"<div class=callout><b class=warn>{html.escape(note)}</b></div>"
                if note else "")
             + thread
-            + f"<form method=post action=/chat>"
-            f"<p class=muted style='margin:0'>{counter}</p>"
-            "<div class=composer>"
-            "<textarea name=answer autofocus></textarea>"
-            "<div class=comprow>"
-            f"<span class=muted>{_('chat_composer_note')}</span>"
-            f"<span style='flex-shrink:0'>"
-            f"<button class=secondary name=skip value=1>{_('btn_chat_skip')}"
-            "</button> "
-            f"<button class=primary>{_('btn_chat_send')}</button></span>"
-            "</div></div></form>"
-            "<form method=post action=/chat/restart style='text-align:center'>"
+            + composer
+            + "<form method=post action=/chat/restart style='text-align:center'>"
             f"<button class=linkish>{_('btn_chat_restart')}</button></form>"
             "</div>"
         )
@@ -1683,6 +2051,10 @@ def create_studio_app(
     def chat(request: Request):
         if "fdr" in thinking:
             return _thinking_page(request, thinking["fdr"])
+        # Same gate as the home door: /chat is the describe state, and the
+        # first message here is the first model call.
+        if _needs_key():
+            return _key_gate_page(request)
         return _chat_page(request)
 
     @app.post("/chat")
@@ -1695,14 +2067,71 @@ def create_studio_app(
         if question is None:
             return RedirectResponse("/chat", status_code=303)
         answer = str(form.get("answer", "")).strip()
-        if form.get("skip") or not answer:
+        skipped = bool(form.get("skip")) or not answer
+        if skipped:
             answer = _("chat_skipped")
-        studio_chat.append_turn(root, "user", answer)
+        studio_chat.append_turn(root, "user", answer, slot=question.slot)
+        if question.slot == studio_chat.OPEN and not skipped:
+            # ONE pass over what they wrote, before anything else is asked.
+            # Same in-flight guard as every other model call on this surface:
+            # a second submit lands on the working page instead of starting a
+            # second extraction over the same paragraph.
+            from starlette.concurrency import run_in_threadpool
+
+            thinking["fdr"] = _("chat_reading")
+            try:
+                extraction = await run_in_threadpool(
+                    studio_chat.extract_intake, answer, provider=provider
+                )
+            except Exception as exc:  # noqa: BLE001 — a page, never a 500
+                # Their paragraph is already in the thread, so the next page
+                # load simply falls back to asking the six.
+                return _failure_page(request, exc)
+            finally:
+                thinking.pop("fdr", None)
+            studio_chat.apply_extraction(
+                root, extraction,
+                {slot: _(f"chat_q_{slot}") for slot in studio_chat.INTAKE_SLOTS},
+            )
         # POST-redirect-GET, always: the GET decides whether the next step is
         # another question or the assessment. Keeping that decision in one
         # place is also why the assessment is not its own route — it is a
         # transition, and an endpoint no rendered page links to is an orphan
         # (caught by tests/test_studio_wireup.py).
+        return RedirectResponse("/chat", status_code=303)
+
+    @app.post("/chat/guess")
+    async def chat_guess(request: Request):
+        """Confirm or correct ONE proposal.
+
+        The charter rule lives here: proposed words become an answer only on
+        the confirm branch, because that is the branch where the founder
+        said them. The pending guess is resolved from the thread, never from
+        the form — a posted slot would let a page decide which slot it was
+        answering.
+        """
+        if "fdr" in thinking:
+            return _thinking_page(request, thinking["fdr"])
+        form = await request.form()
+        turns = studio_chat.load_thread(root)
+        guess = studio_chat.pending_guess(turns)
+        if guess is None:
+            return RedirectResponse("/chat", status_code=303)
+        typed = str(form.get("answer", "")).strip()
+        if form.get("accept"):
+            answer = guess.value
+        elif typed:
+            answer = typed
+        else:
+            # Declined without a replacement: recorded as skipped, exactly
+            # like the skip button. The one thing it must not do is leave
+            # the proposal pending forever.
+            answer = _("chat_skipped")
+        studio_chat.resolve_guess(
+            root, guess, answer,
+            _(f"chat_q_{guess.slot}") if guess.slot in studio_chat.INTAKE_SLOTS
+            else guess.slot,
+        )
         return RedirectResponse("/chat", status_code=303)
 
     def _chat_assess(request: Request) -> HTMLResponse:
@@ -1843,8 +2272,39 @@ def create_studio_app(
         return _render(
             request, _("title_acceptance"),
             f"<pre>{_md(root / 'product' / 'ACCEPTANCE.md')}</pre>"
+            f"<p><a href='/try'>{_('link_try')}</a></p>"
             f"<p><a href='/'>{_('link_back')}</a></p>",
         )
+
+    @app.get("/try", response_class=HTMLResponse)
+    def try_it(request: Request):
+        """The product on the left, its own acceptance list on the right."""
+        from ai_venture_studio.studio_try import try_body
+
+        try:
+            profile = _profile(root)
+        except Exception:  # noqa: BLE001 — a workspace without a profile
+            profile = ""
+        return _render(request, _("title_try"), try_body(root, _, profile),
+                       rail="product")
+
+    @app.post("/try/tick")
+    async def try_tick(request: Request):
+        """One founder tick. Explicitly not a verdict about the product:
+        nothing here changes what was built, and the page says so."""
+        from ai_venture_studio.studio_try import acceptance_rows, set_tick
+
+        form = await request.form()
+        row_id = str(form.get("row", ""))
+        # Same rule as every other identifier arriving from a form: shape
+        # first, then existence. This one becomes a key in a workspace file.
+        if not _REVIEW_ID.match(row_id):
+            return RedirectResponse("/try", status_code=303)
+        row = next((r for r in acceptance_rows(root) if r.id == row_id), None)
+        if row is None:
+            return _no_such_page(request, "title_no_row", row_id)
+        set_tick(root, row, on=not form.get("off"))
+        return RedirectResponse("/try", status_code=303)
 
     @app.get("/review/{review_id}", response_class=HTMLResponse)
     def review_detail(request: Request, review_id: str):
@@ -1859,6 +2319,27 @@ def create_studio_app(
             raise HTTPException(404) from None
         return _render(request, _("title_review"), body)
 
+    @app.get("/demo", response_class=HTMLResponse)
+    def demo_review(request: Request):
+        """`avs replay --demo` in the browser: the vendored demo bundle —
+        a real, redacted review of this repo's own code — rendered by the
+        same timeline the workspace's own reviews use. No key, no
+        workspace, and no second source of truth: the YAML mirror shipped
+        with the package is the whole input."""
+        from ai_venture_studio.editions import EDITIONS_ROOT
+
+        reviews_dir = EDITIONS_ROOT / "demo" / "reviews"
+        names = sorted(p.name for p in reviews_dir.iterdir() if p.is_dir())
+        if not names:
+            return _no_such_page(request, "title_no_demo", "demo")
+        body = review_timeline_body(
+            root, names[0], _, reviews_dir=reviews_dir, evidence=False
+        )
+        return _render(
+            request, _("title_demo"),
+            f"<p class=muted>{_('demo_note')}</p>{body}",
+        )
+
     @app.get("/shots/{name}")
     def shot(name: str):
         from fastapi.responses import FileResponse
@@ -1868,29 +2349,150 @@ def create_studio_app(
             raise HTTPException(404)
         return FileResponse(path)
 
+    def _classification_page(
+        request: Request, complaint: str, criterion: str, route
+    ) -> HTMLResponse:
+        """What the router decided, before it is acted on.
+
+        The two outcomes are different promises — a small fix is repaired
+        directly, a new requirement becomes its own small build — and the
+        founder is the only one who knows which they meant. Two plain
+        forms: confirm what it says, or reword it and route again.
+        """
+        scope = route.kind == "scope_change"
+        return _render(
+            request, _("title_classify"),
+            "<div class=stateline>"
+            f"<span class='sdot {'amber' if scope else 'green'}'></span>"
+            f"<span class='slabel {'warn' if scope else 'ok'}'>"
+            f"{_('cls_scope_chip') if scope else _('cls_fix_chip')}</span></div>"
+            f"<h1>{_('cls_scope_head') if scope else _('cls_fix_head')}</h1>"
+            f"<p>{_('cls_scope_what') if scope else _('cls_fix_what')}</p>"
+            "<div class=card>"
+            f"<div class=lbl style='margin-top:0'>{_('cls_your_words')}</div>"
+            f"<p>{html.escape(complaint)}</p>"
+            + (f"<div class=lbl>{_('cls_criterion')}</div>"
+               f"<p class=muted>{html.escape(criterion)}</p>" if criterion else "")
+            + f"<div class=lbl>{_('cls_feature')}</div>"
+            f"<p><code>{html.escape(route.spec_slug)}</code></p>"
+            f"<div class=lbl>{_('cls_instruction')}</div>"
+            f"<p class=muted>{html.escape(route.instruction)}</p></div>"
+            # Confirm: the classification the founder just read is the one
+            # that executes — the route travels with the form rather than
+            # being decided a second time.
+            "<form method=post action=/correct/confirm>"
+            f"<input type=hidden name=complaint value='{html.escape(complaint)}'>"
+            f"<input type=hidden name=criterion value='{html.escape(criterion)}'>"
+            f"<input type=hidden name=spec_slug value='{html.escape(route.spec_slug)}'>"
+            f"<input type=hidden name=kind value='{html.escape(route.kind)}'>"
+            f"<input type=hidden name=instruction value='{html.escape(route.instruction)}'>"
+            f"<button class=primary>"
+            f"{_('btn_cls_confirm_scope') if scope else _('btn_cls_confirm_fix')}"
+            "</button></form>"
+            "<form method=post action=/correct style='margin-top:18px'>"
+            f"<div class=lbl>{_('cls_reword')}</div>"
+            f"<input type=hidden name=criterion value='{html.escape(criterion)}'>"
+            f"<textarea name=complaint>{html.escape(complaint)}</textarea>"
+            f"<p><button class=secondary>{_('btn_cls_reword')}</button></p>"
+            "</form>"
+            f"<p class=muted>{_('cls_nothing_yet')}</p>",
+            h1="",
+        )
+
+    def _log_correction(complaint: str, result) -> None:
+        path = root / "product" / "CORRECTION-LOG.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                f"- {result.status}: {complaint[:120]} → {result.detail}\n"
+            )
+
     @app.post("/correct")
     async def correct(request: Request):
+        """Classify FIRST, act only once the founder has confirmed.
+
+        This used to run the whole correction on submit, so the founder
+        learned that their bug report had been read as a scope change —
+        their own SCR, approved in their name — only afterwards, from a log
+        line.
+        """
         if "correct" in thinking:
             return _thinking_page(request, thinking["correct"])
         form = await request.form()
         complaint = str(form.get("complaint", "")).strip()
-        if complaint:
-            from starlette.concurrency import run_in_threadpool
+        criterion = str(form.get("criterion", "")).strip()
+        if not complaint:
+            return RedirectResponse("/", status_code=303)
+        from starlette.concurrency import run_in_threadpool
 
-            from ai_venture_studio.upstream.correction import run_correction
+        from ai_venture_studio.upstream import correction as correction_mod
 
-            thinking["correct"] = _("working_correct")
-            try:
-                result = await run_in_threadpool(
-                    run_correction, root, complaint, provider=provider
+        thinking["correct"] = _("working_correct")
+        try:
+            route = await run_in_threadpool(
+                lambda: correction_mod.route_complaint(
+                    root, complaint, provider=provider, criterion=criterion
                 )
-            except Exception as exc:  # noqa: BLE001 — a page, never a 500
-                return _failure_page(request, exc)
-            finally:
-                thinking.pop("correct", None)
-            (root / "product" / "CORRECTION-LOG.md").open("a", encoding="utf-8").write(
-                f"- {result.status}: {complaint[:120]} → {result.detail}\n"
             )
+        except correction_mod.CorrectionRouteError as exc:
+            # Not a crash: the workspace has nothing built, or the router
+            # would not commit. Say which, rather than a stack trace.
+            return _render(
+                request, _("title_classify"),
+                f"<div class=card><b class=warn>{_('cls_cannot_route')}</b>"
+                f"<p class=muted>{html.escape(str(exc))}</p></div>"
+                f"<p><a href='/'>{_('link_back')}</a></p>",
+            )
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        finally:
+            thinking.pop("correct", None)
+        return _classification_page(request, complaint, criterion, route)
+
+    @app.post("/correct/confirm")
+    async def correct_confirm(request: Request):
+        """Execute the classification the founder just read."""
+        if "correct" in thinking:
+            return _thinking_page(request, thinking["correct"])
+        from ai_venture_studio.upstream.correction import (
+            CorrectionRoute,
+            run_correction,
+        )
+
+        form = await request.form()
+        complaint = str(form.get("complaint", "")).strip()
+        criterion = str(form.get("criterion", "")).strip()
+        slug = str(form.get("spec_slug", ""))
+        kind = str(form.get("kind", "fix"))
+        # `spec_slug` becomes a directory name under specs/, so it gets the
+        # same segment rule as every other identifier arriving from a form —
+        # and `kind` decides between two very different actions, so it is
+        # checked against the two it is allowed to be.
+        if not complaint or not _REVIEW_ID.match(slug) or kind not in (
+            "fix", "scope_change"
+        ):
+            return RedirectResponse("/", status_code=303)
+        if not (root / "specs" / slug / "spec.yaml").is_file():
+            return _no_such_page(request, "title_no_spec", slug)
+        route = CorrectionRoute(
+            spec_slug=slug, kind=kind,
+            instruction=str(form.get("instruction", "")) or complaint,
+        )
+        from starlette.concurrency import run_in_threadpool
+
+        thinking["correct"] = _("working_correct")
+        try:
+            result = await run_in_threadpool(
+                lambda: run_correction(
+                    root, complaint, provider=provider,
+                    criterion=criterion, route=route,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — a page, never a 500
+            return _failure_page(request, exc)
+        finally:
+            thinking.pop("correct", None)
+        _log_correction(complaint, result)
         return RedirectResponse("/", status_code=303)
 
     def _no_such_page(request: Request, title_key: str, what: str) -> HTMLResponse:

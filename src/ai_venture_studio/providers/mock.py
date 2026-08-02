@@ -102,13 +102,23 @@ class MockProvider(Provider):
             return yaml.safe_dump({"ready": True, "summary": "可以开始构建", "questions": []})
         if REPORTER_MARKER in system:
             return "mock 确认/报告：会做 X，不做 Y。(plain-language output)"
+        from ai_venture_studio.studio_chat import EXTRACTOR_MARKER
         from ai_venture_studio.upstream.correction import CORRECTION_MARKER
         from ai_venture_studio.upstream.telemetry import DIGEST_MARKER
         from ai_venture_studio.upstream.walkthrough import WALKTHROUGH_MARKER
 
+        if EXTRACTOR_MARKER in system:
+            return self._intake_extract(user)
         if CORRECTION_MARKER in system:
             slug = re.search(r"slug: ([\w-]+)", user)
-            kind = "scope_change" if "新增" in user else "fix"
+            # Both spellings of the same intent: the zh UI says 新增, and the
+            # en Studio's tests have to be able to reach the scope-change
+            # branch without writing Chinese into an English page.
+            kind = (
+                "scope_change"
+                if "新增" in user or "new requirement" in user.lower()
+                else "fix"
+            )
             return yaml.safe_dump(
                 {"spec_slug": slug.group(1) if slug else "unknown",
                  "kind": kind, "instruction": "apply the founder's correction"}
@@ -257,6 +267,31 @@ class MockProvider(Provider):
                         }
                     )
         return yaml.safe_dump({"status": "OK", "findings": findings}, sort_keys=False)
+
+    def _intake_extract(self, user: str) -> str:
+        """The open-paragraph intake pass, deterministically.
+
+        Only ever returns spans it actually copied out of the paragraph, so
+        the verbatim guard in studio_chat has real input to check, plus one
+        GUESS — the case that must never reach FDR.md unconfirmed.
+        """
+        match = re.search(r"<paragraph>\n(.*)\n</paragraph>", user, re.DOTALL)
+        paragraph = (match.group(1) if match else user).strip()
+        spans = [s.strip() for s in re.split(r"[.。\n]", paragraph) if s.strip()]
+        said = {}
+        for slot, span in zip(("who", "actions", "must"), spans):
+            said[slot] = span
+        return yaml.safe_dump(
+            {
+                "said": said,
+                "guesses": [
+                    {"slot": "success", "value": "people come back and use it "
+                                                 "again the next week",
+                     "why": "mock guess from the paragraph"},
+                ],
+            },
+            sort_keys=False, allow_unicode=True,
+        )
 
     def _lead(self, user: str) -> str:
         """Cluster findings that share a file and overlap within 2 lines."""

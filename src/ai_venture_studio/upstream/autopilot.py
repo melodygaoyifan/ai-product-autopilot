@@ -750,29 +750,102 @@ def tag_checkpoint(root: Path) -> str:
     return name
 
 
-def undo_last(root: Path) -> dict:
-    """M7: 回到上一个版本 — resets to the previous checkpoint after saving
-    a rescue branch, so even undo is undoable."""
+def checkpoints(root: Path) -> list[str]:
+    """Every checkpoint tag, oldest first."""
     import subprocess
-    import time as _time
 
-    tags = subprocess.run(
+    return subprocess.run(
         ["git", "tag", "--list", "ap-checkpoint-*", "--sort=version:refname"],
         cwd=root, capture_output=True, timeout=60, text=True,
     ).stdout.split()
-    if len(tags) < 2:
+
+
+def checkpoint_log(root: Path) -> list[dict]:
+    """The change list, NEWEST FIRST, with what going back past each one
+    would really cost.
+
+    The history model here is a straight line of checkpoints: returning to
+    a point means `git reset --hard` to it, so everything after it goes
+    too. That is the honest shape, and `later_changes` / `undoes_commits`
+    exist so a UI can SAY it instead of implying that one change in the
+    middle can be lifted out on its own. (It cannot: that would be
+    `git revert` and a conflict resolution no founder should be handed.)
+    """
+    import subprocess
+
+    tags = checkpoints(root)
+    entries: list[dict] = []
+    for index, tag in enumerate(tags):
+        subject = subprocess.run(
+            ["git", "log", "-1", "--format=%s", tag],
+            cwd=root, capture_output=True, timeout=60, text=True,
+        ).stdout.strip()
+        when = subprocess.run(
+            ["git", "log", "-1", "--format=%ci", tag],
+            cwd=root, capture_output=True, timeout=60, text=True,
+        ).stdout.strip()[:16]
+        previous = tags[index - 1] if index else ""
+        commits = 0
+        if previous:
+            counted = subprocess.run(
+                ["git", "rev-list", "--count", f"{previous}..HEAD"],
+                cwd=root, capture_output=True, timeout=60, text=True,
+            ).stdout.strip()
+            commits = int(counted) if counted.isdigit() else 0
+        entries.append({
+            "tag": tag,
+            "subject": subject,
+            "when": when,
+            "previous": previous,
+            # Checkpoints newer than this one — every one of them is undone
+            # as well, because the reset lands before this one.
+            "later_changes": len(tags) - 1 - index,
+            "undoes_commits": commits,
+        })
+    return list(reversed(entries))
+
+
+def undo_to_before(root: Path, tag: str) -> dict:
+    """Reset to the checkpoint BEFORE `tag`, saving a rescue branch first.
+
+    Linear, and deliberately not disguised: every checkpoint after `tag`
+    goes with it. The caller must have told the founder how many that is —
+    see `checkpoint_log`.
+    """
+    import subprocess
+    import time as _time
+
+    tags = checkpoints(root)
+    if tag not in tags:
+        return {"status": "unknown_checkpoint", "detail": tag}
+    index = tags.index(tag)
+    if index == 0:
         return {"status": "nothing_to_undo",
-                "detail": "只有一个版本，暂时没有可回退的更早版本。"}
+                "detail": "只有一个版本，暂时没有可回退的更早版本。"
+                          " / no earlier version to return to."}
     rescue = f"rescue/{int(_time.time())}"
     subprocess.run(["git", "branch", rescue], cwd=root, capture_output=True, timeout=60)
-    target = tags[-2]
+    target = tags[index - 1]
     reset = subprocess.run(
         ["git", "reset", "--hard", target], cwd=root, capture_output=True, timeout=60, text=True
     )
     if reset.returncode != 0:
         return {"status": "error", "detail": reset.stderr[:200]}
-    subprocess.run(["git", "tag", "-d", tags[-1]], cwd=root, capture_output=True, timeout=60)
-    return {"status": "undone", "restored_to": target, "rescue_branch": rescue}
+    dropped = tags[index:]
+    for stale in dropped:
+        subprocess.run(["git", "tag", "-d", stale], cwd=root, capture_output=True, timeout=60)
+    return {"status": "undone", "restored_to": target, "rescue_branch": rescue,
+            "dropped": dropped}
+
+
+def undo_last(root: Path) -> dict:
+    """M7: 回到上一个版本 — resets to the previous checkpoint after saving
+    a rescue branch, so even undo is undoable."""
+    tags = checkpoints(root)
+    if len(tags) < 2:
+        return {"status": "nothing_to_undo",
+                "detail": "只有一个版本，暂时没有可回退的更早版本。"}
+    return undo_to_before(root, tags[-1])
 
 
 def review_and_repair(
