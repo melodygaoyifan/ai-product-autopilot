@@ -97,10 +97,18 @@ def test_the_failed_modules_card_continues_in_one_click(studio):
 
 def test_retry_inherits_the_provider_and_leaves_forensics(studio, monkeypatch):
     """The two regressions, pinned: --provider travels, and output goes to
-    .mas/build.log — never DEVNULL."""
+    .mas/build.log — never DEVNULL.
+
+    The workspace has to hold the plan the task belongs to: since the
+    path-segment guard (v0.68.1) a `task_id` that is not in the plan is
+    answered out loud instead of spawning a worker doomed on arrival, so a
+    planless workspace never reaches the spawn this test is about.
+    """
     import ai_venture_studio.studio as studio_mod
 
     client, root, _ = studio
+    _interrupted_workspace(root)
+    (root / ".mas" / "build.pid").unlink()  # no live worker in the way
     captured: dict = {}
 
     class _Proc:
