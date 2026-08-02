@@ -295,6 +295,14 @@ sends). Credentials live in a vault layer that never enters prompts.
 
 ### What happens when a build fails?
 
+Passing its own tests does not get a module past the build gate: a web
+product must actually start and listen on its port, and a 小程序 must be
+openable in WeChat DevTools — app.json present, every page registered, and
+every relative `require` chain resolving to a file inside the mini-program
+root, because a module that throws at require time is a page that renders
+blank. Both checks exist because real runs produced green suites over
+products that could not load.
+
 The run retries its own mechanical failures first: one bounded pass, in
 dependency order, with the previous attempt's diagnosis handed to the writer
 — so a retry is a different attempt, not a replay. What still fails is
