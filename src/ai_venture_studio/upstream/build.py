@@ -179,8 +179,15 @@ _MP_CONTRACT_HINT = (
 def _miniprogram_root(repo: Path) -> Path:
     """Where the mini-program actually lives.
 
-    `project.config.json` may name a `miniprogramRoot`; otherwise the
-    conventional `miniprogram/` directory, otherwise the repo itself.
+    A declared `miniprogramRoot` wins — that is the platform's own answer.
+    With nothing declared, **evidence beats directory names**: the candidate
+    that actually holds an `app.json` is the project, because a directory
+    merely *called* `miniprogram/` silently disabled this whole gate once. A
+    real workspace kept its mini-program at the repo root (app.json + pages/
+    there) beside a stray `miniprogram/` containing nothing but a .DS_Store
+    and an `api/` folder; the name heuristic picked the stray, `app.json`
+    was absent, and the gate answered "not my business" over a product it
+    should have been checking.
     """
     import json
 
@@ -197,6 +204,9 @@ def _miniprogram_root(repo: Path) -> Path:
         if declared:
             return (config.parent / str(declared)).resolve()
         return config.parent
+    for candidate in (repo / "miniprogram", repo):
+        if (candidate / "app.json").is_file():
+            return candidate
     return repo / "miniprogram" if (repo / "miniprogram").is_dir() else repo
 
 

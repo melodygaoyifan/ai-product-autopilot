@@ -85,3 +85,37 @@ def test_the_scaffold_is_committed_so_tasks_extend_it(mp):
     ).stdout
     assert "miniprogram/app.json" in tracked
     assert "project.config.json" in tracked
+
+
+def test_a_stray_miniprogram_directory_does_not_disable_the_gate(tmp_path):
+    """Evidence beats directory names.
+
+    A real workspace kept its mini-program at the repo root (app.json and
+    pages/ there) beside a stray `miniprogram/` holding nothing but a
+    .DS_Store and an api/ folder. The name heuristic picked the stray, found
+    no app.json, and the gate answered "not my business" — a vacuous pass
+    over a product with three registered pages, which is exactly the silent
+    no-op this gate exists to prevent.
+    """
+    import json
+
+    repo = tmp_path / "rootlayout"
+    (repo / "pages" / "home").mkdir(parents=True)
+    (repo / "miniprogram" / "api").mkdir(parents=True)      # the stray
+    (repo / "miniprogram" / ".DS_Store").write_text("", encoding="utf-8")
+    (repo / "app.json").write_text(
+        json.dumps({"pages": ["pages/home/home"]}), encoding="utf-8"
+    )
+    (repo / "app.js").write_text("App({})\n", encoding="utf-8")
+    (repo / "pages" / "home" / "home.js").write_text("Page({})\n", encoding="utf-8")
+    (repo / "pages" / "home" / "home.wxml").write_text("<view/>\n", encoding="utf-8")
+
+    assert _miniprogram_root(repo) == repo, "the app.json decides, not the name"
+    assert _miniprogram_gate(repo) is None, "a complete root-layout project loads"
+
+    # ...and the gate now actually judges it: break the page it registered.
+    (repo / "pages" / "home" / "home.wxml").unlink()
+    problems = _miniprogram_gate(repo)
+    assert problems and "pages/home/home.wxml" in problems, (
+        "a stray miniprogram/ must not buy silence about a missing page file"
+    )
