@@ -1893,10 +1893,30 @@ def create_studio_app(
             )
         return RedirectResponse("/", status_code=303)
 
+    def _no_such_page(request: Request, title_key: str, what: str) -> HTMLResponse:
+        """A named thing the workspace does not have. Redirecting home would
+        read as "my click did nothing" — the exact failure the in-flight
+        guard exists to prevent — so the refusal says which name missed."""
+        return _render(
+            request, _(title_key),
+            f"<div class=card><b class=warn>{_('no_such_lead')}</b>"
+            f"<p>{_(title_key + '_missing').format(name=html.escape(what))}</p>"
+            f"</div><p><a href='/'>{_('link_back')}</a></p>",
+        )
+
     @app.post("/retry")
     async def retry(request: Request):
         form = await request.form()
         task_id = str(form.get("task_id", ""))
+        # Same rule the review and incident ids already follow: a task id is
+        # a path segment and an argv word, so anything else is an attempt,
+        # not a typo. And an id that is well-formed but not in the plan used
+        # to spawn a worker that died on arrival — leaving a pid file, so the
+        # Studio showed a build in progress that could never finish.
+        if task_id and not _REVIEW_ID.match(task_id):
+            return RedirectResponse("/", status_code=303)
+        if task_id and task_id not in {t["id"] for t in _task_states(root)}:
+            return _no_such_page(request, "title_no_task", task_id)
         if task_id and not _build_running(root):
             # Same rules as the build worker, which this path had quietly
             # regressed on: the retry inherits the Studio's provider (a mock
@@ -1949,8 +1969,15 @@ def create_studio_app(
     async def feature_build(request: Request):
         form = await request.form()
         slug = str(form.get("slug", ""))
+        # `slug` reaches the filesystem AND an argv, so it gets the same
+        # segment rule as the review and incident ids: without it,
+        # `../../..` walked the build out of the workspace entirely.
+        if not _REVIEW_ID.match(slug):
+            return RedirectResponse("/", status_code=303)
         feature_dir = root / "product" / "features" / slug
-        if feature_dir.is_dir() and not _build_running(root):
+        if not feature_dir.is_dir():
+            return _no_such_page(request, "title_no_feature", slug)
+        if not _build_running(root):
             fdr_path = feature_dir / "fdr.md"
             if spawn is not None:
                 spawn(root)

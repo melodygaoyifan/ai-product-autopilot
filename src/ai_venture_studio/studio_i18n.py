@@ -99,6 +99,26 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "📋 Acceptance walkthrough",
     },
     "link_back": {"zh": "← 返回 / back", "en": "← Back"},
+    # A named thing this workspace does not have. Loud, because a silent
+    # redirect home after a button press reads as a broken button.
+    "no_such_lead": {
+        "zh": "这个名字不在这个工作区里 / Not in this workspace",
+        "en": "That name is not in this workspace",
+    },
+    "title_no_task": {"zh": "找不到该模块 / Module not found", "en": "Module not found"},
+    "title_no_task_missing": {
+        "zh": "计划里没有叫 {name} 的模块，所以没有东西可以重试。"
+              " / No module called {name} is in the plan, so there is nothing to retry.",
+        "en": "No module called {name} is in the plan, so there is nothing to retry.",
+    },
+    "title_no_feature": {
+        "zh": "找不到该功能 / Feature not found", "en": "Feature not found",
+    },
+    "title_no_feature_missing": {
+        "zh": "这个工作区里没有叫 {name} 的待建功能。"
+              " / This workspace has no pending feature called {name}.",
+        "en": "This workspace has no pending feature called {name}.",
+    },
     "guide_summary": {
         "zh": "怎么写好？/ How to write a good FDR",
         "en": "How to write a good FDR",

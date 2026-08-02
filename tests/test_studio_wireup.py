@@ -207,6 +207,92 @@ def test_every_backend_route_is_reachable_from_some_rendered_state(studio):
         )
 
 
+#: Every POST route, with the field names its own rendered forms send. The
+#: route-name gate above proves the button points somewhere; this proves
+#: pressing it does not explode. Add a row when you add a POST route — the
+#: coverage assertion below fails until you do.
+_POST_BODIES: dict[str, list[dict[str, str]]] = {
+    "/chat": [{"answer": "the two of us"}, {"skip": "1"}],
+    "/chat/enough": [{}],
+    "/chat/restart": [{}],
+    "/fdr": [{"fdr": "## 1. Who is this for?\nus\n"}],
+    "/correct": [{"complaint": "the button should say Add task"}],
+    "/retry": [{"task_id": "t2"}],
+    "/undo": [{}],
+    "/feature": [{"fdr": "let us cancel an order"}],
+    "/feature/build": [{"slug": "f2-cancel-orders"}],
+    "/build": [{}],
+    "/live/guide": [{}],
+    "/live/sweep": [{}],
+    "/live/probe": [{"url": "http://127.0.0.1:1/"}],
+    "/incident": [{"description": "TypeError in app main"}],
+    "/incident/fix": [{"incident_id": "nope"}],
+    "/review/{review_id}/evidence": [{}],
+    "/reset": [{}],
+}
+
+#: Values that are an attempt rather than a typo. Each must be refused
+#: without reaching the filesystem or an argv.
+_HOSTILE = ("../../etc/passwd", "../" * 6 + "tmp", "a b; rm -rf /", "x" * 200)
+
+
+def test_every_post_route_is_covered_by_the_press_it_gate(studio):
+    """A POST route with no row above has never been pressed by any test."""
+    client, _root = studio
+    posts = {
+        path for path, methods in _routes(client.app).items() if "POST" in methods
+    }
+    assert posts - set(_POST_BODIES) == set(), "add these to _POST_BODIES"
+
+
+def test_pressing_every_button_does_not_500(studio):
+    """The route-name gate renders pages; it never presses anything. Both
+    unvalidated-path-segment bugs it missed (a `slug` that walked the build
+    out of the workspace, a `task_id` that spawned a worker doomed on
+    arrival) lived behind a POST no test had ever sent."""
+    client, root = studio
+    _walk_all_states(client, root)  # a workspace with a plan, a report, a feature
+    for path, bodies in _POST_BODIES.items():
+        target = path.replace("{review_id}", "rev-wire")
+        for body in bodies:
+            response = client.post(target, data=body, follow_redirects=False)
+            assert response.status_code < 500, (
+                f"POST {target} {body} → {response.status_code}"
+            )
+
+
+@pytest.mark.parametrize("evil", _HOSTILE)
+def test_a_path_segment_from_a_form_is_never_taken_on_trust(studio, evil):
+    """`task_id` and `slug` reach the filesystem and an argv, exactly like
+    the review and incident ids that already carry this rule. Neither may
+    start a worker, and neither may name a path outside the workspace."""
+    client, root = studio
+    _walk_all_states(client, root)
+    (root / ".mas" / "build.pid").unlink(missing_ok=True)
+
+    for path, field in (("/retry", "task_id"), ("/feature/build", "slug")):
+        response = client.post(path, data={field: evil}, follow_redirects=False)
+        assert response.status_code < 500
+        assert not (root / ".mas" / "build.pid").exists(), (
+            f"{path} started a worker for {field}={evil!r}"
+        )
+
+
+def test_a_name_the_workspace_does_not_have_is_said_out_loud(studio):
+    """Well-formed but absent is a different answer from malformed: the
+    founder pressed a real button, so silence reads as a broken button."""
+    client, root = studio
+    _walk_all_states(client, root)
+    (root / ".mas" / "build.pid").unlink(missing_ok=True)
+
+    page = client.post("/retry", data={"task_id": "t-nope"}).text
+    assert "t-nope" in page and "nothing to retry" in page
+    assert not (root / ".mas" / "build.pid").exists()
+
+    page = client.post("/feature/build", data={"slug": "f-nope"}).text
+    assert "f-nope" in page and "no pending feature" in page
+
+
 def test_status_payload_matches_what_the_building_page_js_reads(studio):
     """The building page's script reads s.running / s.built / s.total and
     t.id / t.title / t.state / t.step per task — the JSON contract, pinned."""
