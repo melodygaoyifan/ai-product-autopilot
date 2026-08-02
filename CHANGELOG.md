@@ -4,6 +4,89 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.68.1 — the diagnosis stops lying, and the Studio reads like a product
+
+A patch release: no command, file format, or route changes. Everything below
+either corrects a message that pointed somewhere wrong, or restyles a
+surface without moving it.
+
+**The 小程序 automation diagnosis was wrong three ways, each caught by using
+it.** A timeout was reported as "almost always the service port", which sent
+an investigation to re-check a toggle that was already on — the CLI had in
+fact printed its success marker, and DevTools was simply compiling a project
+it had never opened (measured: first open >300s, second 27s). Then the
+corrected message lied differently: it read the *whole* CLI log, which is
+appended to across runs on purpose, so a `✔ auto` from an earlier run was
+read as this run's success — reporting "first-open cost" for a session that
+had exited after four seconds, while quoting the 300s ceiling as if it were
+the measurement. The check now snapshots the log size before spawning and
+reads only what this run wrote, reports the wait as measured, and treats an
+early exit as its own diagnosis (a session already open on the project,
+naming `pkill -f 'cli auto'`). The success marker is matched as a whole line,
+never as a substring — this workspace's own path contains "auto", so a
+substring test would call every failure a success.
+
+**A directory named `miniprogram/` no longer buys silence.** Found by
+pointing the new gate at products built before it existed: one workspace
+keeps its mini-program at the repo root — `app.json` with three registered
+pages, `pages/` beside it — next to a stray `miniprogram/` holding nothing
+but a `.DS_Store` and an `api/` folder. `_miniprogram_root` picked the stray
+on its *name*, found no `app.json`, and the gate answered "nothing built here
+yet" — a vacuous pass over a real product, which is the exact silent no-op
+this gate exists to prevent. With nothing declared, evidence now beats
+directory names: the candidate that actually holds an `app.json` is the
+project. A declared `miniprogramRoot` still wins, because that is the
+platform's own answer. Four defects became visible on the affected workspace
+the moment the gate could see it.
+
+**The scaffold stops shipping a future AppID leak.** A new workspace's
+`.gitignore` now covers WeChat DevTools' per-machine artifacts:
+`project.private.config.json`, and the `project.config.json` DevTools writes
+*inside* `miniprogramRoot` carrying the logged-in account's real AppID —
+where the scaffold's root config deliberately uses `touristappid`, because a
+real AppID is somebody's identifier and not ours to commit. That inner file
+also shadows the root config for tools that look there first.
+
+Corrected in [the pipeline guide](docs/miniprogram-pipeline.md), because a
+wrong note becomes tomorrow's cargo cult: **`libVersion: "latest"` is fine.**
+Tested both ways on a cold IDE with identical results — it breaks
+`miniprogram-automator`'s `checkVersion` (an undefined `SDKVersion`) but not
+the raw driver, which never version-checks. The guide also now records that
+the IDE degrades over a long automation session: after many open/relaunch
+cycles `captureScreenshot` times out and app calls fail with a bare
+`Uncaught [object Object]`, on a project that passes cleanly after a cold
+start. A run failing in the driver rather than in the assertions means
+restart the IDE, not that the product broke.
+
+**The Studio worked and read as a debug page; now it reads as a product.**
+Nothing new is fetched, no client framework, no new source of truth — still
+server-rendered HTML over the same workspace files, still bilingual, **every
+route unchanged**. A design system replaces the styling accidents: one white
+card on a warm ground, one green primary action (the button that spends real
+money no longer looks like "Triage it"), a persistent Describe → Plan →
+Build → Your product stage rail, and hint text that clears AA instead of
+sitting at ~3.5:1 while carrying real instructions. `CONFIRMATION.md` and
+`BUILD-REPORT.md` are rendered rather than dumped as one grey `<pre>`, with
+the "will NOT build" section lifted into its own callout because that is the
+cheapest place to catch a misunderstanding. The build view gains the elapsed
+clock and accrued spend that were already on disk and thrown away, plus
+DONE/NOW/QUEUED per module — still no percentage and no ETA, because the
+system does not know whether attempt 2 is the last one. Modes reorder instead
+of appending, and add-only is intact: nothing is removed in any mode. Two
+layout defects found by driving the real UI in a browser rather than in
+tests: an unbreakable git-identity token pushed the preflight table into the
+trust table beside it, and a fixed-width state chip overflowed into the task
+title for any state longer than `QUEUED`.
+
+**A task id from a form is never taken on trust.** A well-formed id that is
+not in the plan used to spawn a worker that died on arrival — leaving a pid
+file, so the Studio showed a build in progress that could never finish. It is
+now answered out loud. (That guard made a `/retry` test's planless fixture
+stale; the fixture was repaired, and the property it protects — `--provider`
+travels, output lands in `.mas/build.log` and never `DEVNULL` — is intact.)
+
+Suite 1572 hermetic tests.
+
 ## v0.68.0 — a blank page is no longer a passing page (小程序)
 
 The 小程序 runtime check reported **"all 7 registered pages rendered"** for a
