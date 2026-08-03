@@ -433,16 +433,33 @@ def test_giving_the_workspace_twice_is_refused_not_guessed(tmp_path):
 
 def test_the_readme_founder_demo_is_the_recorded_real_run(tmp_path):
     """The GIF is the founder section's demo, and its caption must keep
-    saying the run was real and partial — a demo edited into a victory lap
-    is the exact failure this repo argues against."""
+    saying the run was real AND disclose what did not go perfectly — a demo
+    edited into a victory lap is the exact failure this repo argues against.
+
+    The run behind the current GIF finished 6 of 6, so "partly built" would
+    now be the lie rather than the disclosure. The property is unchanged and
+    pinned the same way: the claim that nothing was staged, plus at least one
+    concrete admission against interest. A caption that drops every one of
+    these has become marketing.
+    """
     import pathlib
 
     repo = pathlib.Path(__file__).resolve().parents[1]
     readme = (repo / "README.md").read_text(encoding="utf-8")
     assert "docs/media/studio-flow.gif" in readme
     assert (repo / "docs" / "media" / "studio-flow.gif").exists()
-    for phrase in ("One real run, unedited", "partly built"):
+    for phrase in ("One real run, unedited", "nothing composited"):
         assert phrase in readme, f"the honest caption lost {phrase!r}"
+    disclosures = (
+        "partly built",          # some modules failed (earlier runs)
+        "failed its tests",      # one did, and the retry pass rebuilt it
+        "closer look",           # the reviewer is not finished with it
+        "defects",               # driving it found bugs, now fixed
+    )
+    assert any(d in readme for d in disclosures), (
+        "the demo caption admits nothing — a victory lap, which is the one "
+        f"thing this demo may not be. Expected one of {disclosures}"
+    )
 
 
 # --- long POSTs: no 500s, no double-submit (v0.57.1) -------------------------

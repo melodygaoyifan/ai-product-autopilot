@@ -59,15 +59,21 @@ Profiles: `web` | `miniprogram` | `app`. Returning later is just
 `avs studio` from inside the folder. (Wrong Python environment? `uvx --from
 ai-venture-studio avs studio myteam --profile web` sidesteps it.)
 
-<img src="docs/media/studio-flow.gif" alt="The founder flow, recorded from one real run: an empty FDR form, the same form filled in with plain-language answers, the plan returned for confirmation, live per-task build progress, the plain-language build report, and finally the working task list the run produced" width="760">
+<img src="docs/media/studio-flow.gif" alt="The founder flow, recorded from one real run: the single open prompt, the SAID and GUESS rows the system took from one paragraph, the plan returned for confirmation with its NOT-building list, live per-module build state with an elapsed clock, and the plain-language report of the finished product" width="760">
 
-*One real run, unedited — a live provider, no mock, nothing composited.
-Plain language in; a plan comes back for confirmation; modules build with
-live per-task progress; the report says in your own words what works and
-what doesn't; the last frame is the product that run actually produced.
-That report reads "partly built" because some modules failed — it names
-them, keeps the rest working, and offers a retry per module. This is what
-a real run looks like, which is the only kind of demo this repo will ship
+*One real run, unedited — a live provider, no mock, nothing composited. One
+paragraph in; the system shows what it took from it and asks only about the
+gaps; a plan comes back for confirmation with what it will **not** build
+called out; modules build with real per-module state and an honest clock and
+no invented percentage; the report says in your own words what works. That
+run finished 6 of 6 — one module failed its tests and the run's own retry
+pass rebuilt it, which is why the report notes where the reviewer still
+wants a closer look rather than claiming a clean sweep. Every screen here is
+the product as shipped, and driving this one run found six defects that a
+green hermetic suite had not — the plan came back in Chinese for an
+English founder, the wait claimed "$0.00" while it was spending, three
+modules claimed to be building at once, and the finished product was
+reported as "2 of 6". Fixed, each with the test that would have caught it
 ([single screen](docs/media/studio-en.png) · [Chinese UI](docs/media/studio.png)).*
 
 English is the default (`--lang en`); `--lang zh` gives the original bilingual UI for
@@ -75,28 +81,23 @@ English is the default (`--lang en`); `--lang zh` gives the original bilingual U
 header switches the view — **Founder**, **Engineer**, **Enterprise** — and
 deeper views only add read-only detail.
 
-Your entire input is an **FDR**: six questions answered in your own words.
-The one that produced the run above:
+Your entire input is an **FDR** — and you do not have to write one. Say what
+you want in a paragraph and the system reads it back to you: what it took
+verbatim, and what it is guessing. A guess never enters the document until
+you confirm it. This is the whole of what produced the run above:
 
-```markdown
-## 1. Who is this for?
-The two of us running a small studio. Right now we track work in chat
-messages and keep losing track of what is actually finished.
-
-## 2. What do users do with it?
-1. Anyone adds a task with a title and who it is for.
-2. Anyone marks a task done.
-3. We look at the open tasks and the finished ones separately, newest first.
-
-## 3. Must-have features
-Add a task. Mark a task done. See both lists.
-
-## 4. NOT needed for now
-Logins, due dates, notifications, a mobile app.
-
-## 6. What does success look like?
-The two of us stop tracking work in chat messages.
+```text
+A shared task list for the two of us running a small studio. Right now we
+track work in chat messages and keep losing track of what is actually
+finished. Anyone should be able to add a task with a title and who it is
+for, mark a task done, and look at the open tasks and the finished ones
+separately, newest first. No logins, it is just us.
 ```
+
+The six sections it filled from that — who it is for, what people do,
+must-haves, not-in-v1, constraints, what success looks like — are still the
+document that gets built, and [`/?form=1`](RUNBOOK.md) still opens it to
+write or edit by hand.
 
 - **If your FDR is unclear, the system asks — it never guesses** (at most
   5 questions a non-technical person can answer, in your language).
