@@ -240,6 +240,57 @@ def _mp_resolve(spec: str, requiring: Path, root: Path) -> Path:
     return Path(os.path.normpath(base))
 
 
+# Lexical declarations that collide under ES-module semantics. `var` is
+# deliberately absent: re-declaring a var is legal everywhere.
+_MP_TOPLEVEL_DECL = re.compile(
+    r"^(?:export\s+)?(?:async\s+)?(?:function\*?|const|let|class)\s+"
+    r"([A-Za-z_$][\w$]*)",
+    re.MULTILINE,
+)
+
+
+def _mp_duplicate_declaration_problems(root: Path, repo: Path) -> list[str]:
+    """A name declared twice at the top level of one module.
+
+    Verified rather than assumed: `function a(){} function a(){}` is legal in
+    a sloppy script AND in a strict one, but is a SyntaxError under ES-module
+    semantics — which is what the 小程序 toolchain compiles with. So the whole
+    module fails to evaluate, and every page that requires it registers no
+    Page() and renders blank.
+
+    The lesson is avs-studio-3 (2026-08-03): a second `pad2` was added to
+    utils/delivery.js. 106 node --test cases stayed green — Node ran the file
+    as a script — while the cart, delivery and profile pages were all blank in
+    the real app. Node's own runner cannot see this; a regex over the module's
+    top level can.
+    """
+    problems: list[str] = []
+    for source_file in sorted(root.rglob("*.js")):
+        parts = set(source_file.parts)
+        if "node_modules" in parts or "miniprogram_npm" in parts:
+            continue
+        try:
+            text = source_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        text = _MP_BLOCK_COMMENT_RE.sub("", text)
+        text = _MP_LINE_COMMENT_RE.sub("", text)
+        seen: dict[str, int] = {}
+        for match in _MP_TOPLEVEL_DECL.finditer(text):
+            name = match.group(1)
+            seen[name] = seen.get(name, 0) + 1
+        for name, count in seen.items():
+            if count > 1:
+                problems.append(
+                    f"{source_file.relative_to(repo)} declares {name!r} "
+                    f"{count} times at the top level — legal in a plain node "
+                    "script, a SyntaxError under the module semantics the "
+                    "小程序 toolchain compiles with, so the module never "
+                    "evaluates and every page importing it renders blank"
+                )
+    return problems
+
+
 def _mp_require_problems(root: Path, repo: Path, entries: list[Path]) -> list[str]:
     """Walk relative require()/import chains from every entry file.
 
@@ -360,6 +411,7 @@ def _miniprogram_gate(repo: Path) -> str | None:
     # pages this way while this gate said 7/7).
     entries = [root / "app.js"] + [root / f"{page}.js" for page in registered]
     problems.extend(_mp_require_problems(root, repo, entries))
+    problems.extend(_mp_duplicate_declaration_problems(root, repo))
 
     if not problems:
         return None

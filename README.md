@@ -59,7 +59,7 @@ Profiles: `web` | `miniprogram` | `app`. Returning later is just
 `avs studio` from inside the folder. (Wrong Python environment? `uvx --from
 ai-venture-studio avs studio myteam --profile web` sidesteps it.)
 
-<img src="docs/media/studio-flow.gif" alt="The founder flow, recorded from one real run: the single open prompt, the SAID and GUESS rows the system took from one paragraph, the plan returned for confirmation with its NOT-building list, live per-module build state with an elapsed clock, and the plain-language report of the finished product" width="760">
+<img src="docs/media/studio-flow-v070.gif" alt="The founder flow, recorded from one real run: the single open prompt, the SAID and GUESS rows the system took from one paragraph, the plan returned for confirmation with its NOT-building list, live per-module build state with an elapsed clock, and the plain-language report of the finished product" width="760">
 
 *One real run, unedited — a live provider, no mock, nothing composited. One
 paragraph in; the system shows what it took from it and asks only about the
@@ -74,7 +74,7 @@ green hermetic suite had not — the plan came back in Chinese for an
 English founder, the wait claimed "$0.00" while it was spending, three
 modules claimed to be building at once, and the finished product was
 reported as "2 of 6". Fixed, each with the test that would have caught it
-([single screen](docs/media/studio-en.png) · [Chinese UI](docs/media/studio.png)).*
+([single screen](docs/media/studio-en-v070.png) · [Chinese UI](docs/media/studio-zh-v070.png)).*
 
 English is the default (`--lang en`); `--lang zh` gives the original bilingual UI for
 微信小程序 founders. The page
@@ -195,7 +195,7 @@ is in [claims/platform.yaml](claims/platform.yaml).
 - **Perf-lane calibration**: 5 of 5 seeded defects caught (catch rate 100%)
   at the 3x relative-detection factor, loopback low-parity environment,
   2026-07-26 ([manifest](benchmarks/perf_seeded/calibration.yaml)).
-- **1688 hermetic tests** (`uv run pytest`, no network, no keys); every PR
+- **1689 hermetic tests** (`uv run pytest`, no network, no keys); every PR
   in this repo was reviewed by avs itself, and five of those reviews caught
   real bugs.
 - **A hermetic suite is not enough, and this repo says so.** Twelve real

@@ -119,3 +119,50 @@ def test_a_stray_miniprogram_directory_does_not_disable_the_gate(tmp_path):
     assert problems and "pages/home/home.wxml" in problems, (
         "a stray miniprogram/ must not buy silence about a missing page file"
     )
+
+
+def test_a_name_declared_twice_in_one_module_is_caught(tmp_path):
+    """106 node --test cases stayed green while the app was entirely blank.
+
+    avs-studio-3 (2026-08-03): a second `pad2` was added to utils/delivery.js.
+    Verified rather than assumed — `function a(){} function a(){}` is legal in
+    a sloppy script AND a strict one, but is a SyntaxError under ES-module
+    semantics, which is what the 小程序 toolchain compiles with. The module
+    never evaluated, so cart/delivery/profile all registered no Page() and
+    rendered blank, and only the DevTools run found it. Node's own runner
+    cannot see this; the gate can.
+    """
+    import json
+
+    repo = tmp_path / "dup"
+    (repo / "pages" / "home").mkdir(parents=True)
+    (repo / "utils").mkdir()
+    (repo / "app.json").write_text(
+        json.dumps({"pages": ["pages/home/home"]}), encoding="utf-8"
+    )
+    (repo / "app.js").write_text("App({})\n", encoding="utf-8")
+    (repo / "pages" / "home" / "home.wxml").write_text("<view/>\n", encoding="utf-8")
+    (repo / "pages" / "home" / "home.js").write_text(
+        "const { pad2 } = require('../../utils/fmt')\nPage({})\n", encoding="utf-8"
+    )
+    (repo / "utils" / "fmt.js").write_text(
+        "function pad2(n) { return n }\n"
+        "// a later edit adds a second one\n"
+        "function pad2(n) { return '0' + n }\n"
+        "module.exports = { pad2 }\n",
+        encoding="utf-8",
+    )
+
+    problems = _miniprogram_gate(repo)
+
+    assert problems and "pad2" in problems
+    assert "2 times" in problems
+    assert "blank" in problems, "say what it costs, not just that it is wrong"
+
+    # A single declaration, and a re-declared `var` (legal everywhere), pass.
+    (repo / "utils" / "fmt.js").write_text(
+        "function pad2(n) { return n }\nvar x = 1\nvar x = 2\n"
+        "module.exports = { pad2 }\n",
+        encoding="utf-8",
+    )
+    assert _miniprogram_gate(repo) is None
