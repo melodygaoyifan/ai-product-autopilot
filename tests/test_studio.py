@@ -309,9 +309,9 @@ def test_the_english_readme_demo_shows_the_english_screenshot():
 
     repo = pathlib.Path(__file__).resolve().parents[1]
     readme = (repo / "README.md").read_text(encoding="utf-8")
-    assert "docs/media/studio-en.png" in readme
+    assert "docs/media/studio-en-v070.png" in readme
     assert "--lang en" in readme
-    assert (repo / "docs" / "media" / "studio-en.png").exists()
+    assert (repo / "docs" / "media" / "studio-en-v070.png").exists()
 
 
 def test_default_flow_first_visit_is_english(studio_en):
@@ -446,8 +446,8 @@ def test_the_readme_founder_demo_is_the_recorded_real_run(tmp_path):
 
     repo = pathlib.Path(__file__).resolve().parents[1]
     readme = (repo / "README.md").read_text(encoding="utf-8")
-    assert "docs/media/studio-flow.gif" in readme
-    assert (repo / "docs" / "media" / "studio-flow.gif").exists()
+    assert "docs/media/studio-flow-v070.gif" in readme
+    assert (repo / "docs" / "media" / "studio-flow-v070.gif").exists()
     for phrase in ("One real run, unedited", "nothing composited"):
         assert phrase in readme, f"the honest caption lost {phrase!r}"
     disclosures = (
