@@ -137,11 +137,20 @@ def test_the_cost_footer_uses_the_workspaces_own_ledger_when_it_has_one(tmp_path
 
     with _env():
         client, root = _studio(tmp_path, "spent")
-        spend.record("claude-opus-4-8", 1000, 1000)
+        # A figure needs a PRICE, not just a call. Without one this test used
+        # to pass on "≥$0.00" — the misleading zero the building page showed
+        # through a whole real build (see test_studio_spend_honesty.py).
+        (root / ".mas").mkdir(exist_ok=True)
+        (root / ".mas" / "cost-model.yaml").write_text(
+            "prices:\n  claude-opus-4-8:\n    input: 5.0\n    output: 25.0\n",
+            encoding="utf-8",
+        )
+        spend.record("claude-opus-4-8", 1_000_000, 0)
         spend.flush(root)
         page = client.get("/").text
 
     assert "spent" in page
+    assert "$5.00" in page, "the ledger's own figure did not reach the footer"
     assert "no figure to show" not in page
 
 

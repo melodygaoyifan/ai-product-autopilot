@@ -1025,14 +1025,24 @@ def create_studio_app(
         return f"<div>{''.join(parts)}</div>"
 
     def _spend_month_fragment() -> str:
-        """Just the month's dollar figure ("$3.87"), for muted meta lines —
-        empty when nothing was spent, because an omitted figure is honest
-        and a made-up zero is not (some calls are unpriced)."""
+        """Just the month's dollar figure ("≥$3.87"), for muted meta lines —
+        empty when there is no figure to give, because an omitted figure is
+        honest and a made-up zero is not.
+
+        "No figure" covers two cases, and the second one used to slip
+        through: no calls at all, AND calls whose models are all unpriced.
+        A real live build spent 24 minutes showing "$0.00 so far" on the
+        building page — a founder reads that as "this one is free", when it
+        means "this workspace has no price list". The full spend card says
+        so in words; a four-character meta line cannot, so it says nothing.
+        """
         from ai_venture_studio import spend
 
         report = spend.month_report(root)
         if not report.calls:
             return ""
+        if report.is_floor and report.spent_usd == 0:
+            return ""  # priced nothing: a zero here would be a claim
         prefix = "≥" if report.is_floor else ""
         return f"{prefix}${report.spent_usd:.2f}"
 
@@ -1310,7 +1320,10 @@ def create_studio_app(
             meta_bits = [_("building_elapsed")] if clock else []
             if spent:
                 meta_bits.append(
-                    _("building_spent_fmt").format(amount=spent.lstrip("≥$"))
+                    # The whole figure, "≥" included: stripping the floor
+                    # marker turned a lower bound into a total on the one
+                    # page that watches money accrue.
+                    _("building_spent_fmt").format(amount=spent)
                 )
             clock_html = ""
             if clock or spent:

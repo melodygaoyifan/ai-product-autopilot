@@ -63,12 +63,40 @@ class AutopilotResult(BaseModel):
     auto_approvals: list[str] = Field(default_factory=list)
 
 
-_CONFIRM_SYSTEM = f"""You are the {REPORTER_MARKER}. Restate the brief below
+#: Section headings for the confirmation, per language. They are shown to
+#: the model as the format to follow, so they cannot be hardcoded bilingual:
+#: a demonstration beats an instruction. With "会做什么 / What will be built"
+#: in the prompt, an English FDR came back with Chinese headings and then a
+#: Chinese body — the founder's own words were English, the UI was English,
+#: and the one page they must read before spending money was not. Found by
+#: driving a real live run end to end, which is what real runs are for.
+_CONFIRM_HEADINGS = {
+    "zh": ("会做什么 / What will be built", "这次不做 / Not in this version",
+           "怎么算成功 / How we'll know it works"),
+    "en": ("What will be built", "Not in this version",
+           "How we'll know it works"),
+}
+
+
+def fdr_language(fdr_text: str) -> str:
+    """"zh" when the founder wrote any CJK, else "en".
+
+    Deterministic on purpose — a model call to decide which language to
+    answer in is a model call that can get it wrong, and this is the one
+    decision that makes the confirmation readable or useless.
+    """
+    return "zh" if any("一" <= ch <= "鿿" for ch in fdr_text) else "en"
+
+
+def _confirm_system(fdr_text: str) -> str:
+    built, not_now, success = _CONFIRM_HEADINGS[fdr_language(fdr_text)]
+    return f"""You are the {REPORTER_MARKER}. Restate the brief below
 as a short confirmation the founder reads before the build starts — in the
-SAME LANGUAGE as the FDR. Three sections, plain words, no tech terms:
-1. 会做什么 / What will be built (from scope_now, as user-visible abilities)
-2. 这次不做 / Not in this version (scope_later + scope_never)
-3. 怎么算成功 / How we'll know it works
+SAME LANGUAGE as the FDR, which is the language of the headings below.
+Three sections, plain words, no tech terms:
+1. {built} (from scope_now, as user-visible abilities)
+2. {not_now} (scope_later + scope_never)
+3. {success}
 End with one line: reply `--yes` (or re-run with --yes) to start building.
 Respond with the confirmation text only."""
 
@@ -185,7 +213,7 @@ def run_autopilot(
                   "writing the plan back to you in plain language")
     confirmation = provider_impl.complete(
         model=model,
-        system=_CONFIRM_SYSTEM,
+        system=_confirm_system(fdr_text),
         user=yaml.safe_dump(
             brief.model_dump(include={"title", "scope_now", "scope_later", "scope_never", "success_metrics"}),
             sort_keys=False, allow_unicode=True,
@@ -1152,7 +1180,7 @@ def run_feature(
 
     confirmation = provider_impl.complete(
         model=model,
-        system=_CONFIRM_SYSTEM,
+        system=_confirm_system(fdr_text),
         user=yaml.safe_dump(
             {"feature": assessment.summary,
              "tasks": [t.title for t in tasks]},

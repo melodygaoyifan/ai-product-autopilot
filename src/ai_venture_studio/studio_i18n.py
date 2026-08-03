@@ -1061,9 +1061,11 @@ STRINGS: dict[str, dict[str, str]] = {
               "made-up number is worse than an honest step.",
     },
     "building_elapsed": {"zh": "已用时 / elapsed", "en": "elapsed"},
+    # {amount} already carries its own "$" and any "≥" floor marker — a
+    # lower bound must not be reprinted as a total.
     "building_spent_fmt": {
-        "zh": "已花 ${amount} / so far",
-        "en": "${amount} so far",
+        "zh": "已花 {amount} / so far",
+        "en": "{amount} so far",
     },
     # Status chips. Small caps labels; the failed states keep their
     # verbatim state name instead.
