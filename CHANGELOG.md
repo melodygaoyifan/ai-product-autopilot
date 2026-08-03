@@ -4,6 +4,44 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.70.1 — a name declared twice renders every importing page blank
+
+A patch release: no command, file format, or route changes. One gate check
+and one test repair.
+
+**The 小程序 loadability gate now catches duplicate top-level declarations.**
+Found the hard way in a product workspace: a second `pad2` was added to a
+utils module, and **106 `node --test` cases stayed green while the app was
+entirely broken** — the cart, delivery and profile pages all registered no
+`Page()` and rendered pure white. Only the DevTools run found it.
+
+The mechanism was verified rather than assumed, because the obvious
+explanation was wrong: `function a(){} function a(){}` is legal in a sloppy
+script **and in a strict one**. It is a SyntaxError under ES-*module*
+semantics, which is what the 小程序 toolchain compiles with — so the module
+never evaluates and everything importing it goes blank. Node's own test
+runner loads the same file as a script and sees nothing wrong, which is
+exactly why the suite could not catch this.
+
+The gate reports duplicate top-level `function`/`const`/`let`/`class` names
+per module. `var` is deliberately excluded: re-declaring a var is legal
+everywhere. Validated against the real incident in both directions —
+re-introducing the exact second `pad2` on a copy names the file, the
+identifier, the count and the consequence; the repaired workspace passes.
+
+This is the third member of the same family, all mechanically detectable
+with no DevTools and no LLM: a page file that does not exist, a `require`
+that escapes `miniprogramRoot`, and now a module that cannot evaluate.
+
+Also: two README media assertions follow the v0.70.0 screenshot rename
+(`studio-en.png` → `studio-en-v070.png` and siblings), which had shipped
+without them.
+
+Suite 1689 hermetic tests — and this is the first release whose publish run
+enforces PC-1 itself: a claimed test count that disagrees with the count
+that just passed now fails the release rather than publishing a number
+nobody measured.
+
 ## v0.70.0 — what a real run said, and the repair for what it broke
 
 One live English run through the shipped Studio, driven in a browser to
