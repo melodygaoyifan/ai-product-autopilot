@@ -38,3 +38,49 @@ def test_both_call_sites_build_the_prompt_from_the_fdr():
         "a call site still uses the hardcoded-bilingual prompt"
     )
     assert src.count("system=_confirm_system(fdr_text)") == 2
+
+
+# ── the appended blocks: assembled in Python, so they are ours to get right ──
+
+
+def _outcomes():
+    from ai_venture_studio.upstream.autopilot import TaskOutcome
+
+    return [
+        TaskOutcome(task_id="t1", title="Task storage", status="built",
+                    review_verdict="APPROVE"),
+        TaskOutcome(task_id="t2", title="Add-task form", status="built",
+                    review_verdict="REQUEST_CHANGES"),
+        TaskOutcome(task_id="t3", title="Mark done", status="build_failed"),
+    ]
+
+
+def test_an_english_report_has_no_chinese_in_its_tally():
+    """A real English run ended in "## 结果清单" and "个模块建成" — the
+    reporter's prose followed the FDR, but the arithmetic block did not."""
+    from ai_venture_studio.upstream.autopilot import _outcome_tally
+
+    tally = _outcome_tally(_outcomes(), "en")
+
+    assert not any("一" <= ch <= "鿿" for ch in tally), tally
+    assert "**2 / 3** modules built." in tally
+    assert "clean" in tally
+    # A failure is still ours, said plainly, in their language.
+    assert "not your requirements" in tally
+
+
+def test_a_chinese_report_keeps_its_bilingual_tally():
+    from ai_venture_studio.upstream.autopilot import _outcome_tally
+
+    tally = _outcome_tally(_outcomes(), "zh")
+    assert "结果清单" in tally and "个模块建成" in tally
+    assert "已通过检查" in tally
+
+
+def test_the_cost_heading_follows_the_same_table():
+    from ai_venture_studio.upstream.autopilot import _TALLY_TEXT
+
+    assert _TALLY_TEXT["en"]["cost_heading"] == "What this cost"
+    assert not any(
+        "一" <= ch <= "鿿" for value in _TALLY_TEXT["en"].values() for ch in value
+    ), "the English table carries CJK"

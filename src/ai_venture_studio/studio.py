@@ -630,13 +630,25 @@ def _task_states(root: Path) -> list[dict]:
     from ai_venture_studio.upstream import progress as progress_journal
 
     steps = progress_journal.latest_by_task(root)
+    # A step belongs to the ONE task the run is on. Handing every started
+    # task its last narration made a sequential build claim three modules
+    # were in flight at once — "NOW" on each, because both renderers read
+    # "pending + a step" as in-flight. Seen in a real run at 1:25 elapsed:
+    # two DONE, one BUILD_FAILED, and three NOWs of which at most one could
+    # be true. A step that is not happening now is stale narration, which
+    # this file already refuses to print on a built task; the same rule just
+    # has to hold for a task the run has moved past. Keeping the payload's
+    # shape (rather than adding an is_current flag) keeps the server and the
+    # poll JS honest by construction, since neither can drift from the other.
+    live = (progress_journal.current(root) or {}).get("task_id")
     return [
         {
             "id": t["id"],
             "title": t.get("title", t["id"]),
             "state": "built" if t["id"] in built_ids
             else failed.get(t["id"], "pending"),
-            "step": str(steps.get(t["id"], {}).get("detail", "")),
+            "step": str(steps.get(t["id"], {}).get("detail", ""))
+            if t["id"] == live else "",
         }
         for t in plan.get("tasks", [])
     ]

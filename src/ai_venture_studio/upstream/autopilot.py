@@ -391,7 +391,8 @@ def _build_plan(
     # nine" for a run that built six, and separately blamed three
     # spec_blocked tasks on the founder's requirements when they were our own
     # lint rejecting our own writer. A count is not a thing to narrate.
-    tally_block = _outcome_tally(outcomes)
+    report_lang = fdr_language(fdr_text)
+    tally_block = _outcome_tally(outcomes, report_lang)
     # What it cost, in the report the founder actually reads. The signal this
     # answers asked to SEE the number — "how much will a typical month of
     # builds cost me? I'm scared to leave autopilot running" — and a figure
@@ -404,7 +405,10 @@ def _build_plan(
         spend.summarize_workspace(root, since=run_started_at), what="This build"
     )
     shape = spend.typical_and_projected(root)
-    cost_block = f"\n\n---\n\n## 花了多少 / What this cost\n\n{cost_line}\n"
+    cost_block = (
+        f"\n\n---\n\n## {_TALLY_TEXT[report_lang]['cost_heading']}\n\n"
+        f"{cost_line}\n"
+    )
     if shape.get("runs_seen", 0) > 1:
         cost_block += (
             f"\nTypical run so far: ${shape['typical_run_usd']:.2f}; "
@@ -442,29 +446,56 @@ _OURS = {"spec_blocked": "our checks blocked it",
          "merge_conflict": "two parallel lanes collided"}
 
 
-def _outcome_tally(outcomes) -> str:
+#: The appended blocks, per language. The reporter's prose already follows
+#: the FDR, but the tally and the cost line are assembled in Python — and
+#: they were hardcoded bilingual, so a report an English founder read ended
+#: in "## 结果清单", "个模块建成" and "建好了，检查有意见". Same defect as the
+#: confirmation headings, one file over: text a founder reads has to be in
+#: the language they wrote in.
+_TALLY_TEXT = {
+    "zh": {
+        "heading": "结果清单 / What happened, counted",
+        "built_fmt": "**{built} / {total}** 个模块建成 / modules built.",
+        "clean": "已通过检查 / clean",
+        "notes": "建好了，检查有意见 / built, review had notes",
+        "ours": "（这不是你的需求写得不好，是我们这边没过；可以单独重试）"
+                " / not your requirements — ours; retry it on its own",
+        "cost_heading": "花了多少 / What this cost",
+    },
+    "en": {
+        "heading": "What happened, counted",
+        "built_fmt": "**{built} / {total}** modules built.",
+        "clean": "clean",
+        "notes": "built, review had notes",
+        "ours": " — not your requirements, ours; you can retry it on its own",
+        "cost_heading": "What this cost",
+    },
+}
+
+
+def _outcome_tally(outcomes, lang: str = "zh") -> str:
     """The counted truth, appended under the reporter's prose.
 
     Deterministic on purpose: the model narrates, arithmetic counts. It also
     labels every failure as ours, because every status in `_OURS` is.
     """
+    words = _TALLY_TEXT[lang]
     built = [o for o in outcomes if o.status == "built"]
-    failed = [o for o in outcomes if o.status != "built"]
     lines = [
-        "\n\n---\n\n## 结果清单 / What happened, counted\n",
-        f"**{len(built)} / {len(outcomes)}** 个模块建成 / modules built.\n",
+        f"\n\n---\n\n## {words['heading']}\n",
+        words["built_fmt"].format(built=len(built), total=len(outcomes)) + "\n",
     ]
     for outcome in outcomes:
         if outcome.status == "built":
-            note = {"APPROVE": "已通过检查 / clean"}.get(
-                outcome.review_verdict or "", "建好了，检查有意见 / built, review had notes"
+            note = (
+                words["clean"] if outcome.review_verdict == "APPROVE"
+                else words["notes"]
             )
             lines.append(f"- ✅ **{outcome.title}** — {note}")
         else:
             lines.append(
                 f"- ❌ **{outcome.title}** — {_OURS.get(outcome.status, outcome.status)}"
-                "（这不是你的需求写得不好，是我们这边没过；可以单独重试）"
-                " / not your requirements — ours; retry it on its own"
+                + words["ours"]
             )
     return "\n".join(lines) + "\n"
 

@@ -1245,6 +1245,18 @@ def _run_build_inner(
             detail=detail,
         )
 
+    # BEFORE the commit, not after. `built: true` and the changelog fragment
+    # used to be written once the commit already existed, which left them as
+    # uncommitted working-tree changes — and two recovery paths discard those
+    # wholesale: `git checkout -- .` when a fix iteration is rolled back, and
+    # `_reset_workspace` after a failed build. A real run committed six
+    # modules and kept the flag on two, so `built_task_ids` under-reported;
+    # the founder's report headline read "2 of 6" over a finished product,
+    # and — the expensive half — a resumed run would have rebuilt and
+    # re-paid for four modules that were already built and committed.
+    # Inside the task's own commit, no later rollback can take it.
+    if bookkeeping:
+        finalize_build_bookkeeping(repo, slug, written)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     committed = subprocess.run(
         ["git", "-c", "user.email=autoproduct@local", "-c", "user.name=autoproduct",
@@ -1262,8 +1274,6 @@ def _run_build_inner(
         ["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True, text=True
     ).stdout.strip()
 
-    if bookkeeping:
-        finalize_build_bookkeeping(repo, slug, written)
     try:
         from ai_venture_studio.upstream.plan import record_actual
 
