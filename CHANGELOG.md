@@ -4,6 +4,65 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.70.0 — what a real run said, and the repair for what it broke
+
+One live English run through the shipped Studio, driven in a browser to
+replace the README's pre-redesign screenshots. It found six defects that a
+green hermetic suite had not, because each needs a real model, a real price
+list, or a real rollback to appear.
+
+**Every artifact a founder reads now follows the FDR's own language.** The
+confirmation prompt said "in the SAME LANGUAGE as the FDR" and then
+demonstrated its section headings as `会做什么 / What will be built` — and a
+demonstration beats an instruction, so the model copied the frame and wrote
+the body in Chinese over an entirely English FDR. The one page a founder
+must read *before spending money* was not in their language. The headings,
+the counted tally and the cost heading now come from a per-language table
+keyed by the FDR itself, detected deterministically (any CJK ⇒ zh), because
+a model call to decide which language to answer in is a model call that can
+get it wrong.
+
+**`built: true` rides inside the task's own commit.** Written afterwards it
+was an uncommitted working-tree change, and two recovery paths discard those
+wholesale: `git checkout -- .` when a fix iteration is rolled back, and
+`_reset_workspace` after a failed build. A run that committed six modules
+kept the flag on two. The wrong headline number ("2 of 6" over a finished
+product) was the visible half; the expensive half is that `built_task_ids`
+is what a resumed run reads to decide what it may skip, so the next
+`avs create` would have rebuilt and re-billed four committed modules.
+
+**`avs reconcile [--scan DIR] [--apply]`** repairs that damage where it
+already exists, since no code change can fix a workspace built last week.
+It restores a flag only where outcomes.yaml AND a commit naming that spec
+(or the title its commit subject embeds) already agree; a task they disagree
+on is named for a human and left alone. A task is the unit, not a spec file:
+planning is not deterministic, so a re-run leaves the same task a second
+spec under a slightly different slug, and repairing those leftovers would
+resurrect specs a later plan replaced. Keyed on spec files the first version
+reported eleven findings across three real workspaces and nine were false.
+
+**The wait stopped claiming a number it did not have.** `"$0.00 so far"` ran
+for twenty-four minutes of a build that was spending: the guard covered *no
+calls at all* but not calls whose models have no price, and the building page
+then stripped the `≥` floor marker off the figure it did print. A founder
+reads a zero as "this one is free"; it meant "this workspace has no price
+list". No figure now, and the floor marker survives where there is one.
+
+**And one NOW, not three.** Both renderers read "pending + a step" as
+in-flight, and every task that had ever narrated anything still carried its
+last line — so a sequential build showed three modules building at once, of
+which at most one could be true.
+
+Plus the README's founder demo is that run: the flow GIF, the single screen,
+and the `--lang zh` still are all the redesigned Studio, and the caption
+states the run's real outcome and the defects it exposed. The honesty test
+moved with it rather than being relaxed — "partly built" was this demo's
+admission against interest and would now be the lie, so the test pins the
+unedited claim plus at least one concrete admission, and fails a caption
+that admits nothing.
+
+1688 hermetic tests.
+
 ## v0.69.0 — the key, the paragraph, the product, and the decision
 
 The four proposals the Studio redesign deliberately left unbuilt, built —
