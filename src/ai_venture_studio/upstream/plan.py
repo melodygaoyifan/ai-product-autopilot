@@ -572,6 +572,118 @@ def built_task_ids(repo_dir: str | Path) -> set[str]:
     return done
 
 
+def reconcile_built_flags(repo_dir: str | Path, *, apply: bool = False) -> dict:
+    """Find — and optionally repair — specs whose `built` flag the workspace
+    lost, using evidence the workspace already holds.
+
+    Until v0.70 `built: true` was written AFTER the task's own commit, so it
+    sat in the working tree, where two recovery paths discard uncommitted
+    changes wholesale: `git checkout -- .` when a fix iteration is rolled
+    back, and `_reset_workspace` after a failed build. A real run committed
+    six modules and kept the flag on two.
+
+    That flag is not decoration: `built_task_ids` is what a resumed run reads
+    to decide what it may skip, so a lost flag makes the next `avs create`
+    rebuild — and re-bill — work that is already built and committed.
+
+    A TASK is the unit, never a spec file. Planning is not deterministic, so
+    re-running leaves SUPERSEDED specs behind: the same task id gets a second
+    spec directory under a slightly different slug, and the older one keeps
+    `built: false` forever. Four such pairs sit in one real workspace
+    (`per-product-review-area-text-star-rating` beside
+    `per-product-review-area-with-text-and-star-rat`). Those are not lost
+    flags and repairing them would resurrect a spec a later plan replaced —
+    the task already has a built spec, `built_task_ids` already returns it,
+    and nothing will be rebuilt. A first version of this check reported all
+    four as damage, which is why the rule is stated on tasks.
+
+    So a task is a lost flag only when NO spec of its own carries the flag,
+    while both of these say it was built:
+      * outcomes.yaml records it as `built` — the run's own verdict, and
+      * a commit exists naming that spec (`feat(<slug>)`) or its title, which
+        the build's own commit subject embeds.
+    A task the two disagree on is named for a human and left alone. This
+    function never decides that something was built; it restores a record of
+    a decision two independent artifacts already agree on.
+
+    Read-only unless `apply=True`.
+    """
+    import subprocess
+
+    root = Path(repo_dir).resolve()
+    result: dict = {
+        "workspace": str(root), "lost": [], "repaired": [],
+        "unsupported": [], "superseded": [], "status": "clean",
+    }
+    outcomes_path = root / "product" / "outcomes.yaml"
+    if not (root / "specs").is_dir() or not outcomes_path.exists():
+        result["status"] = "not_a_built_workspace"
+        return result
+
+    recorded_built = {
+        o["task_id"] for o in yaml.safe_load(
+            outcomes_path.read_text(encoding="utf-8")
+        ) or [] if o.get("status") == "built" and o.get("task_id")
+    }
+    already_flagged = built_task_ids(root)  # one definition of built, shared
+    log = subprocess.run(
+        ["git", "log", "--pretty=%s"], cwd=root, capture_output=True,
+        text=True, timeout=60,
+    ).stdout
+
+    # task id → its unbuilt specs, so the decision is made per task
+    unbuilt: dict[str, list[tuple[Path, dict]]] = {}
+    for spec_file in sorted((root / "specs").glob("*/spec.yaml")):
+        data = yaml.safe_load(spec_file.read_text(encoding="utf-8")) or {}
+        if data.get("built"):
+            continue
+        marker = TASK_MARKER.search(str(data.get("request", "")))
+        if marker:
+            unbuilt.setdefault(marker.group(1), []).append((spec_file, data))
+
+    for task_id, specs in sorted(unbuilt.items()):
+        if task_id not in recorded_built:
+            continue  # genuinely not built — nothing to restore
+        if task_id in already_flagged:
+            # Another spec for this task carries the flag: these are the
+            # leftovers of a re-plan, and the task is not at risk.
+            result["superseded"].extend(
+                {"slug": f.parent.name, "task_id": task_id} for f, _ in specs
+            )
+            continue
+        # Repair the spec the commits actually name; with several candidates
+        # and no commit naming any of them, repair nothing and say so.
+        supported = [
+            (f, d) for f, d in specs
+            if f"feat({f.parent.name})" in log
+            or (str(d.get("title") or "").strip() and str(d["title"]).strip() in log)
+        ]
+        if not supported:
+            result["unsupported"].append(
+                {"slug": specs[0][0].parent.name, "task_id": task_id}
+            )
+            continue
+        spec_file = supported[0][0]
+        entry = {"slug": spec_file.parent.name, "task_id": task_id}
+        result["lost"].append(entry)
+        if apply:
+            text = spec_file.read_text(encoding="utf-8")
+            if "built: false" in text:
+                text = text.replace("built: false", "built: true", 1)
+            else:  # key absent entirely — append rather than rewrite the YAML
+                text = text.rstrip("\n") + "\nbuilt: true\n"
+            spec_file.write_text(text, encoding="utf-8")
+            result["repaired"].append(entry)
+
+    if result["unsupported"]:
+        result["status"] = "needs_a_human"
+    elif result["repaired"]:
+        result["status"] = "repaired"
+    elif result["lost"]:
+        result["status"] = "lost_flags_found"
+    return result
+
+
 def next_tasks(repo_dir: str | Path) -> list[Task]:
     """Tasks not yet built whose dependencies all are — the work queue view."""
     plan = load_plan(repo_dir)

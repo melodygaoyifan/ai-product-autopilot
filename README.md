@@ -266,6 +266,7 @@ Claude-written code. Setup, env vars, and operations: [RUNBOOK.md](RUNBOOK.md).
 | `automerge` · `deploy-execute` | exist but stay disarmed until a human writes an attributed, expiring policy ([ADR-031](docs/adr/031-policy-armed-automation.md)) |
 | `readiness` · `attest` · `cab-package` · `sweep` | the enterprise adoption surface: substrate ladder, attestation ledger, change control, the janitor |
 | `mp-runtime` | opens a built 小程序 in WeChat DevTools, visits every registered page and screenshots it — the blank-page check the static gate cannot make ([pipeline guide](docs/miniprogram-pipeline.md)) |
+| `reconcile [--scan DIR] [--apply]` | one-time repair for workspaces built before v0.70: restores `built` flags lost to a rollback, so a resumed run does not rebuild and re-bill committed modules. Reports by default; repairs only where outcomes.yaml and the commit log agree, and leaves a superseded spec from a re-plan alone |
 
 </details>
 

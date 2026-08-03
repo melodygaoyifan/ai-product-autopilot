@@ -1399,6 +1399,68 @@ def undo(repo_dir: str = typer.Option(".", help="Workspace directory")):
         raise typer.Exit(code=1)
 
 
+@app.command("reconcile")
+def reconcile(
+    repo_dir: str = typer.Option(".", help="Workspace directory"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Repair the flags (default: report only)"
+    ),
+    scan: str = typer.Option(
+        "", "--scan", help="Scan every workspace one level under this directory"
+    ),
+):
+    """Restore `built` flags a pre-v0.70 workspace lost, so a resumed run
+    does not rebuild — and re-bill — modules that are already committed.
+
+    Reports by default. Repairs only where outcomes.yaml AND a `feat(<slug>)`
+    commit agree the module was built; anything they disagree on is named for
+    a human and left alone.
+    """
+    from ai_venture_studio.upstream.plan import reconcile_built_flags
+
+    roots = (
+        sorted(d for d in Path(scan).expanduser().resolve().iterdir() if d.is_dir())
+        if scan else [Path(repo_dir).resolve()]
+    )
+    findings = 0
+    for root in roots:
+        report = reconcile_built_flags(root, apply=apply)
+        if report["status"] == "not_a_built_workspace":
+            if not scan:
+                console.print(f"{root.name}: no built product here — nothing to check")
+            continue
+        lost, unsupported = report["lost"], report["unsupported"]
+        superseded = report["superseded"]
+        if not lost and not unsupported:
+            note = (
+                f" ({len(superseded)} superseded spec(s) from a re-plan, "
+                "harmless)" if superseded else ""
+            )
+            console.print(
+                f"[green]ok[/green] {root.name}: every built module has its "
+                f"flag{note}"
+            )
+            continue
+        findings += len(lost) + len(unsupported)
+        verb = "repaired" if apply else "LOST (report only — pass --apply to fix)"
+        if lost:
+            console.print(
+                f"[yellow]{root.name}[/yellow]: {len(lost)} flag(s) {verb} — "
+                + ", ".join(f"{e['task_id']} ({e['slug']})" for e in lost)
+            )
+            if not apply:
+                console.print(
+                    "  a resumed run would rebuild these and charge you again"
+                )
+        for entry in unsupported:
+            console.print(
+                f"[red]{root.name}[/red]: {entry['task_id']} ({entry['slug']}) is "
+                "recorded built but has no commit — not repaired, look at it"
+            )
+    if findings and not apply:
+        raise typer.Exit(code=3)  # a finding, not a failure: same shape as `attention`
+
+
 @app.command()
 def verify(
     repo_dir: str = typer.Option(".", help="Workspace directory"),
