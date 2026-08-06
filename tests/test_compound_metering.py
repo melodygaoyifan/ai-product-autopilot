@@ -77,3 +77,58 @@ def test_a_run_that_never_reached_a_provider_writes_no_ledger_noise(
         if ledger.exists() else []
     )
     assert rows == []
+
+
+def test_a_gepa_proposal_writes_what_the_optimizer_spent(tmp_path):
+    """gepa has no production caller yet — no CLI command, no orchestrator
+    wiring. That is exactly why the flush goes in now: `propose_charter`
+    calls a provider and only `write_proposal` knows a workspace, so whoever
+    wires it up later inherits the metering instead of the leak."""
+    from ai_venture_studio import gepa
+
+    root = _workspace(tmp_path)
+    spend.record("claude-opus-4-8", 9_000, 1_200)
+
+    proposal = gepa.GepaProposal(
+        target="skills/security.md", baseline_holdout_rate=0.5,
+        candidate_holdout_rate=0.7, improved=True, candidate_charter="body",
+    )
+    gepa.write_proposal(root, proposal, at="2026-08-06")
+
+    rows = [
+        json.loads(line)
+        for line in (root / ".mas" / "spend.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    assert [(r["input_tokens"], r["output_tokens"]) for r in rows] == [(9_000, 1_200)]
+
+
+def test_a_failing_smoke_still_records_what_the_calls_cost(tmp_path, monkeypatch):
+    """`smoke` already flushed — nothing pinned it. The subtle path is the
+    failing one: it exits 1 to block a release, and an early exit is exactly
+    where a flush gets dropped by a later edit. The calls were made and paid
+    for whether or not the boundary held."""
+    from ai_venture_studio import smoke as smoke_mod
+
+    root = _workspace(tmp_path)
+
+    def _fake_run_smoke(providers, *, model=None):
+        spend.record("claude-sonnet-5", 1_100, 90)
+        return [
+            smoke_mod.ProviderSmoke(
+                provider="anthropic", model="claude-sonnet-5", status="failed",
+                checks=[smoke_mod.Check(name="streams_large", status="failed")],
+            )
+        ]
+
+    monkeypatch.setattr(smoke_mod, "run_smoke", _fake_run_smoke)
+
+    result = CliRunner().invoke(app, ["smoke", "--repo-dir", str(root)])
+    assert result.exit_code == 1, result.output
+
+    rows = [
+        json.loads(line)
+        for line in (root / ".mas" / "spend.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    assert [(r["input_tokens"], r["output_tokens"]) for r in rows] == [(1_100, 90)]

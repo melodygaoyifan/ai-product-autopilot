@@ -4,6 +4,34 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.72.2 — metering stops being something each command has to remember
+
+Patch. v0.72.1 fixed `compound`'s missing ledger flush by hand. Fixing the
+one caller that was caught is how the same bug comes back: the audit that
+followed found **2 of 77 commands** flushed the buffer, and `gepa` — a
+provider-calling path with no production caller yet — was about to inherit
+the gap the moment someone wired it up.
+
+Three changes, smallest to largest:
+
+- `gepa.write_proposal()` flushes. It is the terminal step that knows a
+  workspace, and closing it before gepa has a caller means whoever wires it
+  up inherits the metering instead of the leak.
+- `smoke` needed no fix — it already flushed, including on the
+  release-blocking exit-1 path — but nothing pinned that. Now a test does,
+  on the failing path specifically, because an early exit is exactly where a
+  later edit drops a flush.
+- Every command flushes, once, in one place. A wrapper around each
+  registered command persists whatever was buffered to the workspace the
+  command was already pointed at (`--repo-dir`/`--workspace`). An empty
+  buffer flushes to nothing, so this is inert for commands that never call a
+  provider, and an unwritable ledger can never mask the command's real
+  result.
+
+ADR-032 removed the spending *cap* and kept the metering deliberately. This
+makes the kept half structural rather than a rule each new command's author
+has to already know.
+
 ## v0.72.1 — the compounding loop writes down what it spends
 
 Patch. Found by arming the scheduler and reading the ledger afterwards:

@@ -118,7 +118,19 @@ def propose_charter(
 
 def write_proposal(workspace: str | pathlib.Path, proposal: GepaProposal,
                    *, at: str) -> pathlib.Path:
+    """Persist the proposal — and the cost of producing it.
+
+    `propose_charter` calls a provider; the adapter buffers usage in process
+    state and only a caller that knows a workspace can flush it. This is that
+    caller. gepa has no production wiring yet, which is precisely why the
+    flush goes in now: whoever wires it up inherits the metering rather than
+    repeating the compound leak (v0.72.1).
+    """
     import yaml
+
+    from ai_venture_studio import spend
+
+    spend.flush(workspace)
 
     out = pathlib.Path(workspace) / ".mas" / "gepa"
     out.mkdir(parents=True, exist_ok=True)

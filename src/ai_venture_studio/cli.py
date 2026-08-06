@@ -3527,6 +3527,55 @@ def cadence_cmd(
         raise typer.Exit(code=3)
 
 
+_WORKSPACE_PARAMS = ("repo_dir", "workspace", "repo", "root")
+
+
+def _metered(callback):
+    """Wrap a command so whatever it spent reaches the ledger.
+
+    The provider adapter buffers each call in process-global state; only a
+    caller that knows the workspace can persist it. Two commands did that by
+    hand and the rest did not, so `compound` ran daily on a LaunchAgent and
+    spent real money invisibly for as long as it existed (v0.72.1).
+
+    Patching the callers one at a time is how that recurs: the next command
+    to reach a provider is written by someone who never learned the rule.
+    So the flush happens here, once, for every command — keyed off whichever
+    workspace option the command already declares. An empty buffer flushes
+    to nothing, so this is inert for the commands that never call out.
+
+    ADR-032 removed the spending *cap* and kept the metering deliberately.
+    This is the kept half, made structural.
+    """
+    import functools
+
+    @functools.wraps(callback)
+    def wrapper(**kwargs):
+        try:
+            return callback(**kwargs)
+        finally:
+            from ai_venture_studio import spend
+
+            target = next(
+                (
+                    kwargs[name]
+                    for name in _WORKSPACE_PARAMS
+                    if isinstance(kwargs.get(name), str | Path)
+                ),
+                ".",
+            )
+            try:
+                spend.flush(target)
+            except OSError:
+                pass  # an unwritable ledger must never mask the real result
+
+    return wrapper
+
+
+for _info in app.registered_commands:
+    _info.callback = _metered(_info.callback)
+
+
 def main() -> None:
     sys.exit(app())
 
