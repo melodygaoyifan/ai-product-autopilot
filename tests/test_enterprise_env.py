@@ -390,8 +390,14 @@ def test_edition_card_names_the_gate_owner(tmp_path):
 def test_preflight_reads_live_state_and_names_fixes(tmp_path, monkeypatch):
     from ai_venture_studio.studio_modes import build_preflight
 
-    for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
-                "AVS_ANTHROPIC_MODE", "AVS_STUDIO_TOKEN"):
+    # ANTHROPIC_API_KEY_FILE belongs in this list as much as the key itself:
+    # the preflight resolves a key through `env_or_file`, so a developer whose
+    # shell exports only the _FILE form saw "model: ready" and a failure that
+    # reproduced on their machine alone. The sibling test above clears it;
+    # this one did not.
+    for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_FILE",
+                "ANTHROPIC_AUTH_TOKEN", "AVS_ANTHROPIC_MODE",
+                "AVS_STUDIO_TOKEN"):
         monkeypatch.delenv(var, raising=False)
     (tmp_path / ".mas").mkdir()
     rows = {r["item"]: r for r in build_preflight(tmp_path)}

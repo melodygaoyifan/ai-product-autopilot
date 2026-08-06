@@ -84,6 +84,9 @@ def test_enterprise_journey_on_a_mapop_like_repo(tmp_path, monkeypatch):
     )
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # …and the _FILE form the preflight also resolves, or "no credential in
+    # this test env" is false on any machine that keeps its key in a file.
+    monkeypatch.delenv("ANTHROPIC_API_KEY_FILE", raising=False)
     monkeypatch.delenv("AVS_ANTHROPIC_MODE", raising=False)
     root = _mapop_like_repo(tmp_path)
 
@@ -156,6 +159,7 @@ def test_preflight_cli_matches_the_studio_card_and_gates_strictly(
     """Studio–CLI parity: `avs preflight` prints the same six checks, and
     --strict turns readiness into a pipeline gate."""
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY_FILE", raising=False)
     root = _mapop_like_repo(tmp_path)
     runner.invoke(app, [
         "init", str(root), "--adopt", "--profile", "data",
