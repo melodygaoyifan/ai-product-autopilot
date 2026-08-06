@@ -1,0 +1,260 @@
+"""The loops' watchdog. What these pin, in one line each: a loop that never
+ran must never read as fresh, and a loop needing a human number must never be
+answered by the machine."""
+
+import datetime as dt
+import plistlib
+
+import pytest
+import yaml
+
+from ai_venture_studio import cadence
+
+
+def _compound_proposal(root, date: str):
+    directory = root / ".mas" / "compound"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"proposal-{date}.md").write_text("# proposal\n", encoding="utf-8")
+
+
+def _sweep_digest(root, date: str):
+    directory = root / ".mas" / "sweep"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"digest-{date}.yaml").write_text("at: x\n", encoding="utf-8")
+
+
+def _attention_log(root, rows):
+    directory = root / "metrics"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "attention-log.yaml").write_text(
+        yaml.safe_dump({"log": rows}, sort_keys=False), encoding="utf-8"
+    )
+
+
+def _loop(report, name):
+    return next(loop for loop in report.loops if loop.name == name)
+
+
+TODAY = dt.date(2026, 8, 5)
+
+
+def test_empty_workspace_is_never_run_not_fresh(tmp_path):
+    """The failure mode a watchdog can actually have: reading absence as a
+    clean pass."""
+    report = cadence.assess(tmp_path, today=TODAY)
+    assert {loop.state for loop in report.loops} == {"never_run"}
+    assert all(loop.age_days is None for loop in report.loops)
+    assert all(loop.last_run == "" for loop in report.loops)
+    assert len(report.stale) == 3
+
+
+def test_fresh_loops_are_ok(tmp_path):
+    _compound_proposal(tmp_path, "2026-08-03")
+    _sweep_digest(tmp_path, "2026-08-01")
+    _attention_log(tmp_path, [
+        {"week": "2026-W31", "window": "w", "hours": 2.0, "status": "logged",
+         "decided_by": "melody"},
+    ])
+    report = cadence.assess(tmp_path, today=TODAY)
+    assert _loop(report, "compound").state == "ok"
+    assert _loop(report, "compound").age_days == 2
+    assert _loop(report, "sweep").state == "ok"
+    # 2026-W31 closes Sunday 2026-08-02; three days before "today".
+    assert _loop(report, "attention").state == "ok"
+    assert report.stale == []
+
+
+def test_grace_separates_due_from_overdue(tmp_path):
+    """A weekly loop is seven days old on the day it is next due — that is
+    health, not staleness. Only a slide past the grace window fails a gate."""
+    # Separate workspaces: the newest artifact wins, so an older file added
+    # beside a newer one would not age the loop.
+    _compound_proposal(tmp_path / "at_seven", "2026-07-29")  # 7 days
+    due = _loop(cadence.assess(tmp_path / "at_seven", today=TODAY), "compound")
+    assert due.state == "due"
+    assert due.needs_run is True
+    assert due.is_stale is False
+
+    _compound_proposal(tmp_path / "at_ten", "2026-07-26")  # 10 days > 7 + 2
+    late = _loop(cadence.assess(tmp_path / "at_ten", today=TODAY), "compound")
+    assert late.state == "overdue"
+    assert late.is_stale is True
+
+
+def test_newest_artifact_wins_and_names_itself(tmp_path):
+    _compound_proposal(tmp_path, "2026-06-01")
+    _compound_proposal(tmp_path, "2026-08-04")
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "compound")
+    assert loop.last_run == "2026-08-04"
+    # Provenance travels with the verdict so a surprise is checkable.
+    assert loop.evidence.endswith("proposal-2026-08-04.md")
+
+
+def test_future_dated_artifact_clamps_to_zero(tmp_path):
+    """Clock skew must not invent a negative staleness on top of a bad date."""
+    _sweep_digest(tmp_path, "2026-09-01")
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "sweep")
+    assert loop.age_days == 0
+    assert loop.state == "ok"
+
+
+def test_not_tracked_attention_week_is_not_a_run(tmp_path):
+    """The live log's only row is `not_tracked`. Counting it would let the
+    series the kill criterion depends on look maintained while measuring
+    nothing."""
+    _attention_log(tmp_path, [
+        {"week": "2026-W30", "window": "w", "hours": None,
+         "status": "not_tracked", "decided_by": "melody"},
+    ])
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "attention")
+    assert loop.state == "never_run"
+    assert loop.human_input_required is True
+
+
+def test_unreadable_attention_log_is_not_fresh(tmp_path):
+    (tmp_path / "metrics").mkdir()
+    (tmp_path / "metrics" / "attention-log.yaml").write_text(
+        "log: [ this is not: valid: yaml", encoding="utf-8"
+    )
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "attention")
+    assert loop.state == "never_run"
+    assert "unreadable" in loop.evidence
+
+
+def test_iso_week_end_is_the_sunday():
+    assert cadence._iso_week_end("2026-W31") == dt.date(2026, 8, 2)
+    assert cadence._iso_week_end("nonsense") is None
+    assert cadence._iso_week_end("") is None
+
+
+def test_run_due_skips_fresh_loops(tmp_path, monkeypatch):
+    """What makes a daily trigger safe against weekly work."""
+    _compound_proposal(tmp_path, "2026-08-04")
+    _sweep_digest(tmp_path, "2026-08-04")
+    _attention_log(tmp_path, [
+        {"week": "2026-W31", "window": "w", "hours": 1.0, "status": "logged",
+         "decided_by": "melody"},
+    ])
+    calls = []
+    monkeypatch.setattr(
+        cadence.subprocess, "run",
+        lambda argv, **kw: calls.append(argv) or _completed(),
+    )
+    outcomes = cadence.run_due(tmp_path, today=TODAY)
+    assert calls == []
+    assert all(not o.ran for o in outcomes)
+    assert all("not due" in o.detail for o in outcomes)
+
+
+def test_run_due_runs_only_what_is_due(tmp_path, monkeypatch):
+    _compound_proposal(tmp_path, "2026-08-04")  # fresh
+    _sweep_digest(tmp_path, "2026-06-01")       # overdue
+    calls = []
+    monkeypatch.setattr(
+        cadence.subprocess, "run",
+        lambda argv, **kw: calls.append(argv) or _completed(),
+    )
+    outcomes = cadence.run_due(tmp_path, today=TODAY, executable="/usr/local/bin/avs")
+    ran = {o.loop for o in outcomes if o.ran}
+    assert ran == {"sweep", "attention"}
+    # Each command spells its workspace option the way that command spells it.
+    by_name = {argv[1]: argv for argv in calls}
+    assert by_name["sweep"][2] == "--workspace"
+    assert by_name["attention"][2] == "--repo-dir"
+
+
+def test_attention_is_surfaced_never_answered(tmp_path, monkeypatch):
+    """`avs attention` logs a row only with --confirm-hours, and the machine
+    must never supply one: the number is the operator's."""
+    monkeypatch.setattr(
+        cadence.subprocess, "run", lambda argv, **kw: _completed(argv=argv)
+    )
+    outcomes = cadence.run_due(tmp_path, today=TODAY, executable="/usr/local/bin/avs")
+    attention = next(o for o in outcomes if o.loop == "attention")
+    assert "--confirm-hours" not in " ".join(attention.detail.split())
+    assert "surfaced for your decision" in attention.detail
+
+
+def test_interpreter_fallback_is_a_module_that_exists(tmp_path, monkeypatch):
+    """`-m ai_venture_studio` has no `__main__.py` and dies with "No module
+    named ai_venture_studio.__main__". The `.cli` form is the one that runs."""
+    import importlib.util
+
+    calls = []
+    monkeypatch.setattr(
+        cadence.subprocess, "run",
+        lambda argv, **kw: calls.append(argv) or _completed(),
+    )
+    cadence.run_due(tmp_path, today=TODAY, executable="/usr/bin/python3")
+    assert calls[0][1:3] == ["-m", "ai_venture_studio.cli"]
+    assert importlib.util.find_spec("ai_venture_studio.cli") is not None
+
+
+def test_run_due_survives_a_missing_binary(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        cadence.subprocess, "run",
+        lambda argv, **kw: (_ for _ in ()).throw(FileNotFoundError("no avs")),
+    )
+    outcomes = cadence.run_due(tmp_path, today=TODAY, executable="/nope/avs")
+    assert all(not o.ran for o in outcomes)
+    assert all("could not run" in o.detail for o in outcomes)
+
+
+def test_plist_schedules_daily_and_does_not_run_at_load(tmp_path):
+    body = plistlib.loads(
+        cadence.render_plist(tmp_path, executable="/usr/local/bin/avs", hour=9)
+    )
+    assert body["Label"] == cadence.LAUNCH_AGENT_LABEL
+    assert body["ProgramArguments"][:2] == ["/usr/local/bin/avs", "cadence"]
+    assert "--run-due" in body["ProgramArguments"]
+    assert body["StartCalendarInterval"] == {"Hour": 9, "Minute": 0}
+    # Installing a trigger must not itself start a run.
+    assert body["RunAtLoad"] is False
+
+
+def test_plist_rejects_an_impossible_time(tmp_path):
+    with pytest.raises(cadence.CadenceError):
+        cadence.render_plist(tmp_path, hour=25)
+
+
+def test_install_refuses_a_workspace_with_no_state(tmp_path):
+    """A scheduler pointed at a workspace without `.mas/` would run forever
+    and find nothing — the silent-success failure, installed."""
+    with pytest.raises(cadence.CadenceError, match=r"\.mas"):
+        cadence.install_agent(
+            tmp_path, load=False, plist_path=tmp_path / "agent.plist"
+        )
+
+
+def test_install_writes_the_plist_but_arms_nothing(tmp_path, monkeypatch):
+    (tmp_path / ".mas").mkdir()
+    monkeypatch.setattr(
+        cadence, "agent_log_path", lambda: tmp_path / "logs" / "loops.log"
+    )
+    target = tmp_path / "agent.plist"
+    done = cadence.install_agent(
+        tmp_path, executable="/usr/local/bin/avs", load=False, plist_path=target
+    )
+    assert target.exists()
+    assert done["loaded"] is False
+    assert done["command"].startswith("launchctl bootstrap")
+    assert plistlib.loads(target.read_bytes())["Label"] == cadence.LAUNCH_AGENT_LABEL
+
+
+def test_summary_names_the_overdue_loops(tmp_path):
+    _compound_proposal(tmp_path, "2026-08-04")
+    _sweep_digest(tmp_path, "2026-01-01")
+    _attention_log(tmp_path, [
+        {"week": "2026-W31", "window": "w", "hours": 1.0, "status": "logged",
+         "decided_by": "melody"},
+    ])
+    report = cadence.assess(tmp_path, today=TODAY)
+    assert report.summary() == "1 loop overdue: sweep"
+
+
+def _completed(argv=None, returncode=0, stdout="", stderr=""):
+    import subprocess
+
+    return subprocess.CompletedProcess(
+        args=argv or [], returncode=returncode, stdout=stdout, stderr=stderr
+    )

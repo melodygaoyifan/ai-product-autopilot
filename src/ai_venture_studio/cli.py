@@ -116,7 +116,20 @@ def review(
         )
         raise typer.Exit(code=3)
 
-    assert result is not None
+    # Every terminating path above returns or exits, so a missing result here
+    # means the graph ended in a state none of them describe. An `assert`
+    # would say so only until someone ran under `-O`, and then the next line
+    # would raise AttributeError on None instead — a real invariant deserves
+    # a real check and a diagnosable message.
+    if result is None:
+        console.print(
+            "[red]Internal error: the review graph produced no result and did "
+            "not pause.[/red]\n"
+            f"Last node: {state.get('__last_node__', 'unknown')}; "
+            f"review_id: {state.get('review_id', 'unknown')}; "
+            f"artifacts: {state.get('artifacts_dir', 'none')}"
+        )
+        raise typer.Exit(code=2)
     color = {
         Verdict.APPROVE: "green",
         Verdict.APPROVE_WITH_NOTES: "green",
@@ -158,7 +171,17 @@ def resume(
 ):
     """Continue a review paused at Gate 3 (Review Gate)."""
     result, state = resume_review(review_id, decision, repo_dir=repo_dir)
-    assert result is not None
+    if result is None:
+        # A resume that neither produces a verdict nor re-pauses means the
+        # checkpoint did not carry the run to an end state — usually a
+        # checkpoint written by a different version. Say which one.
+        console.print(
+            f"[red]Resume produced no verdict for {review_id}.[/red]\n"
+            "The checkpoint did not carry the run to a decision — it may have "
+            "been written by a different version. Re-run the review to get a "
+            "fresh one."
+        )
+        raise typer.Exit(code=2)
     console.print(
         f"\nResumed with decision [bold]{decision}[/bold] → "
         f"[bold]{result.verdict.value}[/bold] — {result.summary}"
@@ -823,12 +846,23 @@ def create(
         "Without this, a locked plan is reused as-is.",
     ),
     provider: str = typer.Option("anthropic", help="Provider (e.g. 'mock')"),
+    token_ceiling: int = typer.Option(
+        None,
+        help="Stop the run between tasks once it passes this many tokens — a "
+             "termination bound on a looping build, NOT a spending cap "
+             "(ADR-032). Built modules are kept and a re-run continues. "
+             "0 disables it.",
+    ),
 ):
     """The non-technical flow: write ONE document (the FDR), the system
     builds the product. First run writes the FDR template + guide."""
     from ai_venture_studio.upstream import init_workspace
-    from ai_venture_studio.upstream.autopilot import run_autopilot
+    from ai_venture_studio.upstream.autopilot import (
+        DEFAULT_TOKEN_CEILING,
+        run_autopilot,
+    )
     from ai_venture_studio.upstream.fdr import write_template
+
 
     root = Path(directory).resolve()
     # --profile answers a question only a NEW workspace has. Demanding it
@@ -880,7 +914,10 @@ def create(
     progress.set_sink(lambda line: console.print(f"[dim]{line}[/dim]"))
     try:
         result = run_autopilot(
-            root, fdr_path, provider=provider, yes=yes, replan=replan
+            root, fdr_path, provider=provider, yes=yes, replan=replan,
+            token_ceiling=(
+                DEFAULT_TOKEN_CEILING if token_ceiling is None else token_ceiling
+            ),
         )
     finally:
         progress.set_sink(None)
@@ -894,8 +931,15 @@ def create(
         console.print(result.confirmation)
         console.print(f"\n(saved to {root / 'product' / 'CONFIRMATION.md'})")
         raise typer.Exit(code=0)
-    color = "green" if result.status == "completed" else "red"
+    color = {"completed": "green", "halted": "yellow"}.get(result.status, "red")
     console.print(f"\n[bold {color}]{result.status}[/bold {color}]")
+    if result.status == "halted":
+        console.print(
+            "[yellow]Stopped at the termination bound: a build consuming this "
+            "much is looping, not working. Nothing was refused over money "
+            "(ADR-032) — built modules are kept, and re-running continues "
+            "from here. --token-ceiling raises the bound.[/yellow]"
+        )
     for o in result.outcomes:
         verdict = f" · review: {o.review_verdict}" if o.review_verdict else ""
         console.print(f"  {o.task_id} {o.title}: {o.status}{verdict}")
@@ -3349,6 +3393,107 @@ def evidence_bundle(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
     console.print(f"Evidence bundle written: {path}")
+
+
+@app.command("cadence")
+def cadence_cmd(
+    repo_dir: str = typer.Option(".", help="Workspace the recurring loops run in"),
+    today: str = typer.Option(None, help="ISO date override (default: today)"),
+    run_due: bool = typer.Option(
+        False, "--run-due",
+        help="Run each loop that is due (loops needing your number are only "
+             "surfaced, never answered)",
+    ),
+    install: bool = typer.Option(
+        False, "--install", help="Install the daily LaunchAgent that fires --run-due"
+    ),
+    uninstall: bool = typer.Option(
+        False, "--uninstall", help="Remove the LaunchAgent"
+    ),
+    at: str = typer.Option("09:00", help="Schedule for --install, as HH:MM"),
+    arm: bool = typer.Option(
+        False, "--arm",
+        help="With --install, load it into launchd now (default: write the "
+             "plist and print the command for you to run)",
+    ),
+):
+    """Which recurring loop is overdue, and the trigger that keeps them from
+    lapsing. Reads the artifacts compound/sweep/attention already write; a
+    loop that never ran is reported as never run, not as fresh.
+
+    Exits 3 when a loop is overdue, so it can gate a script."""
+    import datetime as _dt
+
+    from ai_venture_studio import cadence as cad
+
+    if uninstall:
+        removed = cad.uninstall_agent()
+        console.print(
+            f"[green]removed[/green] {removed['plist']}" if removed["removed"]
+            else f"[dim]nothing to remove at {removed['plist']}[/dim]"
+        )
+        return
+
+    if install:
+        try:
+            hour, _, minute = at.partition(":")
+            done = cad.install_agent(
+                repo_dir, hour=int(hour), minute=int(minute or 0), load=arm
+            )
+        except (ValueError, cad.CadenceError) as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=2) from exc
+        console.print(f"[green]wrote[/green] {done['plist']}")
+        console.print(f"  {done['schedule']} → avs cadence --run-due")
+        console.print(f"  workspace: {done['workspace']}")
+        console.print(f"  log: {done['log']}")
+        if done["loaded"]:
+            console.print("[green]loaded into launchd[/green] — it will fire on schedule")
+        elif arm:
+            console.print(f"[red]launchctl refused: {done.get('detail', '')}[/red]")
+            raise typer.Exit(code=2)
+        else:
+            console.print(
+                f"\nNot armed yet. To start it:\n  [bold]{done['command']}[/bold]"
+            )
+        return
+
+    day = _dt.date.fromisoformat(today) if today else None
+    report = cad.assess(repo_dir, today=day)
+
+    if run_due:
+        outcomes = cad.run_due(repo_dir, today=day)
+        for outcome in outcomes:
+            if not outcome.ran:
+                console.print(f"[dim]{outcome.loop}: {outcome.detail}[/dim]")
+                continue
+            color = "green" if outcome.exit_code == 0 else "yellow"
+            console.print(f"[{color}]{outcome.loop}: ran (exit {outcome.exit_code})[/{color}]")
+            if outcome.detail:
+                console.print(f"  [dim]{outcome.detail}[/dim]")
+        report = cad.assess(repo_dir, today=day)
+
+    table = Table(show_lines=False)
+    table.add_column("loop")
+    table.add_column("last run")
+    table.add_column("cadence")
+    table.add_column("state")
+    for loop in report.loops:
+        color = {"ok": "green", "due": "yellow"}.get(loop.state, "red")
+        table.add_row(
+            loop.name, loop.last_run or "—", f"{loop.cadence_days}d",
+            f"[{color}]{loop.describe()}[/{color}]",
+        )
+    console.print(table)
+    console.print(report.summary())
+
+    for loop in report.stale:
+        hint = "  (needs YOUR number — the machine cannot log it)" \
+            if loop.human_input_required else ""
+        console.print(f"  [dim]{loop.command}{hint}[/dim]")
+
+    if report.stale:
+        raise typer.Exit(code=3)
 
 
 def main() -> None:

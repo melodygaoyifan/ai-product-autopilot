@@ -1,0 +1,455 @@
+"""Loop cadence — the recurring loops' own watchdog.
+
+Three loops in this system are designed to *recur*: the compounding loop
+(§09.8), the Sweep role (doc 29), and weekly attention collection (doc 25
+§76.4). Each writes a dated artifact when it runs. None of them had a
+trigger — "weekly" was a habit, and a habit that lapses is invisible.
+
+`attention.py` already records what that costs, in its own words: a missed
+week does not merely lose a week, it *resets the streak* the kill criterion
+depends on. A loop whose recurrence is unenforced degrades silently and
+reports nothing, which is the "looks done" failure exactly.
+
+This module reads the artifacts the loops already write and answers one
+question mechanically: **which loop is overdue?** Three rules keep it
+honest:
+
+1. **It states; it does not decide.** Staleness is arithmetic on file
+   dates. Nothing here judges whether a loop's output was any good.
+2. **A loop that never ran is `never_run`, not zero days old.** Absence of
+   evidence is reported as absence, never rendered as a fresh pass — the
+   one way a watchdog can lie.
+3. **Loops needing a human number are never run for them.** `avs
+   attention` without `--confirm-hours` is read-only by design ("the
+   machine never sets this"). The scheduler surfaces the ask; the human
+   answers it. Mechanical recurrence is the machine's job; judgment is not.
+
+**Why this is machine-local and not CI.** Every artifact read here lives
+under `.mas/`, which is gitignored. A CI runner checks out an empty `.mas/`
+and would find every loop `never_run` on every run — or, worse, be tuned
+until it reported a clean pass forever against state it cannot see. The
+trigger has to run where the state lives, so the installer here writes a
+user LaunchAgent on the operator's own machine.
+
+The LaunchAgent fires *daily* and runs only what is due. A weekly timer has
+one chance to be missed; a daily due-check has seven, and re-running when
+nothing is due costs a file-stat.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import pathlib
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+
+from pydantic import BaseModel, Field
+
+WEEKLY = 7
+
+#: Slack before "due" becomes "overdue". A weekly loop run every Monday is
+#: seven days old the next Monday — due, and entirely healthy. Only a loop
+#: that has slid past a whole extra weekend is stale enough to fail a gate.
+GRACE_DAYS = 2
+
+#: Filenames the loops already write. Parsed, never written, by this module.
+_DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+
+class CadenceError(Exception):
+    """A cadence check could not be made — never a loop being overdue."""
+
+
+class LoopStatus(BaseModel):
+    """One recurring loop's standing, as fact plus provenance.
+
+    `evidence` carries where the date came from so a surprising verdict can
+    be checked against the filesystem rather than believed.
+    """
+
+    name: str
+    cadence_days: int = WEEKLY
+    last_run: str = ""  # ISO date; "" when the loop has never run
+    age_days: int | None = None  # None when never run
+    state: str = "ok"  # ok | due | overdue | never_run
+    evidence: str = ""
+    command: str = ""
+    human_input_required: bool = False
+
+    @property
+    def needs_run(self) -> bool:
+        """Due, overdue, or never run — the scheduler should act."""
+        return self.state in {"due", "overdue", "never_run"}
+
+    @property
+    def is_stale(self) -> bool:
+        """Overdue or never run — a gate should fail."""
+        return self.state in {"overdue", "never_run"}
+
+    def describe(self) -> str:
+        if self.state == "never_run":
+            return "never run"
+        if self.state == "ok":
+            return f"ok ({self.age_days}d)"
+        return f"{self.state.upper()} ({self.age_days}d)"
+
+
+class CadenceReport(BaseModel):
+    at: str = ""
+    repo_dir: str = ""
+    loops: list[LoopStatus] = Field(default_factory=list)
+
+    @property
+    def stale(self) -> list[LoopStatus]:
+        return [loop for loop in self.loops if loop.is_stale]
+
+    @property
+    def due(self) -> list[LoopStatus]:
+        return [loop for loop in self.loops if loop.needs_run]
+
+    def summary(self) -> str:
+        if not self.loops:
+            return "no recurring loops configured"
+        if not self.stale:
+            return f"all {len(self.loops)} loops within cadence"
+        names = ", ".join(loop.name for loop in self.stale)
+        noun = "loop" if len(self.stale) == 1 else "loops"
+        return f"{len(self.stale)} {noun} overdue: {names}"
+
+
+def _classify(
+    last: dt.date | None, today: dt.date, cadence_days: int
+) -> tuple[str, int | None]:
+    """Date arithmetic, isolated so the rule is readable and testable.
+
+    A future-dated artifact (clock skew, a hand-written `--today`) is clamped
+    to zero rather than reported as a negative age: it means "ran", and
+    inventing a negative staleness would be a second lie on top of the first.
+    """
+    if last is None:
+        return "never_run", None
+    age = max((today - last).days, 0)
+    if age < cadence_days:
+        return "ok", age
+    if age <= cadence_days + GRACE_DAYS:
+        return "due", age
+    return "overdue", age
+
+
+def _latest_dated_file(
+    directory: pathlib.Path, pattern: str
+) -> tuple[dt.date | None, str]:
+    """Newest ISO date embedded in a filename, plus the file it came from.
+
+    The date is read from the *name*, not the mtime: the loops name their
+    output for the day they cover, and a file copied or restored later would
+    otherwise read as a run that never happened.
+    """
+    if not directory.is_dir():
+        return None, f"{directory} (absent)"
+    best: dt.date | None = None
+    best_name = ""
+    for path in directory.glob(pattern):
+        found = _DATE_RE.search(path.name)
+        if not found:
+            continue
+        try:
+            day = dt.date.fromisoformat(found.group(1))
+        except ValueError:
+            continue
+        if best is None or day > best:
+            best, best_name = day, path.name
+    if best is None:
+        return None, f"{directory} (no dated artifact)"
+    return best, str(directory / best_name)
+
+
+def _compound_status(repo_dir: pathlib.Path, today: dt.date) -> LoopStatus:
+    last, evidence = _latest_dated_file(
+        repo_dir / ".mas" / "compound", "proposal-*.md"
+    )
+    state, age = _classify(last, today, WEEKLY)
+    return LoopStatus(
+        name="compound", last_run=last.isoformat() if last else "",
+        age_days=age, state=state, evidence=evidence,
+        command="avs compound",
+    )
+
+
+def _sweep_status(repo_dir: pathlib.Path, today: dt.date) -> LoopStatus:
+    last, evidence = _latest_dated_file(
+        repo_dir / ".mas" / "sweep", "digest-*.yaml"
+    )
+    state, age = _classify(last, today, WEEKLY)
+    return LoopStatus(
+        name="sweep", last_run=last.isoformat() if last else "",
+        age_days=age, state=state, evidence=evidence,
+        command="avs sweep",
+    )
+
+
+def _attention_status(repo_dir: pathlib.Path, today: dt.date) -> LoopStatus:
+    """Attention's marker is a logged row, not a file.
+
+    Only `status: logged` rows count. A `not_tracked` row records that the
+    week was *considered* and left unmeasured — treating it as a run would
+    let the series look maintained while measuring nothing, and this is the
+    one series the launch kill criterion is falsifiable by.
+    """
+    from ai_venture_studio import attention
+
+    evidence = str(pathlib.Path(repo_dir) / attention.ATTENTION_LOG)
+    try:
+        rows = attention.load_log(repo_dir)
+    except Exception as exc:  # noqa: BLE001 — an unreadable log is not "fresh"
+        return LoopStatus(
+            name="attention", state="never_run", human_input_required=True,
+            evidence=f"{evidence} (unreadable: {exc})",
+            command="avs attention",
+        )
+    logged = [row for row in rows if row.status == "logged" and row.week]
+    last: dt.date | None = None
+    for row in logged:
+        week_end = _iso_week_end(row.week)
+        if week_end and (last is None or week_end > last):
+            last, evidence = week_end, f"{evidence} ({row.week})"
+    state, age = _classify(last, today, WEEKLY)
+    return LoopStatus(
+        name="attention", last_run=last.isoformat() if last else "",
+        age_days=age, state=state, evidence=evidence,
+        command="avs attention", human_input_required=True,
+    )
+
+
+def _iso_week_end(week: str) -> dt.date | None:
+    """`YYYY-Www` → the Sunday that closes it, the earliest date by which
+    that week could have been logged. Unparseable input is None, not today."""
+    try:
+        year, _, number = week.partition("-W")
+        return dt.date.fromisocalendar(int(year), int(number), 7)
+    except (ValueError, TypeError):
+        return None
+
+
+def assess(
+    repo_dir: str | pathlib.Path = ".", *, today: dt.date | None = None
+) -> CadenceReport:
+    """Every recurring loop's standing, read from what the loops wrote."""
+    root = pathlib.Path(repo_dir)
+    day = today or dt.date.today()
+    return CadenceReport(
+        at=day.isoformat(),
+        repo_dir=str(root.resolve()),
+        loops=[
+            _compound_status(root, day),
+            _sweep_status(root, day),
+            _attention_status(root, day),
+        ],
+    )
+
+
+# --------------------------------------------------------------------------
+# Running what is due
+# --------------------------------------------------------------------------
+
+
+class RunOutcome(BaseModel):
+    loop: str
+    ran: bool = False
+    exit_code: int | None = None
+    detail: str = ""
+
+
+def run_due(
+    repo_dir: str | pathlib.Path = ".", *, today: dt.date | None = None,
+    timeout: int = 3600, executable: str | None = None,
+) -> list[RunOutcome]:
+    """Run each loop that is due; skip the ones that are not.
+
+    Idempotent by construction: a second call the same day finds the loops
+    fresh and does nothing, which is what lets the scheduler fire daily
+    against weekly work.
+
+    Loops marked `human_input_required` are run in their read-only form —
+    they surface the ask into the scheduler's log without answering it.
+    """
+    report = assess(repo_dir, today=today)
+    binary = executable or shutil.which("avs") or sys.executable
+    outcomes: list[RunOutcome] = []
+    for loop in report.loops:
+        if not loop.needs_run:
+            outcomes.append(RunOutcome(
+                loop=loop.name, detail=f"not due ({loop.describe()})"
+            ))
+            continue
+        argv = _argv_for(loop, binary, pathlib.Path(repo_dir))
+        try:
+            completed = subprocess.run(  # noqa: S603 — argv list, never a shell
+                argv, capture_output=True, text=True, timeout=timeout, check=False
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            outcomes.append(RunOutcome(
+                loop=loop.name, ran=False, detail=f"could not run: {exc}"
+            ))
+            continue
+        detail = (completed.stderr or completed.stdout or "").strip()
+        if loop.human_input_required:
+            detail = f"surfaced for your decision — {detail}" if detail else \
+                "surfaced for your decision"
+        outcomes.append(RunOutcome(
+            loop=loop.name, ran=True, exit_code=completed.returncode,
+            detail=detail[-2000:],
+        ))
+    return outcomes
+
+
+def _argv_for(
+    loop: LoopStatus, binary: str, repo_dir: pathlib.Path
+) -> list[str]:
+    """The command for one loop. The three commands spell their workspace
+    option differently (`--repo-dir` vs `--workspace`), so it is looked up
+    rather than assumed.
+
+    The interpreter fallback is `-m ai_venture_studio.cli`, not
+    `-m ai_venture_studio`: there is no `__main__.py`, so the package form
+    fails with "No module named ai_venture_studio.__main__". The `.cli` form
+    is the one the detached workers already run.
+    """
+    base = (
+        [binary] if binary.endswith("avs")
+        else [binary, "-m", "ai_venture_studio.cli"]
+    )
+    flag = {"sweep": "--workspace"}.get(loop.name, "--repo-dir")
+    return [*base, loop.name, flag, str(repo_dir)]
+
+
+# --------------------------------------------------------------------------
+# The trigger: a machine-local LaunchAgent
+# --------------------------------------------------------------------------
+
+LAUNCH_AGENT_LABEL = "ai.venture.studio.loops"
+
+
+def agent_plist_path() -> pathlib.Path:
+    return (
+        pathlib.Path.home() / "Library" / "LaunchAgents"
+        / f"{LAUNCH_AGENT_LABEL}.plist"
+    )
+
+
+def agent_log_path() -> pathlib.Path:
+    return pathlib.Path.home() / "Library" / "Logs" / "ai-venture-studio" / "loops.log"
+
+
+def render_plist(
+    workspace: str | pathlib.Path, *, executable: str | None = None,
+    hour: int = 9, minute: int = 0,
+) -> bytes:
+    """The LaunchAgent, as plist bytes.
+
+    Pure and returned rather than written, so a test asserts on the exact
+    schedule and argv without touching `~/Library`.
+
+    `RunAtLoad` is deliberately false: installing a scheduler must not itself
+    start a run. The operator installs the trigger, then the trigger fires on
+    its own schedule.
+    """
+    if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+        raise CadenceError(f"invalid schedule: {hour:02d}:{minute:02d}")
+    binary = executable or shutil.which("avs") or sys.executable
+    root = pathlib.Path(workspace).resolve()
+    log = agent_log_path()
+    plan = {
+        "Label": LAUNCH_AGENT_LABEL,
+        "ProgramArguments": [
+            binary, "cadence", "--repo-dir", str(root), "--run-due",
+        ],
+        "WorkingDirectory": str(root),
+        # Daily, not weekly. A weekly timer has one chance to be missed; the
+        # loops themselves enforce the weekly cadence, so a daily check that
+        # finds nothing due is a no-op that costs a file-stat.
+        "StartCalendarInterval": {"Hour": int(hour), "Minute": int(minute)},
+        "RunAtLoad": False,
+        "StandardOutPath": str(log),
+        "StandardErrorPath": str(log),
+    }
+    return plistlib.dumps(plan, sort_keys=True)
+
+
+def install_agent(
+    workspace: str | pathlib.Path, *, executable: str | None = None,
+    hour: int = 9, minute: int = 0, load: bool = True,
+    plist_path: pathlib.Path | None = None,
+) -> dict:
+    """Write the LaunchAgent, and by default ask launchd to load it.
+
+    Returns what was done rather than printing it, so the CLI owns the words
+    and a test owns the facts. With `load=False` the plist is written and the
+    exact `launchctl` line is returned instead of run — the trigger is armed
+    by a human, which is the same posture every other automation in this
+    system takes.
+    """
+    if sys.platform != "darwin" and plist_path is None:
+        raise CadenceError(
+            "LaunchAgents are macOS-only. On Linux, run "
+            "`avs cadence --run-due` from cron or a systemd timer — the "
+            "check itself is portable."
+        )
+    root = pathlib.Path(workspace).resolve()
+    if not (root / ".mas").is_dir():
+        raise CadenceError(
+            f"{root} has no .mas/ — the loops read their state from there, so "
+            "a scheduler pointed here would find nothing to do. Point "
+            "--repo-dir at the workspace the loops actually run in."
+        )
+    path = plist_path or agent_plist_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    agent_log_path().parent.mkdir(parents=True, exist_ok=True)
+    body = render_plist(root, executable=executable, hour=hour, minute=minute)
+    path.write_bytes(body)
+    command = ["launchctl", "bootstrap", f"gui/{_uid()}", str(path)]
+    result = {
+        "plist": str(path),
+        "schedule": f"daily {hour:02d}:{minute:02d}",
+        "workspace": str(root),
+        "log": str(agent_log_path()),
+        "loaded": False,
+        "command": " ".join(command),
+    }
+    if not load:
+        return result
+    # A previous copy must be removed first or bootstrap refuses; a failure
+    # here is not an error, since nothing was loaded to remove.
+    subprocess.run(  # noqa: S603 — argv list, never a shell
+        ["launchctl", "bootout", f"gui/{_uid()}/{LAUNCH_AGENT_LABEL}"],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    completed = subprocess.run(  # noqa: S603 — argv list, never a shell
+        command, capture_output=True, text=True, timeout=30, check=False,
+    )
+    result["loaded"] = completed.returncode == 0
+    if completed.returncode != 0:
+        result["detail"] = (completed.stderr or completed.stdout or "").strip()
+    return result
+
+
+def uninstall_agent(plist_path: pathlib.Path | None = None) -> dict:
+    """Remove the LaunchAgent. Absent is success — uninstall is idempotent."""
+    path = plist_path or agent_plist_path()
+    subprocess.run(  # noqa: S603 — argv list, never a shell
+        ["launchctl", "bootout", f"gui/{_uid()}/{LAUNCH_AGENT_LABEL}"],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    existed = path.exists()
+    if existed:
+        path.unlink()
+    return {"plist": str(path), "removed": existed}
+
+
+def _uid() -> int:
+    import os
+
+    return os.getuid()

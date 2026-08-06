@@ -108,6 +108,28 @@ def buffered() -> int:
         return len(_buffer)
 
 
+def tokens_since(repo_dir: str | pathlib.Path, since: str) -> int:
+    """Tokens attributed to this run so far — ledger plus the unflushed buffer.
+
+    Counts the buffer as well as the file because the answer is wanted
+    *during* a run, and the ledger only learns about a call at the next
+    `flush`. A reader that saw the file alone would report a long run as
+    having spent nothing, which is the one wrong answer here.
+
+    Tokens, not dollars, and deliberately: this feeds a termination bound on
+    a loop, not a budget. ADR-032 stands — nothing refuses work over money.
+    """
+    total = sum(
+        e.input_tokens + e.output_tokens for e in read_entries(repo_dir, since=since)
+    )
+    with _lock:
+        pending = list(_buffer)
+    for row in pending:
+        if str(row.get("at", "")) >= since:
+            total += int(row.get("input_tokens", 0)) + int(row.get("output_tokens", 0))
+    return total
+
+
 def flush(repo_dir: str | pathlib.Path) -> int:
     """Append the buffer to the workspace ledger; returns rows written.
 

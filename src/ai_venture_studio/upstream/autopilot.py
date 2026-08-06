@@ -37,6 +37,23 @@ from ai_venture_studio.yamlx import extract_mapping
 
 REPORTER_MARKER = "plain-language reporter for non-technical founders"
 
+#: Runaway backstop for one build, in tokens. NOT a budget — ADR-032 removed
+#: framework-side spending caps and stands: nothing here refuses work over
+#: money, and for subscription billing tokens do not map to dollars at all.
+#: What this bounds is *termination*. The build loop is the one place in the
+#: system where a loop can retry into a wall: `MAX_ITERATIONS` bounds
+#: attempts per task and `max_tasks` bounds tasks, but a task whose context
+#: grows each iteration can consume without limit inside those counts, and
+#: the ledger showed nothing until the run ended.
+#:
+#: Set far above any healthy run, on the run's own arithmetic: 12 tasks × 3
+#: build iterations ≈ 36 model rounds, plus a spec and a review each; at the
+#: ~60k tokens a full-context round costs, a complete 12-task build lands
+#: near 3M. Ten million is roughly 3× that — a run that crosses it is not
+#: expensive, it is looping. Raise it with `token_ceiling=` for genuinely
+#: large plans; `token_ceiling=0` disables the bound entirely.
+DEFAULT_TOKEN_CEILING = 10_000_000
+
 
 class TaskOutcome(BaseModel):
     task_id: str
@@ -55,7 +72,9 @@ class TaskOutcome(BaseModel):
 
 
 class AutopilotResult(BaseModel):
-    status: str  # needs_answers | awaiting_confirmation | completed | failed
+    #: halted = stopped at the token termination bound with its work intact
+    #: and resumable — distinct from `failed`, where something went wrong.
+    status: str  # needs_answers | awaiting_confirmation | completed | failed | halted
     assessment: Assessment | None = None
     confirmation: str = ""
     outcomes: list[TaskOutcome] = Field(default_factory=list)
@@ -135,6 +154,7 @@ def run_autopilot(
     max_tasks: int = 12,
     parallel: bool = False,
     replan: bool = False,
+    token_ceiling: int = DEFAULT_TOKEN_CEILING,
 ) -> AutopilotResult:
     root = Path(workspace).resolve()
     fdr_text = Path(fdr_path).read_text(encoding="utf-8")
@@ -185,6 +205,7 @@ def run_autopilot(
             assessment=assessment, auto_approvals=auto_approvals,
             provider=provider, model=model, max_tasks=max_tasks,
             parallel=parallel, run_started_at=run_started_at,
+            token_ceiling=token_ceiling,
         )
 
     # The pre-task phases are the longest silent stretch in a run — assess,
@@ -252,6 +273,7 @@ def run_autopilot(
         assessment=assessment, auto_approvals=auto_approvals,
         provider=provider, model=model, max_tasks=max_tasks,
         parallel=parallel, run_started_at=run_started_at,
+        token_ceiling=token_ceiling,
     )
 
 
@@ -305,6 +327,7 @@ def _build_plan(
     max_tasks: int,
     parallel: bool,
     run_started_at: str,
+    token_ceiling: int = DEFAULT_TOKEN_CEILING,
 ) -> AutopilotResult:
     """Spec → build → review every task in the plan, then report.
 
@@ -312,6 +335,8 @@ def _build_plan(
     reused from an earlier run take exactly the same route from here, so
     reuse can never mean a weaker build.
     """
+    from ai_venture_studio import spend
+
     provider_impl = get_provider(provider)
 
     # Task-level resume (plan item 15, upstream half). The expensive unit
@@ -350,7 +375,28 @@ def _build_plan(
             ):
                 record_outcome(outcomes, wave_outcome)
         ordered = []
+    halted_at = 0
     for task in ordered:
+        # The stop rule, checked BETWEEN tasks rather than inside one. A task
+        # interrupted halfway leaves a half-written workspace and has to be
+        # rebuilt from scratch; a task never started costs nothing and is
+        # already resumable, because outcomes are on disk and `tasks_to_build`
+        # skips what is done. So the bound stops the loop at the one boundary
+        # where stopping is free.
+        if token_ceiling:
+            used = spend.tokens_since(root, run_started_at)
+            if used > token_ceiling:
+                halted_at = used
+                auto_approvals.append(
+                    f"HALTED: this run passed the {token_ceiling:,}-token "
+                    f"termination bound at {used:,} tokens with "
+                    f"{len(ordered) - len(resumed)} task(s) still unbuilt. "
+                    "Nothing was refused over money — a build that consumes "
+                    "this much is looping, not working. Re-run `avs create` "
+                    "to continue where it stopped (built tasks are not "
+                    "rebuilt), or raise the bound with --token-ceiling."
+                )
+                break
         outcome = _attempt_task(
             root, task, provider=provider, model=model, fdr_text=fdr_text,
             auto_approvals=auto_approvals,
@@ -360,6 +406,9 @@ def _build_plan(
         # Persist immediately: a crash after this point must not lose the
         # task that just cost minutes to build.
         _write_outcomes(root, outcomes)
+        # Also flush the ledger, so the bound above reads a real number rather
+        # than only what is still in the buffer.
+        spend.flush(root)
 
     # The machine retries its own failures before asking a human to. Every
     # failed task used to end the story with a retry button the founder had
@@ -367,10 +416,13 @@ def _build_plan(
     # (t1/t2 recovered on the second pass, t5/t9 built on retry). A retry a
     # human would perform mechanically is the machine's job; judgment gates
     # stay human.
-    _retry_failed_tasks(
-        root, plan_topo, outcomes, provider=provider, model=model,
-        fdr_text=fdr_text, auto_approvals=auto_approvals,
-    )
+    # Not when halted: the bound exists because this run was consuming without
+    # converging, and a retry pass is more of exactly that.
+    if not halted_at:
+        _retry_failed_tasks(
+            root, plan_topo, outcomes, provider=provider, model=model,
+            fdr_text=fdr_text, auto_approvals=auto_approvals,
+        )
 
     report = provider_impl.complete(
         model=model,
@@ -422,7 +474,12 @@ def _build_plan(
     report_path.write_text(report + tally_block + cost_block, encoding="utf-8")
 
     built_count = sum(1 for o in outcomes if o.status == "built")
-    status = "completed" if built_count == len(outcomes) and outcomes else "failed"
+    if halted_at:
+        # Its own status, not "failed": nothing failed. The run stopped at a
+        # bound with its work intact, and re-running continues it.
+        status = "halted"
+    else:
+        status = "completed" if built_count == len(outcomes) and outcomes else "failed"
     _post_build_artifacts(
         root, provider=provider, model=model, fdr_text=fdr_text,
         outcomes=outcomes, status=status,
