@@ -241,6 +241,59 @@ def test_install_writes_the_plist_but_arms_nothing(tmp_path, monkeypatch):
     assert plistlib.loads(target.read_bytes())["Label"] == cadence.LAUNCH_AGENT_LABEL
 
 
+def test_plist_carries_the_credential_pointer(tmp_path):
+    """launchd does not read a login shell. Without this the 09:00 run reaches
+    its provider with no credential and fails every morning into a log."""
+    env, warnings = cadence.scheduled_env(
+        {"ANTHROPIC_API_KEY_FILE": "/Users/x/.secrets/k", "IRRELEVANT": "y"},
+        binary="/opt/env/bin/avs",
+    )
+    assert env["ANTHROPIC_API_KEY_FILE"] == "/Users/x/.secrets/k"
+    assert "IRRELEVANT" not in env
+    # The interpreter's own bin dir leads, so a subprocess resolving by name
+    # finds this `avs` and not launchd's bare four-entry PATH.
+    assert env["PATH"].split(":")[0] == "/opt/env/bin"
+    assert warnings == []
+
+    body = plistlib.loads(cadence.render_plist(tmp_path, env=env))
+    assert body["EnvironmentVariables"]["ANTHROPIC_API_KEY_FILE"] == "/Users/x/.secrets/k"
+
+
+def test_a_raw_secret_is_never_written_to_the_plist(tmp_path):
+    """The plist is a readable file in ~/Library. A key in it would make the
+    scheduler a credential leak, so the secret is refused and named."""
+    env, warnings = cadence.scheduled_env({"ANTHROPIC_API_KEY": "sk-ant-REAL"})
+    assert "ANTHROPIC_API_KEY" not in env
+    assert not any("sk-ant-REAL" in v for v in env.values())
+    assert any("ANTHROPIC_API_KEY" in w and "_FILE" in w for w in warnings)
+
+    body = plistlib.loads(cadence.render_plist(tmp_path, env=env))
+    assert "sk-ant-REAL" not in plistlib.dumps(body).decode()
+
+
+def test_no_credential_at_all_is_a_warning_not_a_silent_install(tmp_path):
+    _, warnings = cadence.scheduled_env({})
+    assert any("without a credential" in w for w in warnings)
+
+
+def test_install_reports_what_it_carried(tmp_path, monkeypatch):
+    (tmp_path / ".mas").mkdir()
+    monkeypatch.setattr(
+        cadence, "agent_log_path", lambda: tmp_path / "logs" / "loops.log"
+    )
+    # The real shell may export any of these; the assertion is about what the
+    # installer carries, not about this machine.
+    for name in cadence.ENV_SECRETS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY_FILE", "/Users/x/.secrets/k")
+    done = cadence.install_agent(
+        tmp_path, executable="/usr/local/bin/avs", load=False,
+        plist_path=tmp_path / "agent.plist",
+    )
+    assert done["env_keys"] == ["ANTHROPIC_API_KEY_FILE"]
+    assert done["warnings"] == []
+
+
 def test_summary_names_the_overdue_loops(tmp_path):
     _compound_proposal(tmp_path, "2026-08-04")
     _sweep_digest(tmp_path, "2026-01-01")

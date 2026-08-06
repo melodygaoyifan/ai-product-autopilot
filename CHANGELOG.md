@@ -4,6 +4,36 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.71.1 — the trigger gets an environment
+
+Arming v0.71.0's LaunchAgent against a real product workspace surfaced the
+one thing that would have made it useless: **launchd does not read a login
+shell.** A credential the operator keeps in `.zshrc` — here an
+`ANTHROPIC_API_KEY_FILE` pointing at `~/.secrets/` — is simply absent at
+09:00. `compound` would have reached its provider with nothing and failed
+every morning into a log file nobody opens, which is the silent-success
+failure this whole feature exists to prevent, reintroduced by the installer.
+
+The plist now carries an `EnvironmentVariables` block:
+
+- **Pointers travel, secrets never do.** `ENV_POINTERS` (`*_KEY_FILE`,
+  `ANTHROPIC_BASE_URL`, `AWS_PROFILE`, …) are copied. `ENV_SECRETS`
+  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) are **refused by name** — the
+  plist is a readable file in `~/Library/LaunchAgents`, and writing a key
+  into it would turn the scheduler into a credential leak. The refusal names
+  the variable so the operator converts it to its `_FILE` form instead of
+  debugging a silent 401.
+- **PATH is set explicitly.** launchd's default is a bare
+  `/usr/bin:/bin:/usr/sbin:/sbin`, which does not contain the interpreter
+  `avs` was installed into.
+- **No credential at all is a warning at install time**, not a discovery a
+  week later.
+
+Also corrected: `install_agent` now reports `env_keys` and `warnings`, and
+`avs cadence --install` prints both.
+
+Suite 1718 hermetic tests, 3 skipped.
+
 ## v0.71.0 — the recurring loops get a trigger, and the build loop gets a floor
 
 Three loops in this system were designed to recur — the compounding loop

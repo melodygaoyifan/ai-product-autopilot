@@ -3447,6 +3447,10 @@ def cadence_cmd(
         console.print(f"  {done['schedule']} → avs cadence --run-due")
         console.print(f"  workspace: {done['workspace']}")
         console.print(f"  log: {done['log']}")
+        if done["env_keys"]:
+            console.print(f"  environment: {', '.join(done['env_keys'])}")
+        for warning in done["warnings"]:
+            console.print(f"[yellow]  warning: {warning}[/yellow]")
         if done["loaded"]:
             console.print("[green]loaded into launchd[/green] — it will fire on schedule")
         elif arm:

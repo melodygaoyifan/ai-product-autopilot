@@ -344,9 +344,76 @@ def agent_log_path() -> pathlib.Path:
     return pathlib.Path.home() / "Library" / "Logs" / "ai-venture-studio" / "loops.log"
 
 
+#: launchd does not read a login shell. A credential the operator keeps in
+#: `.zshrc` is simply absent at 09:00, so a scheduled `compound` reaches its
+#: provider with nothing and fails every morning into a log nobody opens.
+#: These names travel into the plist so a scheduled run resolves the same
+#: credential an interactive run resolves.
+#:
+#: Only *pointers* are eligible — a variable naming a file, or a non-secret
+#: setting. The plist is a readable file in `~/Library/LaunchAgents`; writing
+#: a key into it would turn the scheduler into a credential leak.
+ENV_POINTERS = (
+    "ANTHROPIC_API_KEY_FILE",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_MODEL",
+    "AWS_PROFILE",
+    "AWS_REGION",
+    "AVS_PROVIDER",
+)
+
+#: Raw secrets, never copied. Refused *by name* so the operator learns which
+#: variable to convert to its `_FILE` form, rather than debugging a silent
+#: 401 at nine in the morning.
+ENV_SECRETS = (
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "AWS_SECRET_ACCESS_KEY",
+)
+
+
+def scheduled_env(
+    environ: dict | None = None, *, binary: str | None = None
+) -> tuple[dict[str, str], list[str]]:
+    """The environment a launchd job needs, and what could not be carried.
+
+    Returns `(env, warnings)`. Pure over `environ` so a test can assert both
+    halves without touching the real process environment.
+    """
+    import os
+
+    source = os.environ if environ is None else environ
+    env: dict[str, str] = {}
+    # launchd's default PATH is `/usr/bin:/bin:/usr/sbin:/sbin` — it does not
+    # contain the interpreter `avs` was installed into, so any subprocess that
+    # resolves a tool by name would miss it.
+    parts = [str(pathlib.Path(binary).parent)] if binary else []
+    env["PATH"] = ":".join([*parts, "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+    for name in ENV_POINTERS:
+        value = str(source.get(name, "")).strip()
+        if value:
+            env[name] = value
+    warnings: list[str] = []
+    for name in ENV_SECRETS:
+        if str(source.get(name, "")).strip() and name not in env:
+            warnings.append(
+                f"{name} is set in your shell but will NOT be written to the "
+                f"plist — a secret does not belong in a readable file. Put the "
+                f"key in a file and export {name}_FILE instead."
+            )
+    if not any(n.endswith("_FILE") for n in env):
+        warnings.append(
+            "No *_KEY_FILE pointer found, so the scheduled run may reach its "
+            "provider without a credential. Loops that need one will fail into "
+            f"{agent_log_path()}."
+        )
+    return env, warnings
+
+
 def render_plist(
     workspace: str | pathlib.Path, *, executable: str | None = None,
-    hour: int = 9, minute: int = 0,
+    hour: int = 9, minute: int = 0, env: dict[str, str] | None = None,
 ) -> bytes:
     """The LaunchAgent, as plist bytes.
 
@@ -376,6 +443,9 @@ def render_plist(
         "StandardOutPath": str(log),
         "StandardErrorPath": str(log),
     }
+    plan["EnvironmentVariables"] = (
+        env if env is not None else scheduled_env(binary=binary)[0]
+    )
     return plistlib.dumps(plan, sort_keys=True)
 
 
@@ -408,7 +478,11 @@ def install_agent(
     path = plist_path or agent_plist_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     agent_log_path().parent.mkdir(parents=True, exist_ok=True)
-    body = render_plist(root, executable=executable, hour=hour, minute=minute)
+    binary = executable or shutil.which("avs") or sys.executable
+    env, warnings = scheduled_env(binary=binary)
+    body = render_plist(
+        root, executable=executable, hour=hour, minute=minute, env=env
+    )
     path.write_bytes(body)
     command = ["launchctl", "bootstrap", f"gui/{_uid()}", str(path)]
     result = {
@@ -418,6 +492,8 @@ def install_agent(
         "log": str(agent_log_path()),
         "loaded": False,
         "command": " ".join(command),
+        "env_keys": sorted(k for k in env if k != "PATH"),
+        "warnings": warnings,
     }
     if not load:
         return result
