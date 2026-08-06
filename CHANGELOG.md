@@ -35,7 +35,7 @@ pinned against `pyproject.toml` by a test, along with the CHANGELOG's leading
 entry, because the release checklist that was supposed to catch this is
 exactly the kind of habit this release is about not relying on.
 
-Suite 1724 hermetic tests, 3 skipped.
+Suite 1726 hermetic tests (as measured by CI at the tag).
 
 ## v0.71.1 — the trigger gets an environment
 
