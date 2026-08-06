@@ -25,8 +25,21 @@ from ai_venture_studio.paths import skills_root as _skills_root
 _DEFAULT_SKILLS = _skills_root()
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from ai_venture_studio import __version__
+
+        console.print(__version__)
+        raise typer.Exit()
+
+
 @app.callback()
-def _root() -> None:
+def _root(
+    version: bool = typer.Option(
+        None, "--version", callback=_version_callback, is_eager=True,
+        help="Print the installed version and exit",
+    ),
+) -> None:
     """ai-venture-studio — multi-agent review-side SDLC system."""
 
 
@@ -3523,7 +3536,20 @@ def cadence_cmd(
             if loop.human_input_required else ""
         console.print(f"  [dim]{loop.command}{hint}[/dim]")
 
-    if report.stale:
+    build = cad.scheduler_build()
+    if build.installed:
+        console.print(f"[dim]scheduler: {build.describe()}[/dim]")
+    if build.behind:
+        console.print(
+            f"\n[yellow]The scheduler is running v{build.scheduled_version}; "
+            f"you are on v{build.running_version}.[/yellow]\n"
+            f"  [dim]Publishing does not reach the daily loop — that install "
+            f"has to be upgraded too.[/dim]\n"
+            f"  [bold]{build.binary.replace('/avs', '/pip')} install --upgrade "
+            f"ai-venture-studio[/bold]"
+        )
+
+    if report.stale or build.behind:
         raise typer.Exit(code=3)
 
 

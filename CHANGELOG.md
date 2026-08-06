@@ -4,6 +4,43 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.72.3 — the scheduler tells you when it is running an old build
+
+Patch. Releasing v0.72.2 exposed the gap between *published* and *deployed*:
+the LaunchAgent's plist names an absolute path to an `avs` binary — whichever
+install was on PATH when the agent was armed — and that is a different install
+from the one a release is cut with. `git push`, a green publish and a new
+version on PyPI move nothing on the machine. The daily loop went on running
+v0.72.1, including the metering fix it did not have, and would have kept doing
+so until somebody thought to check by hand.
+
+That is the same shape as every bug `avs cadence` exists to catch: a green
+report over a stale reality. So it is a mechanical check now.
+
+`avs cadence` reads the installed plist, asks the scheduled binary's own
+interpreter which version it has, and compares. A scheduler running an older
+build than the reporting one is a finding: it prints both versions and the
+exact `pip install --upgrade` line for that install, and **exits 3** — the
+same code as an overdue loop, because a yellow line alone gets scrolled past
+and the exit code is what a script reads.
+
+Details that matter:
+
+- The probe asks for **distribution metadata** (`importlib.metadata.version`),
+  which is what pip wrote to disk and cannot drift, falling back to
+  `__version__` only for an uninstalled checkout. `__version__` is
+  hand-maintained and has drifted before — 0.70.1 shipped inside both v0.71.0
+  and v0.71.1.
+- It probes the **interpreter** named in the console script's shebang rather
+  than running `avs --version`, because it has to work against builds older
+  than the one asking, and those are precisely the builds that lack any flag
+  added later.
+- Only *older* counts. Running `avs cadence` from a development checkout while
+  the scheduler holds the last release is normal and is not reported.
+- An install too broken to import is reported as unreadable, never as current.
+
+Also: `avs --version`, which did not exist.
+
 ## v0.72.2 — metering stops being something each command has to remember
 
 Patch. v0.72.1 fixed `compound`'s missing ledger flush by hand. Fixing the

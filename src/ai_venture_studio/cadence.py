@@ -589,6 +589,150 @@ def install_agent(
     return result
 
 
+# --------------------------------------------------------------------------
+# Is the trigger running the build you think it is?
+# --------------------------------------------------------------------------
+#
+# The plist names an absolute path to an `avs` binary — whichever one was on
+# PATH at install time. That install is a *different* install from the one you
+# release with, and nothing connects them: `git push` + a green publish moves
+# PyPI, and the thing that fires at 09:00 goes on running whatever it has.
+#
+# v0.72.2 shipped a metering fix and the daily loop kept running v0.72.1 for
+# as long as nobody thought to look. That is the same shape as every other bug
+# this module exists to catch: a green report over a stale reality. So the
+# check is mechanical now, and the operator is told rather than trusted to
+# remember.
+
+#: Asked of the *scheduled* interpreter, so it must run on builds older than
+#: this one — it cannot assume a flag or an attribute added later. Distribution
+#: metadata is what pip actually wrote to disk and cannot drift from it;
+#: `__version__` is hand-maintained and did drift (0.70.1 shipped inside both
+#: v0.71.0 and v0.71.1). Metadata first, attribute only as a fallback for a
+#: source checkout that was never installed.
+_VERSION_PROBE = (
+    "import importlib.metadata as m\n"
+    "try:\n"
+    "    print(m.version('ai-venture-studio'))\n"
+    "except Exception:\n"
+    "    import ai_venture_studio as p\n"
+    "    print(p.__version__)\n"
+)
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
+
+
+class SchedulerBuild(BaseModel):
+    """What the daily trigger will execute, next to what is reporting here."""
+
+    plist: str = ""
+    installed: bool = False
+    binary: str = ""
+    scheduled_version: str = ""
+    running_version: str = ""
+    detail: str = ""  # why the scheduled version could not be read
+
+    @property
+    def known(self) -> bool:
+        return bool(self.scheduled_version and self.running_version)
+
+    @property
+    def behind(self) -> bool:
+        """The scheduler runs an OLDER build than this one.
+
+        Only older counts. A newer or equal scheduled build is not a finding:
+        running `avs cadence` from a development checkout while the scheduler
+        holds the last release is normal, and reporting it would train the
+        operator to scroll past the line that matters.
+        """
+        if not (self.installed and self.known):
+            return False
+        return _version_tuple(self.scheduled_version) < _version_tuple(
+            self.running_version
+        )
+
+    def describe(self) -> str:
+        if not self.installed:
+            return "no LaunchAgent installed"
+        if not self.scheduled_version:
+            return f"{self.binary} — version unreadable ({self.detail})"
+        return f"{self.binary} runs v{self.scheduled_version}"
+
+
+def _interpreter_for(binary: str) -> tuple[str | None, str]:
+    """The python that owns a console script, read from its shebang.
+
+    The scheduled binary is usually `.../bin/avs`, a generated console script
+    whose first line names its interpreter. Probing that interpreter works
+    against every past build; probing `avs --version` would only work against
+    builds new enough to have the flag, which is exactly the builds that are
+    not the problem.
+    """
+    path = pathlib.Path(binary)
+    if path.name in ("python", "python3") or path.name.startswith("python"):
+        return binary, ""
+    try:
+        first = path.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
+    except OSError as exc:
+        return None, f"cannot read {binary}: {exc.strerror or exc}"
+    if not first.startswith("#!"):
+        return None, f"{binary} is not a console script"
+    return first[2:].strip().split()[0], ""
+
+
+def scheduler_build(
+    plist_path: pathlib.Path | None = None, *, running: str | None = None,
+    runner=None,
+) -> SchedulerBuild:
+    """Read the installed plist and ask its binary which version it is.
+
+    `runner` is injected so the probe is a unit test rather than a subprocess:
+    it takes an argv list and returns an object with `returncode` and `stdout`.
+    """
+    from ai_venture_studio import __version__
+
+    path = plist_path or agent_plist_path()
+    build = SchedulerBuild(
+        plist=str(path), running_version=running or __version__
+    )
+    if not path.exists():
+        return build
+    build.installed = True
+    try:
+        plan = plistlib.loads(path.read_bytes())
+        build.binary = str(plan["ProgramArguments"][0])
+    except (OSError, ValueError, KeyError, IndexError) as exc:
+        build.detail = f"unreadable plist: {exc}"
+        return build
+
+    interpreter, why = _interpreter_for(build.binary)
+    if interpreter is None:
+        build.detail = why
+        return build
+
+    if runner is None:
+        def runner(argv):
+            return subprocess.run(  # noqa: S603 — argv list, never a shell
+                argv, capture_output=True, text=True, timeout=30, check=False,
+            )
+
+    try:
+        done = runner([interpreter, "-c", _VERSION_PROBE])
+    except (OSError, subprocess.SubprocessError) as exc:
+        build.detail = f"probe failed: {exc}"
+        return build
+    if done.returncode != 0:
+        build.detail = "the scheduled install cannot import ai-venture-studio"
+        return build
+    build.scheduled_version = (done.stdout or "").strip().splitlines()[-1:][0] \
+        if (done.stdout or "").strip() else ""
+    if not build.scheduled_version:
+        build.detail = "the version probe printed nothing"
+    return build
+
+
 def uninstall_agent(plist_path: pathlib.Path | None = None) -> dict:
     """Remove the LaunchAgent. Absent is success — uninstall is idempotent."""
     path = plist_path or agent_plist_path()

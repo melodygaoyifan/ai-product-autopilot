@@ -401,3 +401,161 @@ def _completed(argv=None, returncode=0, stdout="", stderr=""):
     return subprocess.CompletedProcess(
         args=argv or [], returncode=returncode, stdout=stdout, stderr=stderr
     )
+
+
+# --- the trigger runs a build; is it the build you shipped? -----------------
+#
+# v0.72.2 published a metering fix while the LaunchAgent went on running
+# v0.72.1, because the plist names an absolute path to a *different* install
+# from the one that releases. Nothing connected the two, so "published" and
+# "deployed" drifted silently — the green-over-stale shape this whole module
+# exists to catch.
+
+
+def _plist_at(tmp_path, binary: str):
+    path = tmp_path / "agent.plist"
+    path.write_bytes(plistlib.dumps({
+        "Label": cadence.LAUNCH_AGENT_LABEL,
+        "ProgramArguments": [binary, "cadence", "--repo-dir", "/ws", "--run-due"],
+    }))
+    return path
+
+
+def _console_script(tmp_path, interpreter: str = "/usr/bin/python3"):
+    script = tmp_path / "avs"
+    script.write_text(f"#!{interpreter}\nfrom x import main\n", encoding="utf-8")
+    return str(script)
+
+
+def test_a_scheduler_left_on_the_previous_release_is_a_finding(tmp_path):
+    build = cadence.scheduler_build(
+        _plist_at(tmp_path, _console_script(tmp_path)),
+        running="0.72.2",
+        runner=lambda argv: _completed(argv, stdout="0.72.1\n"),
+    )
+    assert build.scheduled_version == "0.72.1"
+    assert build.behind, "publishing moved PyPI and the daily loop kept the old build"
+    assert "0.72.1" in build.describe()
+
+
+def test_a_scheduler_on_the_same_build_is_not_a_finding(tmp_path):
+    build = cadence.scheduler_build(
+        _plist_at(tmp_path, _console_script(tmp_path)),
+        running="0.72.2",
+        runner=lambda argv: _completed(argv, stdout="0.72.2\n"),
+    )
+    assert not build.behind
+
+
+def test_a_newer_scheduled_build_is_not_reported_as_drift(tmp_path):
+    """Running `avs cadence` from a development checkout while the scheduler
+    holds the last release is normal. Reporting it would train the operator to
+    scroll past the line that matters."""
+    build = cadence.scheduler_build(
+        _plist_at(tmp_path, _console_script(tmp_path)),
+        running="0.72.0",
+        runner=lambda argv: _completed(argv, stdout="0.73.0\n"),
+    )
+    assert not build.behind
+
+
+def test_no_scheduler_installed_claims_nothing(tmp_path):
+    build = cadence.scheduler_build(tmp_path / "absent.plist", running="0.72.2")
+    assert not build.installed
+    assert not build.behind
+    assert build.describe() == "no LaunchAgent installed"
+
+
+def test_an_unreadable_version_is_reported_not_guessed(tmp_path):
+    """An install too broken to import must not read as up to date — that is
+    the same silence the check exists to break."""
+    build = cadence.scheduler_build(
+        _plist_at(tmp_path, _console_script(tmp_path)),
+        running="0.72.2",
+        runner=lambda argv: _completed(argv, returncode=1, stderr="boom"),
+    )
+    assert build.scheduled_version == ""
+    assert not build.behind
+    assert "cannot import" in build.detail
+    assert "unreadable" in build.describe()
+
+
+def test_the_probe_targets_the_interpreter_that_owns_the_script(tmp_path):
+    """It must work against builds older than this one, so it cannot assume a
+    flag or attribute added later — it asks the script's own interpreter."""
+    seen = []
+
+    def _runner(argv):
+        seen.append(argv)
+        return _completed(argv, stdout="0.71.1\n")
+
+    cadence.scheduler_build(
+        _plist_at(tmp_path, _console_script(tmp_path, "/opt/py/bin/python3")),
+        running="0.72.2", runner=_runner,
+    )
+    assert seen[0][0] == "/opt/py/bin/python3"
+    assert "importlib.metadata" in seen[0][2], "pip's own record, which cannot drift"
+
+
+def test_a_plist_pointing_at_a_missing_binary_says_so(tmp_path):
+    build = cadence.scheduler_build(
+        _plist_at(tmp_path, str(tmp_path / "gone" / "avs")),
+        running="0.72.2",
+        runner=lambda argv: _completed(argv, stdout="0.1.0\n"),
+    )
+    assert not build.behind
+    assert build.detail, "a binary that is not there must not read as current"
+
+
+def _healthy_workspace(tmp_path):
+    _compound_proposal(tmp_path, "2026-08-05")
+    _sweep_digest(tmp_path, "2026-08-05")
+    _attention_log(tmp_path, [
+        {"week": "2026-W31", "window": "w", "hours": 1.0, "status": "logged",
+         "decided_by": "melody"},
+    ])
+    return tmp_path
+
+
+def _run_cadence(tmp_path, build, monkeypatch):
+    from typer.testing import CliRunner
+
+    from ai_venture_studio.cli import app
+
+    monkeypatch.setattr(cadence, "scheduler_build", lambda *a, **k: build)
+    return CliRunner().invoke(
+        app, ["cadence", "--repo-dir", str(_healthy_workspace(tmp_path)),
+              "--today", "2026-08-05"]
+    )
+
+
+def test_a_stale_scheduler_build_gates_the_exit_code(tmp_path, monkeypatch):
+    """Every loop is on time and the report is still not a pass — the loops
+    are being kept by a build that is not the one that was shipped. A yellow
+    line alone would be scrolled past; the exit code is what a script reads."""
+    result = _run_cadence(tmp_path, cadence.SchedulerBuild(
+        plist="/p", installed=True, binary="/opt/bin/avs",
+        scheduled_version="0.72.1", running_version="0.72.2",
+    ), monkeypatch)
+    assert result.exit_code == 3, result.output
+    assert "0.72.1" in result.output and "0.72.2" in result.output
+    assert "pip" in result.output, "the operator is told the exact fix"
+
+
+def test_loops_on_time_on_the_current_build_is_a_clean_pass(tmp_path, monkeypatch):
+    result = _run_cadence(tmp_path, cadence.SchedulerBuild(
+        plist="/p", installed=True, binary="/opt/bin/avs",
+        scheduled_version="0.72.2", running_version="0.72.2",
+    ), monkeypatch)
+    assert result.exit_code == 0, result.output
+
+
+def test_version_flag_reports_the_installed_build():
+    from typer.testing import CliRunner
+
+    from ai_venture_studio import __version__
+    from ai_venture_studio.cli import app
+
+    result = CliRunner().invoke(app, ["--version"])
+    assert result.exit_code == 0, result.output
+    assert __version__ in result.output
