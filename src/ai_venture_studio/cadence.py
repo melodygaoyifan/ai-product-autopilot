@@ -78,6 +78,11 @@ class LoopStatus(BaseModel):
     evidence: str = ""
     command: str = ""
     human_input_required: bool = False
+    produced: str = ""  # what the last run actually yielded, in its own words
+    #: The loop ran on schedule but had no input to read. Not stale — the loop
+    #: is healthy — but reporting it as a plain "ok" would let a loop that
+    #: compounds nothing read as a loop that is working.
+    vacuous: bool = False
 
     @property
     def needs_run(self) -> bool:
@@ -93,7 +98,9 @@ class LoopStatus(BaseModel):
         if self.state == "never_run":
             return "never run"
         if self.state == "ok":
-            return f"ok ({self.age_days}d)"
+            return f"ok, empty ({self.age_days}d)" if self.vacuous else (
+                f"ok ({self.age_days}d)"
+            )
         return f"{self.state.upper()} ({self.age_days}d)"
 
 
@@ -110,14 +117,28 @@ class CadenceReport(BaseModel):
     def due(self) -> list[LoopStatus]:
         return [loop for loop in self.loops if loop.needs_run]
 
+    @property
+    def vacuous(self) -> list[LoopStatus]:
+        """Ran on time, read nothing. Healthy by date, hollow by content."""
+        return [loop for loop in self.loops if loop.vacuous]
+
     def summary(self) -> str:
         if not self.loops:
             return "no recurring loops configured"
-        if not self.stale:
-            return f"all {len(self.loops)} loops within cadence"
-        names = ", ".join(loop.name for loop in self.stale)
-        noun = "loop" if len(self.stale) == 1 else "loops"
-        return f"{len(self.stale)} {noun} overdue: {names}"
+        if self.stale:
+            names = ", ".join(loop.name for loop in self.stale)
+            noun = "loop" if len(self.stale) == 1 else "loops"
+            return f"{len(self.stale)} {noun} overdue: {names}"
+        if self.vacuous:
+            # "All within cadence" would be true and misleading in the same
+            # breath — the schedule is being kept over an empty window.
+            names = ", ".join(loop.name for loop in self.vacuous)
+            noun = "loop" if len(self.vacuous) == 1 else "loops"
+            return (
+                f"all {len(self.loops)} loops within cadence, but "
+                f"{len(self.vacuous)} {noun} had nothing to read: {names}"
+            )
+        return f"all {len(self.loops)} loops within cadence"
 
 
 def _classify(
@@ -167,15 +188,51 @@ def _latest_dated_file(
     return best, str(directory / best_name)
 
 
+#: compound's own header line: `Window: 12 review(s). Verdicts: {...}.`
+#: Matched rather than re-derived, so the reading is of what that run actually
+#: saw — not of what the window happens to hold now, days later.
+_WINDOW_RE = re.compile(r"Window:\s*(\d+)\s*review")
+
+#: The sentinel `render_proposal` writes when nothing cleared the evidence bar.
+_NO_CONSTRAINT = "no constraint met the evidence bar"
+
+
+def _proposal_substance(path: str) -> tuple[int | None, str, bool]:
+    """What the last compounding run actually read, and whether it read at all.
+
+    Returns `(reviews, produced, vacuous)`. An unrecognised format returns
+    `(None, "", False)` — an older artifact says nothing about its own
+    substance, and guessing would be worse than silence.
+    """
+    try:
+        text = pathlib.Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None, "", False
+    found = _WINDOW_RE.search(text)
+    if not found:
+        return None, "", False
+    reviews = int(found.group(1))
+    if reviews == 0:
+        # The loop ran and wrote a file, so every date-based check calls it
+        # fresh. It compounded nothing, because nothing reached it.
+        return 0, "read 0 reviews — nothing to compound", True
+    verdict = ("no constraint met the bar" if _NO_CONSTRAINT in text
+               else "constraint(s) proposed")
+    return reviews, f"read {reviews} review(s), {verdict}", False
+
+
 def _compound_status(repo_dir: pathlib.Path, today: dt.date) -> LoopStatus:
     last, evidence = _latest_dated_file(
         repo_dir / ".mas" / "compound", "proposal-*.md"
     )
     state, age = _classify(last, today, WEEKLY)
+    produced, vacuous = "", False
+    if evidence:
+        _, produced, vacuous = _proposal_substance(evidence)
     return LoopStatus(
         name="compound", last_run=last.isoformat() if last else "",
         age_days=age, state=state, evidence=evidence,
-        command="avs compound",
+        command="avs compound", produced=produced, vacuous=vacuous,
     )
 
 
@@ -184,11 +241,31 @@ def _sweep_status(repo_dir: pathlib.Path, today: dt.date) -> LoopStatus:
         repo_dir / ".mas" / "sweep", "digest-*.yaml"
     )
     state, age = _classify(last, today, WEEKLY)
+    # Sweep is deliberately NOT judged vacuous on an empty result: invariant
+    # 14.30 makes a clean pass a real finding that must be recorded rather
+    # than pass silently. Its own note is carried through instead.
+    produced = ""
+    if evidence:
+        produced = _digest_note(evidence)
     return LoopStatus(
         name="sweep", last_run=last.isoformat() if last else "",
         age_days=age, state=state, evidence=evidence,
-        command="avs sweep",
+        command="avs sweep", produced=produced,
     )
+
+
+def _digest_note(path: str) -> str:
+    """Sweep already writes a one-line account of its pass; carry it, don't
+    re-derive it."""
+    import yaml
+
+    try:
+        data = yaml.safe_load(pathlib.Path(path).read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("note", "")).strip()
 
 
 def _attention_status(repo_dir: pathlib.Path, today: dt.date) -> LoopStatus:

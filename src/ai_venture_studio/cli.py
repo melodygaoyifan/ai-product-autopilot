@@ -3482,14 +3482,26 @@ def cadence_cmd(
     table.add_column("last run")
     table.add_column("cadence")
     table.add_column("state")
+    table.add_column("last run produced")
     for loop in report.loops:
         color = {"ok": "green", "due": "yellow"}.get(loop.state, "red")
+        if loop.vacuous:
+            color = "yellow"
         table.add_row(
             loop.name, loop.last_run or "—", f"{loop.cadence_days}d",
             f"[{color}]{loop.describe()}[/{color}]",
+            loop.produced or "—",
         )
     console.print(table)
     console.print(report.summary())
+
+    for loop in report.vacuous:
+        console.print(
+            f"  [yellow]{loop.name} is on schedule but read nothing — the "
+            f"cadence is being kept over an empty window.[/yellow]\n"
+            f"  [dim]Check that work is reaching it before trusting the "
+            f"green.[/dim]"
+        )
 
     for loop in report.stale:
         hint = "  (needs YOUR number — the machine cannot log it)" \

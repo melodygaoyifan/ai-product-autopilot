@@ -4,6 +4,39 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.72.0 — a loop that read nothing no longer reports as a loop that worked
+
+`cadence` decided freshness from the *existence* of a dated artifact. Run
+`avs compound` against a workspace whose 7-day window holds no reviews and it
+writes a proposal without ever calling a provider — and that file then reads
+as a healthy run for a week. The narrow form of the same "looks done" this
+feature exists to prevent, and it was demonstrable, not theoretical.
+
+The fix separates two things a date cannot tell apart:
+
+- **Read nothing** (`Window: 0 review(s)`) — the loop ran, so it is *not*
+  stale and does not fail a gate, but it is now marked `vacuous`, rendered
+  `ok, empty`, and named in the summary: "all 3 loops within cadence, but 1
+  loop had nothing to read: compound".
+- **Read plenty and concluded nothing** — twelve reviews where no constraint
+  cleared the evidence bar is work with a real negative result, and is
+  reported as such.
+
+Sweep is deliberately exempt: invariant 14.30 makes a clean pass a finding
+that must be recorded rather than pass silently, so an empty sweep is real
+work. Its own `note` is carried through instead. An unrecognised proposal
+format claims nothing in either direction rather than guessing.
+
+`avs cadence` gains a **"last run produced"** column.
+
+Also fixed: **`__version__` had drifted to 0.70.1** and shipped that way in
+both v0.71.0 and v0.71.1 — nothing read it, so nothing caught it. It is now
+pinned against `pyproject.toml` by a test, along with the CHANGELOG's leading
+entry, because the release checklist that was supposed to catch this is
+exactly the kind of habit this release is about not relying on.
+
+Suite 1724 hermetic tests, 3 skipped.
+
 ## v0.71.1 — the trigger gets an environment
 
 Arming v0.71.0's LaunchAgent against a real product workspace surfaced the

@@ -241,6 +241,96 @@ def test_install_writes_the_plist_but_arms_nothing(tmp_path, monkeypatch):
     assert plistlib.loads(target.read_bytes())["Label"] == cadence.LAUNCH_AGENT_LABEL
 
 
+def _proposal_text(root, date: str, *, reviews: int, barren: bool = True):
+    directory = root / ".mas" / "compound"
+    directory.mkdir(parents=True, exist_ok=True)
+    body = [
+        f"# Compounding-loop proposal — {date}", "",
+        f"Window: {reviews} review(s). Verdicts: {{}}.", "",
+        "## Proposed CLAUDE.md constraints",
+        "- (no constraint met the evidence bar this window)" if barren
+        else "- always name the port explicitly",
+    ]
+    (directory / f"proposal-{date}.md").write_text(
+        "\n".join(body), encoding="utf-8"
+    )
+
+
+def test_a_run_that_read_nothing_is_not_a_productive_run(tmp_path):
+    """The narrow "looks done": compound with no reviews in its window writes
+    a proposal without ever calling a provider, and a date-only check calls
+    that fresh for seven days."""
+    _proposal_text(tmp_path, "2026-08-04", reviews=0)
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "compound")
+    # The loop genuinely ran, so it is NOT stale and must not fail a gate.
+    assert loop.state == "ok"
+    assert loop.is_stale is False
+    # But it read nothing, and that has to be visible.
+    assert loop.vacuous is True
+    assert "0 reviews" in loop.produced
+    assert "empty" in loop.describe()
+
+
+def test_reading_reviews_and_finding_nothing_is_a_real_result(tmp_path):
+    """The distinction the fix turns on: examining twelve reviews and
+    concluding nothing crossed the bar is work, not emptiness."""
+    _proposal_text(tmp_path, "2026-08-04", reviews=12, barren=True)
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "compound")
+    assert loop.vacuous is False
+    assert "12 review(s)" in loop.produced
+    assert "no constraint met the bar" in loop.produced
+
+
+def test_a_proposed_constraint_is_reported_as_such(tmp_path):
+    _proposal_text(tmp_path, "2026-08-04", reviews=9, barren=False)
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "compound")
+    assert loop.vacuous is False
+    assert "constraint(s) proposed" in loop.produced
+
+
+def test_summary_will_not_call_an_empty_window_simply_fine(tmp_path):
+    _proposal_text(tmp_path, "2026-08-04", reviews=0)
+    _sweep_digest(tmp_path, "2026-08-04")
+    _attention_log(tmp_path, [
+        {"week": "2026-W31", "window": "w", "hours": 1.0, "status": "logged",
+         "decided_by": "melody"},
+    ])
+    report = cadence.assess(tmp_path, today=TODAY)
+    assert report.stale == []
+    assert [loop.name for loop in report.vacuous] == ["compound"]
+    assert "nothing to read" in report.summary()
+    assert "compound" in report.summary()
+
+
+def test_an_unreadable_proposal_format_claims_nothing(tmp_path):
+    """An older artifact says nothing about its own substance. Silence beats
+    a guess in either direction."""
+    directory = tmp_path / ".mas" / "compound"
+    directory.mkdir(parents=True)
+    (directory / "proposal-2026-08-04.md").write_text("# old\n", encoding="utf-8")
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "compound")
+    assert loop.vacuous is False
+    assert loop.produced == ""
+    assert loop.state == "ok"
+
+
+def test_a_sweep_clean_pass_is_never_called_vacuous(tmp_path):
+    """Invariant 14.30: a clean pass is a finding recorded, not a silence.
+    Sweep inspecting its surface and finding no chores is real work."""
+    directory = tmp_path / ".mas" / "sweep"
+    directory.mkdir(parents=True)
+    (directory / "digest-2026-08-04.yaml").write_text(
+        yaml.safe_dump({
+            "at": "2026-08-04", "items_inspected": 0, "clean_pass": True,
+            "note": "clean pass — recorded, not silent (invariant 14.30)",
+        }),
+        encoding="utf-8",
+    )
+    loop = _loop(cadence.assess(tmp_path, today=TODAY), "sweep")
+    assert loop.vacuous is False
+    assert "clean pass" in loop.produced
+
+
 def test_plist_carries_the_credential_pointer(tmp_path):
     """launchd does not read a login shell. Without this the 09:00 run reaches
     its provider with no credential and fails every morning into a log."""
