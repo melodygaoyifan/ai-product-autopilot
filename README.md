@@ -265,6 +265,7 @@ Claude-written code. Setup, env vars, and operations: [RUNBOOK.md](RUNBOOK.md).
 | `bench` · `product-bench` · `voter-gate` · `compound --pr` | the benchmarks, voter registration gates, and the weekly compounding loop |
 | `automerge` · `deploy-execute` | exist but stay disarmed until a human writes an attributed, expiring policy ([ADR-031](docs/adr/031-policy-armed-automation.md)) |
 | `readiness` · `attest` · `cab-package` · `sweep` | the enterprise adoption surface: substrate ladder, attestation ledger, change control, the janitor |
+| `cadence [--install --arm]` | the recurring loops' watchdog and trigger. Reports which of `compound`/`sweep`/`attention` is overdue, and `--install` writes a daily macOS LaunchAgent that runs the due ones. Exits 3 when something needs doing, so it can gate a script. A loop that never ran reads as *never run*, never as fresh; a loop that ran on time over an empty window is reported as such rather than counted green; and a scheduler still running an older build than the one you released is a finding with the exact upgrade line, because publishing does not reach the machine |
 | `mp-runtime` | opens a built 小程序 in WeChat DevTools, visits every registered page and screenshots it — the blank-page check the static gate cannot make ([pipeline guide](docs/miniprogram-pipeline.md)) |
 | `reconcile [--scan DIR] [--apply]` | one-time repair for workspaces built before v0.70: restores `built` flags lost to a rollback, so a resumed run does not rebuild and re-bill committed modules. Reports by default; repairs only where outcomes.yaml and the commit log agree, and leaves a superseded spec from a re-plan alone |
 
@@ -340,6 +341,12 @@ bypassed by anything here. What the framework owes you is the number, and
 it delivers it everywhere money is decided: every build report ends with
 what the run cost, as arithmetic; `avs cost` prints the month per model;
 the Studio shows spend on the confirm page, before the first dollar.
+Every command records what it spent to the workspace ledger — *every*
+command, in one place rather than as a rule each new one's author has to
+already know. That is not decoration: `compound` reached a provider daily
+on a scheduler while writing nothing to the ledger, and the run that costs
+money without appearing in the number is the one that produces the
+surprise this question is about.
 Prices are published list prices with a source and a date (`avs prices`),
 ranges resolved upward so the estimate is a ceiling, and a model with no
 sourced price keeps the total honestly labelled a floor — never counted as
@@ -363,7 +370,11 @@ and [CHANGELOG.md](CHANGELOG.md); the release-by-release record back to
 v0.8 is in [docs/release-history.md](docs/release-history.md). Next
 milestone: the v3.0.0 design gate — the launch PRD's kill criterion needs
 four consecutive logged attention weeks, and a human records the decision
-([runbook](docs/v3-live-loop.md)).
+([runbook](docs/v3-live-loop.md)). `avs cadence` is what keeps that clock
+honest: four *consecutive* weeks is a criterion a missed week resets, and
+the failure mode is not refusing to log — it is nobody noticing the week
+went by. The machine tracks the dates; the hours are still yours to record,
+and it will not answer that for you.
 
 ---
 

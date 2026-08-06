@@ -135,6 +135,45 @@ the scanners are already installed.
 
 ## Weekly rhythm
 
+Start with `avs cadence --repo-dir <workspace>`. It reads the artifacts the
+loops already write and reports which of `compound`, `sweep` and `attention`
+is overdue. Exit 3 means something needs doing, so it can gate a script.
+
+```bash
+avs cadence --repo-dir ~/work/my-product          # what is overdue
+avs cadence --repo-dir ~/work/my-product --run-due # run the due ones now
+avs cadence --repo-dir ~/work/my-product --install --arm  # daily, 09:00
+```
+
+Point it at the **workspace**, not this repo — `.mas/` is where the loops'
+state accumulates, and a scheduler aimed at a checkout reports three loops
+that have never run, correctly and uselessly.
+
+What it refuses to do quietly:
+
+- A loop that never ran reads as **never run**, not as fresh.
+- A loop that ran on time over an empty window is reported as *ok, empty* —
+  keeping a cadence over nothing is not the same as doing the work.
+- `attention` needs a number only you have. `--run-due` surfaces it and
+  never answers it.
+- A scheduler running an **older build than the one you released** is a
+  finding, with the exact `pip install --upgrade` line for that install. A
+  green publish moves PyPI and moves nothing on your machine; the plist
+  names an absolute path to whichever install was on PATH when you armed it.
+
+On `--install`: launchd does not read a login shell, so credentials exported
+from `.zshrc` are absent at 09:00. The plist carries `*_KEY_FILE` pointers
+and non-secret settings; raw keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
+are **refused by name**, because `~/Library/LaunchAgents` is readable and a
+key written there turns the scheduler into a credential leak. Convert the
+variable to its `_FILE` form. Installing never starts a run — `--arm` loads
+it, and it fires on its own schedule after that. Logs:
+`~/Library/Logs/ai-venture-studio/loops.log`. On Linux, run
+`avs cadence --run-due` from cron or a systemd timer; the check is portable
+and only the LaunchAgent is macOS-only.
+
+Then, weekly:
+
 1. `avs compound --pr` — review and merge (or close) the proposal.
 2. `avs bench` — must PASS; a regression after merging a compound
    PR means Gate 4: revert the CLAUDE.md change.
@@ -216,7 +255,17 @@ git commit -am "release: v0.55.0" && git push
 
 # 2. tag it — this is what triggers the publish
 git tag v0.55.0 && git push origin v0.55.0
+
+# 3. published is not deployed — upgrade anything running on a schedule
+avs cadence --repo-dir <workspace>   # exits 3 if the LaunchAgent is behind
 ```
+
+Step 3 is not bookkeeping. The LaunchAgent's plist names an absolute path to
+whichever `avs` install was on PATH when it was armed, which is not the
+install you release from. v0.72.2 shipped a metering fix and the daily loop
+went on running v0.72.1, silently, because nothing connected the two. The
+cadence check now names both versions and prints the exact upgrade line for
+that specific install.
 
 The workflow runs the full suite on the tagged commit, checks the tag against
 `pyproject.toml` (a mistyped tag fails instead of publishing a wrong number),
