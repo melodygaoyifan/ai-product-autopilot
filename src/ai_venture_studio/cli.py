@@ -271,6 +271,21 @@ def compound(
     console.print(report)
     console.print(f"\nProposal written to {report_path}")
 
+    # The proposer's call is buffered in-process by the provider adapter and
+    # only reaches the ledger when someone who knows the workspace flushes it.
+    # Nobody did, so every compounding run spent unmetered — invisible while
+    # this was a hand-run command, and a standing unmetered cost now that a
+    # scheduler fires it. ADR-032 removed the spending CAP and deliberately
+    # kept the metering; this is the kept half.
+    from ai_venture_studio import spend
+
+    spend.flush(repo_dir)
+    cost = spend.summarize_workspace(repo_dir)
+    if cost.calls:
+        console.print(
+            f"[dim]{spend.render_plain(cost, what='This workspace')}[/dim]"
+        )
+
     if not proposals:
         raise typer.Exit(code=0)
     if not pr:

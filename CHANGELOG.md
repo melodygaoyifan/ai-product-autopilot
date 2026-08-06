@@ -4,6 +4,29 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.72.1 — the compounding loop writes down what it spends
+
+Patch. Found by arming the scheduler and reading the ledger afterwards:
+`avs compound` called a provider, produced a real proposal, and the
+workspace's `.mas/spend.jsonl` showed **zero calls**.
+
+The provider adapter buffers usage in process state; only a caller that knows
+the workspace can flush it to disk. The review graph, `build`, `autopilot`
+and the Studio all flush. The compounding loop never did — so every run spent
+real money and left no trace of it. Survivable while it was hand-run and
+occasional; not survivable once `avs cadence` put it on a daily LaunchAgent,
+where it becomes a standing recurring unmetered cost.
+
+`compound` now flushes and prints the workspace cost line. ADR-032 removed
+the spending *cap* and deliberately kept the metering; this is the kept half,
+and it is now pinned by a test that was verified to fail without the fix.
+
+Audited the rest: `sweep` is deterministic and calls nothing. The other
+provider-calling modules (`leader`, `verify`, `studio_chat`) flush through
+their callers. `gepa` and `smoke` do not, but neither is on a scheduler.
+
+Suite 1728 hermetic tests (as measured by CI at the tag).
+
 ## v0.72.0 — a loop that read nothing no longer reports as a loop that worked
 
 `cadence` decided freshness from the *existence* of a dated artifact. Run
