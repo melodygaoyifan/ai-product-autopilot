@@ -4,6 +4,74 @@ SemVer over the enumerated contract surface (CONTRIBUTING.md). One entry
 per release, newest first; the git tags v0.8.0–v0.27.0 predate this file
 and are summarized in the README roadmap and docs/implementation-map.md.
 
+## v0.71.0 — the recurring loops get a trigger, and the build loop gets a floor
+
+Three loops in this system were designed to recur — the compounding loop
+(§09.8), the Sweep role (doc 29), weekly attention collection (doc 25
+§76.4) — and none of them had a trigger. "Weekly" was a habit, and this
+repo is the evidence of what a lapsed habit costs: `attention.py` opens by
+saying a missed week does not merely lose a week, it **resets the streak
+the kill criterion depends on**, and `metrics/attention-log.yaml` records
+the discipline starting 2026-W31 and then stops. Nothing reported the
+lapse, because nothing was watching.
+
+**`avs cadence`** reads the artifacts the loops already write — a
+`proposal-<date>.md`, a `digest-<date>.yaml`, a `logged` attention row —
+and says which loop is overdue. It exits 3 when one is, so it can gate a
+script. Three rules keep it from lying: a loop that never ran reports
+`never_run` rather than fresh (the one failure a watchdog can actually
+have); a `not_tracked` attention week is not a run, or the series the kill
+criterion is falsifiable by could look maintained while measuring nothing;
+and a future-dated artifact clamps to zero instead of inventing a negative
+staleness. Seven days is `due`, ten is `overdue` — a weekly loop is seven
+days old on the day it is next due, and that is health.
+
+**The trigger is machine-local, and had to be.** The obvious move was a CI
+cron, and it would have been wrong: every artifact these loops read lives
+under `.mas/`, which is gitignored. A runner checks out an empty `.mas/`,
+finds every loop `never_run`, and gets tuned until it reports a clean pass
+forever against state it cannot see — the "looks done" failure with a green
+check on top. So `avs cadence --install` writes a user LaunchAgent instead.
+It fires **daily** and runs only what is due: a weekly timer has one chance
+to be missed, a daily due-check has seven, and finding nothing due costs a
+file-stat. `--run-due` is idempotent for the same reason.
+
+It is written disarmed. `--install` writes the plist and prints the
+`launchctl` line; `--arm` loads it. `RunAtLoad` is false, so installing a
+trigger never starts a run. And `avs attention` is only ever run in its
+read-only form: it logs a row solely with `--confirm-hours`, that number is
+the operator's, and the scheduler surfaces the ask without answering it.
+Mechanical recurrence is the machine's job; the judgment is not.
+
+**A termination bound on the build loop.** `MAX_ITERATIONS` bounds attempts
+per task and `max_tasks` bounds tasks, but a task whose context grows each
+iteration can consume without limit inside those counts, and the ledger
+said nothing until the run ended. `avs create` now stops between tasks once
+a run passes `--token-ceiling` (default 10M).
+
+This is **not** a spending cap and ADR-032 stands: it counts tokens, never
+dollars, no price table can make it fire, and a month of heavy spend still
+builds — pinned by a test that says so. Ten million is roughly 3× what a
+full 12-task build arithmetically costs; a run that crosses it is looping,
+not working. The status is its own word, `halted`, not `failed`, because
+nothing failed: it stops at a task boundary where stopping is free, keeps
+every built module, takes no undo checkpoint, and a re-run continues from
+there. `--token-ceiling 0` disables it.
+
+Also: the two remaining runtime `assert`s in `cli.py` are explicit checks
+that raise with a diagnosable message (CLAUDE.md — an `assert` holds only
+until someone runs under `-O`, and then the next line raises
+`AttributeError` on `None` instead). And three tests were reading the
+developer's own shell: the preflight resolves a key through `env_or_file`,
+but the enterprise preflight and journey tests cleared only
+`ANTHROPIC_API_KEY`, never `ANTHROPIC_API_KEY_FILE` — so a machine that
+keeps its key in a file saw `model: ready` where the test's own comment
+said "no credential in this test env", and the suite failed there and
+nowhere else. The second and third sites were hidden behind the first until
+the run went past `-x`.
+
+Suite 1714 hermetic tests, 3 skipped.
+
 ## v0.70.1 — a name declared twice renders every importing page blank
 
 A patch release: no command, file format, or route changes. One gate check
